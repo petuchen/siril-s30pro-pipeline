@@ -43,6 +43,11 @@
   .lang-toggle button{ border:none; background:transparent; padding:10px 16px; border-radius:999px; font-weight:600; font-size:0.85rem; cursor:pointer; color:var(--muted); transition: all .15s ease; min-height:36px; }
   .lang-toggle button.active{ background: var(--accent); color:#fff; }
 
+  .header-actions{ display:flex; flex-direction:column; align-items:flex-end; gap:10px; flex-shrink:0; }
+  .btn-repo{ display:inline-flex; align-items:center; gap:8px; background: var(--text); color:#fff; text-decoration:none; padding:10px 16px; border-radius:999px; font-weight:600; font-size:0.85rem; box-shadow: var(--shadow); transition: all .15s ease; white-space:nowrap; }
+  .btn-repo:hover{ background: var(--accent); }
+  .btn-repo svg{ width:16px; height:16px; flex-shrink:0; }
+
   nav.tabs{ display:flex; gap:6px; overflow-x:auto; padding:6px 0 14px; -webkit-overflow-scrolling:touch; }
   nav.tabs::-webkit-scrollbar{ height:6px; }
   nav.tabs::-webkit-scrollbar-thumb{ background: var(--border); border-radius:4px; }
@@ -118,9 +123,15 @@
       <h1 data-i18n="pageTitle"></h1>
       <p class="subtitle" data-i18n="pageSubtitle"></p>
     </div>
-    <div class="lang-toggle">
-      <button id="btn-en" onclick="setLang('en')">English</button>
-      <button id="btn-zh" onclick="setLang('zh')">繁體中文</button>
+    <div class="header-actions">
+      <a class="btn-repo" href="https://github.com/petuchen/siril-s30pro-pipeline/archive/refs/heads/main.zip" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span data-i18n="downloadLink"></span>
+      </a>
+      <div class="lang-toggle">
+        <button id="btn-en" onclick="setLang('en')">English</button>
+        <button id="btn-zh" onclick="setLang('zh')">繁體中文</button>
+      </div>
     </div>
   </header>
 
@@ -137,6 +148,7 @@ const UI = {
   en: {
     pageTitle: "S30 Pro Pipeline — README",
     pageSubtitle: "One-click astrophotography processing for smart telescopes, inside Siril. Nine guided stages, live before/after previews, undo everywhere.",
+    downloadLink: "Download on GitHub",
     footerNote: "S30 Pro Pipeline · GPL-3.0-or-later · built on work by Naztronomy, GraXpert, and VeraLux. Diagram via D3.js.",
     overviewTab: "Overview",
     references: "References",
@@ -145,6 +157,7 @@ const UI = {
   zh: {
     pageTitle: "S30 Pro Pipeline — 使用說明",
     pageSubtitle: "在 Siril 中一鍵完成智慧望遠鏡天文攝影後製。九個引導式步驟、即時前後對比預覽、每一步皆可復原。",
+    downloadLink: "在 GitHub 下載",
     footerNote: "S30 Pro Pipeline · GPL-3.0-or-later · 建基於 Naztronomy、GraXpert 與 VeraLux 的成果。圖表以 D3.js 繪製。",
     overviewTab: "總覽",
     references: "參考資料",
