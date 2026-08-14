@@ -1,0 +1,20 @@
+# Dated development snapshots — full history lives in git, not the
+# filesystem. Only the canonical, unversioned files are tracked:
+# S30Pro_Pipeline.py, README.md, CHANGELOG.md, S30Pro_Pipeline_README.html,
+# test_S30Pro_Pipeline_functions.py, download_wide_field_index.sh
+S30Pro_Pipeline_v*.py
+S30Pro_Pipeline_README_v*.html
+README_v*.md
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local test/session artifacts, if ever produced alongside the script
+*.log

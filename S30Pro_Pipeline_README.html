@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>S30 Pro Pipeline — README</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  :root{
+    --bg: #f5f6fb;
+    --surface: #ffffff;
+    --surface-2: #fbfbfe;
+    --text: #1c2033;
+    --muted: #66697c;
+    --accent: #4763ff;
+    --accent-2: #7c6df2;
+    --border: #e7e8f2;
+    --radius-lg: 18px;
+    --radius-md: 12px;
+    --shadow: 0 2px 10px rgba(30,30,60,0.05), 0 1px 2px rgba(30,30,60,0.04);
+    --c1: #4763ff;  /* processing stages */
+    --c2: #14b8a6;  /* finishing stages */
+    --c3: #f59e0b;  /* setup / prerequisites */
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--bg); color: var(--text);
+    font-family: "Inter","Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height:1.65; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{ max-width: 1080px; margin: 0 auto; padding: 24px 16px 72px; }
+  @media (min-width: 640px){ .wrap{ padding: 28px 20px 80px; } }
+
+  header.top{ display:flex; flex-wrap:wrap; gap:14px; align-items:flex-start; justify-content:space-between; margin-bottom: 20px; }
+  .title-block h1{ font-size: 1.4rem; font-weight:800; margin:0 0 6px; letter-spacing:-0.01em; }
+  @media (min-width: 640px){ .title-block h1{ font-size: 1.65rem; } }
+  .title-block p.subtitle{ margin:0; color: var(--muted); font-size:0.92rem; max-width:640px; }
+
+  .lang-toggle{ display:flex; background: var(--surface); border:1px solid var(--border); border-radius: 999px; padding:4px; box-shadow: var(--shadow); flex-shrink:0; }
+  .lang-toggle button{ border:none; background:transparent; padding:10px 16px; border-radius:999px; font-weight:600; font-size:0.85rem; cursor:pointer; color:var(--muted); transition: all .15s ease; min-height:36px; }
+  .lang-toggle button.active{ background: var(--accent); color:#fff; }
+
+  nav.tabs{ display:flex; gap:6px; overflow-x:auto; padding:6px 0 14px; -webkit-overflow-scrolling:touch; }
+  nav.tabs::-webkit-scrollbar{ height:6px; }
+  nav.tabs::-webkit-scrollbar-thumb{ background: var(--border); border-radius:4px; }
+  nav.tabs button{ flex:0 0 auto; border:1px solid var(--border); background: var(--surface); color: var(--text); padding:10px 15px; border-radius: 999px; font-size:0.85rem; font-weight:600; cursor:pointer; white-space:nowrap; transition: all .15s ease; display:flex; align-items:center; gap:7px; min-height:40px; }
+  nav.tabs button .dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  nav.tabs button:hover{ border-color: var(--accent-2); }
+  nav.tabs button.active{ background: var(--text); color:#fff; border-color:var(--text); }
+
+  #content{ display:flex; flex-direction:column; }
+  .panel{ display:none; }
+  .panel.active{ display:block; animation: fade .2s ease; }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+  .card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow); margin-bottom:16px; }
+  @media (min-width: 640px){ .card{ padding: 26px 28px; } }
+  .card h2.topic-title{ font-size:1.2rem; font-weight:800; margin:0 0 4px; letter-spacing:-0.01em; }
+  @media (min-width: 640px){ .card h2.topic-title{ font-size:1.35rem; } }
+  .card h2.topic-title .badge{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:10px; }
+  .card h3{ font-size:0.76rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--accent); font-weight:700; margin:18px 0 10px; }
+  .card h3:first-child{ margin-top:0; }
+  .card p{ margin:0 0 10px; color:var(--text); font-size:0.95rem; }
+  .card p:last-child{ margin-bottom:0; }
+  .card ul, .card ol{ margin:0 0 10px; padding-left:22px; font-size:0.95rem; }
+  .card li{ margin-bottom:6px; }
+  .card code{ background:#eef0fa; border:1px solid var(--border); border-radius:5px; padding:1px 6px; font-size:0.85em; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .card pre{ background:#141724; color:#dfe3f0; border-radius: var(--radius-md); padding:14px 16px; overflow-x:auto; font-size:0.82rem; line-height:1.55; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .card pre code{ background:transparent; border:none; padding:0; color:inherit; }
+
+  .why{ background:#f2f7ff; border-left:4px solid var(--accent); border-radius:0 var(--radius-md) var(--radius-md) 0; padding:10px 14px; margin:0 0 12px; font-size:0.9rem; color:#2b3550; }
+  .why b{ color: var(--accent); }
+
+  table.tbl{ width:100%; border-collapse:collapse; font-size:0.88rem; margin:0 0 10px; }
+  table.tbl th, table.tbl td{ border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top; }
+  table.tbl th{ background: var(--surface-2); font-weight:700; }
+  .tbl-scroll{ overflow-x:auto; }
+
+  .steps{ counter-reset: step; list-style:none; padding-left:0 !important; }
+  .steps > li{ position:relative; padding-left:44px; margin-bottom:14px; }
+  .steps > li::before{ counter-increment: step; content: counter(step); position:absolute; left:0; top:0; width:28px; height:28px; border-radius:50%; background:var(--accent); color:#fff; font-weight:700; font-size:0.85rem; display:flex; align-items:center; justify-content:center; }
+  .steps b.step-t{ display:block; margin-bottom:3px; }
+  .tag{ display:inline-block; font-size:0.72rem; font-weight:700; border-radius:999px; padding:2px 10px; margin-left:8px; vertical-align:middle; }
+  .tag.req{ background:#ffe4e6; color:#be123c; }
+  .tag.rec{ background:#fef3c7; color:#b45309; }
+  .tag.opt{ background:#e0f2fe; color:#0369a1; }
+
+  details.refs{ border-top:1px solid var(--border); padding-top:14px; margin-top:14px; }
+  details.refs summary{ cursor:pointer; font-weight:700; font-size:0.82rem; color:var(--muted); list-style:none; display:flex; align-items:center; gap:8px; user-select:none; }
+  details.refs summary::-webkit-details-marker{ display:none; }
+  details.refs summary::before{ content:"▸"; display:inline-block; transition: transform .15s ease; color:var(--accent); }
+  details.refs[open] summary::before{ transform: rotate(90deg); }
+  details.refs ol{ margin:12px 0 0; padding-left:20px; font-size:0.84rem; color:var(--muted); }
+  details.refs a{ color: var(--accent); text-decoration:none; word-break:break-all; }
+  details.refs a:hover{ text-decoration:underline; }
+
+  .graph-hint{ font-size:0.82rem; color:var(--muted); text-align:center; margin:6px 0 0; }
+  .graph-wrap{ width:100%; border:1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); overflow:auto; margin-top:14px; padding:6px; }
+  #network-graph{ width:100%; height:auto; display:block; }
+  .legend{ display:flex; flex-wrap:wrap; gap:12px; margin:14px 0 0; font-size:0.78rem; color:var(--muted); }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .legend i{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .node-label{ font-size:10.5px; font-weight:700; fill:#fff; pointer-events:none; }
+  .link{ stroke: #c7c9dd; stroke-width:1.6px; fill:none; }
+  .node rect{ stroke:#fff; stroke-width:2px; cursor:pointer; }
+
+  footer.foot{ text-align:center; color:var(--muted); font-size:0.76rem; margin-top:24px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="title-block">
+      <h1 data-i18n="pageTitle"></h1>
+      <p class="subtitle" data-i18n="pageSubtitle"></p>
+    </div>
+    <div class="lang-toggle">
+      <button id="btn-en" onclick="setLang('en')">English</button>
+      <button id="btn-zh" onclick="setLang('zh')">繁體中文</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs"></nav>
+
+  <div id="content"></div>
+
+  <footer class="foot" data-i18n="footerNote"></footer>
+</div>
+
+<script>
+/* ---------- UI chrome strings ---------- */
+const UI = {
+  en: {
+    pageTitle: "S30 Pro Pipeline — README",
+    pageSubtitle: "One-click astrophotography processing for smart telescopes, inside Siril. Nine guided stages, live before/after previews, undo everywhere.",
+    footerNote: "S30 Pro Pipeline · GPL-3.0-or-later · built on work by Naztronomy, GraXpert, and VeraLux. Diagram via D3.js.",
+    overviewTab: "Overview",
+    references: "References",
+    graphHint: "The pipeline, in order — click a node to jump to the relevant tab. Amber = one-time setup, blue = image processing, teal = finishing touches."
+  },
+  zh: {
+    pageTitle: "S30 Pro Pipeline — 使用說明",
+    pageSubtitle: "在 Siril 中一鍵完成智慧望遠鏡天文攝影後製。九個引導式步驟、即時前後對比預覽、每一步皆可復原。",
+    footerNote: "S30 Pro Pipeline · GPL-3.0-or-later · 建基於 Naztronomy、GraXpert 與 VeraLux 的成果。圖表以 D3.js 繪製。",
+    overviewTab: "總覽",
+    references: "參考資料",
+    graphHint: "整條處理流程（依序）— 點擊節點可跳到對應分頁。琥珀色＝一次性安裝設定，藍色＝影像處理，青色＝最後修飾。"
+  }
+};
+
+/* ---------- Content ---------- */
+const OVERVIEW = {
+  summary:{
+    en:`<p>A telescope doesn't take one pretty picture — it takes <b>hundreds of short, faint, noisy exposures</b> ("subs"). Processing is the craft of combining them and progressively cleaning the result. This script packages that whole craft into one window inside <a href="https://siril.org" target="_blank" rel="noopener">Siril</a>: stack &rarr; crop &rarr; remove sky glow &rarr; denoise &rarr; (optionally) remix into the Hubble palette &rarr; stretch the faint signal into view &rarr; fine-tune colors &rarr; polish like a phone photo &rarr; label what's in the frame.</p>
+    <p>Every stage shows a draggable <b>before/after comparison</b>, has an <b>Undo</b> button, and can run alone or as part of <b>Run Full Pipeline</b>. All settings export to a JSON file you can share. It supports ZWO Seestar S30&nbsp;Pro / S30 / S50, Dwarf&nbsp;2/3/Mini, Celestron Origin and Unistellar scopes, and auto-detects yours from the file headers.</p>`,
+    zh:`<p>望遠鏡拍的不是一張漂亮照片，而是<b>數百張短曝光、昏暗且充滿雜訊的影像</b>（稱為「子畫幅」）。後製就是把它們疊合、並逐步清理的工藝。本腳本把整套流程整合進 <a href="https://siril.org" target="_blank" rel="noopener">Siril</a> 的單一視窗：疊圖 → 裁切 → 去除天空光害 → 降噪 →（可選）混色成哈伯色盤 → 拉伸讓微弱訊號現形 → 微調色彩 → 像修手機照片般潤飾 → 標註畫面中的天體。</p>
+    <p>每個步驟都有可拖曳的<b>前後對比</b>、<b>復原</b>按鈕，可單獨執行或以「Run Full Pipeline」一鍵完成。所有設定可匯出成 JSON 檔分享。支援 ZWO Seestar S30&nbsp;Pro / S30 / S50、Dwarf&nbsp;2/3/Mini、Celestron Origin 與 Unistellar 望遠鏡，並會從檔頭自動偵測型號。</p>`
+  }
+};
+
+const TOPICS = [
+{
+  id:"prereq", cluster:"c3",
+  title:{en:"Prerequisites", zh:"事前準備"},
+  html:{
+    en:`
+    <h3>Do these once, in this order</h3>
+    <ol class="steps">
+      <li><b class="step-t">Install Siril <span class="tag req">required</span></b>
+        The script runs <i>inside</i> Siril, the free astrophotography program. <b>Version 1.4 or newer</b> is required — older versions cannot run Python scripts. Download from <a href="https://siril.org/download/" target="_blank" rel="noopener">siril.org/download</a>. On macOS, right-click → Open on first launch to pass Gatekeeper.
+      </li>
+      <li><b class="step-t">Organize your files <span class="tag req">required</span></b>
+        Create a session folder containing a <code>lights</code> sub-folder with your exposures. Optionally add <code>darks</code>, <code>flats</code>, <code>biases</code> folders for calibration frames.
+        <pre><code>MySession/
+├── lights/   ← your exposures (required)
+├── darks/    ← cap-on exposures (removes sensor heat noise)
+├── flats/    ← uniform-surface shots (removes dust &amp; vignetting)
+└── biases/   ← shortest exposures (removes readout noise)</code></pre>
+        <div class="why"><b>Why:</b> the stacker needs to know which file plays which role. On a Seestar, copy the contents of <code>MyWorks/&lt;target&gt;</code> into <code>lights/</code>.</div>
+      </li>
+      <li><b class="step-t">Install GraXpert &amp; download its AI models <span class="tag req">required for stages 5 &amp; 7</span></b>
+        Install <a href="https://graxpert.com" target="_blank" rel="noopener">GraXpert</a>, open it once, load any image, and run <b>AI Background Extraction</b> and <b>Denoising</b> one time each so it downloads the model files (a few hundred MB). The pipeline then finds them automatically.
+        <div class="why"><b>Why:</b> the neural-network models are large and license-restricted, so GraXpert itself must fetch them; the pipeline only runs them. No GraXpert? Stage 5 also offers Siril's built-in gradient removal — but AI denoise (stage 7) needs the model.</div>
+      </li>
+      <li><b class="step-t">Download the local Gaia star catalogs <span class="tag rec">recommended</span></b>
+        Get both catalogs from <a href="https://siril.org/download/#catalogues" target="_blank" rel="noopener">siril.org</a> (astrometry = one file, photometry = a folder), then point Siril at them under <b>Preferences → Astrometry</b>. Stage 1 shows a live ✅/❌ status for each.
+        <div class="why"><b>Why:</b> plate solving (knowing exactly where your image sits in the sky) needs the astrometry catalog — without it, mosaics fall back to simple star alignment. Color calibration (SPCC) uses the photometry catalog to match your stars against their true measured colors.</div>
+      </li>
+      <li><b class="step-t">Install StarNet++ <span class="tag opt">optional — star removal in stage 6</span></b>
+        Download the <b>command-line</b> version from <a href="https://www.starnetastro.com/download/" target="_blank" rel="noopener">starnetastro.com</a> and unzip it somewhere permanent. On macOS, grant it permission in Terminal:
+        <pre><code>cd /path/to/StarNetCLI
+chmod +x starnet++ run_starnet.sh        # make executable
+xattr -dr com.apple.quarantine .         # remove download quarantine</code></pre>
+        Then set the path in Siril: <b>Preferences → Miscellaneous → StarNet executable</b>.
+        <div class="why"><b>Why:</b> macOS blocks unsigned internet downloads until you clear the quarantine flag. StarNet lets the Hubble-palette stage recolor only the nebula and keep stars natural.</div>
+      </li>
+      <li><b class="step-t">Install local Astrometry.net / <code>solve-field</code> <span class="tag opt">optional — enables the plate-solve fallback, especially for Milky Way Mode</span></b>
+        Preprocess's plate-solve step (used for SPCC and Annotate's WCS) already retries with a local Astrometry.net solve if Siril's own solver fails, and — for "Median (Milky Way Mode)" stacking specifically — retries once more with a full blind solve if that also fails. Neither fallback does anything without a local Astrometry.net install; without one, Siril just reports the failure and SPCC/Annotate get skipped for that run.
+        <ol>
+          <li>Install the solver: macOS (Homebrew) <code>brew install astrometry-net</code>; Windows — <a href="http://ansvr.astrometry.net/" target="_blank" rel="noopener">ansvr</a>; Linux — <code>sudo apt install astrometry.net</code> or your distro's package.</li>
+          <li>Download index files matching your field of view from <a href="http://data.astrometry.net/" target="_blank" rel="noopener">data.astrometry.net</a> (rule of thumb: skymark size 10%–100% of your field width). Tele camera (~4.6° FOV): <code>index-4108</code>–<code>index-4114</code>. Wide/Milky Way camera (~60–70° FOV): <code>index-4116</code>–<code>index-4119</code> — the pipeline folder includes <code>download_wide_field_index.sh</code> to fetch and MD5-verify these four automatically.</li>
+          <li>Confirm <code>solve-field</code>'s own config file — <code>astrometry.cfg</code>, e.g. <code>/opt/homebrew/etc/astrometry.cfg</code> on Apple Silicon Homebrew — has an <code>add_path</code> line pointing at your index-file folder. This is separate from Siril's own setting, which only locates the <code>solve-field</code> binary, not the index files.</li>
+          <li>In Siril: <b>Preferences → Astrometry</b>, point the local Astrometry.net path at the <code>solve-field</code> binary's folder (e.g. <code>/opt/homebrew/bin</code> on Apple Silicon Homebrew).</li>
+          <li>Sanity-check outside Siril first, for real diagnostics instead of Siril's one-line summary — run from a regular Terminal (not Siril's own command box; <code>solve-field</code> is an external program, not a Siril command):
+            <pre><code>solve-field --scale-units degwidth --scale-low &lt;X&gt; --scale-high &lt;Y&gt; -v your_stacked.fits</code></pre>
+            The verbose (<code>-v</code>) output lists exactly which index files loaded before it starts searching.
+          </li>
+        </ol>
+        <div class="why"><b>Why:</b> Siril's own plate-solve algorithm sometimes fails on stacked Seestar images (even ones that solve fine on nova.astrometry.net), and reliably fails on Milky Way Mode's very wide stacked field using a header-hinted near-search. A local Astrometry.net install lets the pipeline's automatic fallbacks actually do something instead of just reporting the failure.</div>
+      </li>
+      <li><b class="step-t">Internet on first run <span class="tag opt">automatic</span></b>
+        The first launch auto-installs Python libraries (PyQt6, NumPy, Astropy, OpenCV, ONNX Runtime) into Siril's environment — a few minutes, once.
+      </li>
+    </ol>`,
+    zh:`
+    <h3>只需做一次，請依順序完成</h3>
+    <ol class="steps">
+      <li><b class="step-t">安裝 Siril <span class="tag req">必要</span></b>
+        腳本是在免費天文攝影軟體 Siril <i>裡面</i>執行的，需要 <b>1.4 以上版本</b>（舊版無法執行 Python 腳本）。請至 <a href="https://siril.org/download/" target="_blank" rel="noopener">siril.org/download</a> 下載。macOS 首次啟動請按右鍵 → 打開，以通過 Gatekeeper 檢查。
+      </li>
+      <li><b class="step-t">整理檔案 <span class="tag req">必要</span></b>
+        建立一個拍攝資料夾，內含 <code>lights</code> 子資料夾放置曝光影像；校正幀資料夾 <code>darks</code>、<code>flats</code>、<code>biases</code> 為選用。
+        <pre><code>MySession/
+├── lights/   ← 你的曝光影像（必要）
+├── darks/    ← 蓋上鏡頭蓋拍攝（消除感光元件熱雜訊）
+├── flats/    ← 均勻面光源影像（消除灰塵陰影與暗角）
+└── biases/   ← 最短曝光影像（消除讀出雜訊）</code></pre>
+        <div class="why"><b>原因：</b>疊圖軟體必須知道每個檔案的用途。Seestar 使用者可將 <code>MyWorks/&lt;目標&gt;</code> 內的檔案複製到 <code>lights/</code>。</div>
+      </li>
+      <li><b class="step-t">安裝 GraXpert 並下載 AI 模型 <span class="tag req">第 5、7 步必要</span></b>
+        安裝 <a href="https://graxpert.com" target="_blank" rel="noopener">GraXpert</a>，開啟一次並載入任意影像，各執行一次 <b>AI 背景抽取</b>與<b>降噪</b>，讓它下載模型檔（數百 MB）。之後本腳本會自動找到模型。
+        <div class="why"><b>原因：</b>神經網路模型檔案龐大且有授權限制，必須由 GraXpert 本身下載，腳本只負責執行。沒有 GraXpert？第 5 步也提供 Siril 內建的梯度移除；但第 7 步的 AI 降噪必須有模型。</div>
+      </li>
+      <li><b class="step-t">下載本機 Gaia 星表 <span class="tag rec">強烈建議</span></b>
+        從 <a href="https://siril.org/download/#catalogues" target="_blank" rel="noopener">siril.org</a> 下載兩個星表（天體測量＝單一檔案、測光＝資料夾），並在 Siril 的<b>偏好設定 → Astrometry</b> 中指定路徑。第 1 步驟卡片會即時顯示每個星表的 ✅/❌ 狀態。
+        <div class="why"><b>原因：</b>「盤面解析」（precisely 知道影像對應天空的哪個位置）需要天體測量星表——沒有它，馬賽克拼接只能退回簡單的星點對齊。色彩校正（SPCC）則用測光星表，把你影像中的恆星與其真實測量顏色比對。</div>
+      </li>
+      <li><b class="step-t">安裝 StarNet++ <span class="tag opt">選用 — 第 6 步的移星功能</span></b>
+        從 <a href="https://www.starnetastro.com/download/" target="_blank" rel="noopener">starnetastro.com</a> 下載<b>命令列版本</b>並解壓到固定位置。macOS 需在終端機授權：
+        <pre><code>cd /path/to/StarNetCLI
+chmod +x starnet++ run_starnet.sh        # 賦予執行權限
+xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
+        然後在 Siril 的<b>偏好設定 → 雜項 → StarNet 執行檔</b>中設定路徑。
+        <div class="why"><b>原因：</b>macOS 會封鎖未簽章的網路下載程式，需清除隔離旗標。StarNet 讓哈伯色盤步驟只對星雲重新上色、保留恆星的自然色彩。</div>
+      </li>
+      <li><b class="step-t">安裝本機 Astrometry.net／<code>solve-field</code> <span class="tag opt">選用 — 啟用板解算備援，對銀河模式尤其重要</span></b>
+        前置處理的板解算步驟（供 SPCC 及標註步驟的天體測量座標使用）在 Siril 自身解算器失敗時，已會自動重試一次本機 Astrometry.net 解算；若選用「Median (Milky Way Mode)」疊圖方式，且該次也失敗，還會再重試一次完全盲解算。這兩層備援若沒有安裝本機 Astrometry.net 都無法發揮作用——沒裝的話，Siril 只會回報失敗，該次執行的 SPCC／標註就會被跳過。
+        <ol>
+          <li>安裝解算器：macOS（Homebrew）執行 <code>brew install astrometry-net</code>；Windows 安裝 <a href="http://ansvr.astrometry.net/" target="_blank" rel="noopener">ansvr</a>；Linux 執行 <code>sudo apt install astrometry.net</code> 或所用發行版對應的套件。</li>
+          <li>從 <a href="http://data.astrometry.net/" target="_blank" rel="noopener">data.astrometry.net</a> 下載符合你視野大小的索引檔（經驗法則：星標尺寸約為視野寬度的 10%–100%）。主鏡頭相機（視野約 4.6°）：<code>index-4108</code>–<code>index-4114</code>。廣角／銀河相機（視野約 60–70°）：<code>index-4116</code>–<code>index-4119</code>——本專案資料夾內附的 <code>download_wide_field_index.sh</code> 可自動下載並以 MD5 驗證這四個檔案。</li>
+          <li>確認 <code>solve-field</code> 自身的設定檔——<code>astrometry.cfg</code>（例如 Apple Silicon Homebrew 上的 <code>/opt/homebrew/etc/astrometry.cfg</code>）——內含指向索引檔資料夾的 <code>add_path</code> 那一行。這與 Siril 本身的設定是分開的，Siril 的設定只用來定位 <code>solve-field</code> 執行檔本身，並不知道索引檔放在哪裡。</li>
+          <li>在 Siril 中：<b>偏好設定 → Astrometry</b>，將本機 Astrometry.net 路徑指向 <code>solve-field</code> 執行檔所在資料夾（例如 Apple Silicon Homebrew 上的 <code>/opt/homebrew/bin</code>）。</li>
+          <li>建議先在 Siril 之外做一次檢查，可看到比 Siril 單行摘要更完整的診斷資訊——請在一般終端機（而非 Siril 自身的指令欄，<code>solve-field</code> 是外部程式、不是 Siril 指令）執行：
+            <pre><code>solve-field --scale-units degwidth --scale-low &lt;X&gt; --scale-high &lt;Y&gt; -v your_stacked.fits</code></pre>
+            加上 <code>-v</code> 的詳細輸出會在開始搜尋前，列出實際載入了哪些索引檔。
+          </li>
+        </ol>
+        <div class="why"><b>原因：</b>Siril 自身的板解算演算法有時會在堆疊後的 Seestar 影像上失敗（即使同一張影像在 nova.astrometry.net 上可順利解算），而在銀河模式極寬廣的堆疊視野上，使用標頭提示的鄰近搜尋幾乎必定失敗。安裝本機 Astrometry.net 後，管線內建的自動備援機制才真正有作用，而不只是回報失敗。</div>
+      </li>
+      <li><b class="step-t">首次執行需要網路 <span class="tag opt">自動</span></b>
+        第一次啟動會自動安裝 Python 函式庫（PyQt6、NumPy、Astropy、OpenCV、ONNX Runtime），約需數分鐘，僅此一次。
+      </li>
+    </ol>`
+  },
+  references:[
+    {t:"Siril — download & catalogs", u:"https://siril.org/download/"},
+    {t:"GraXpert — official site", u:"https://graxpert.com"},
+    {t:"StarNet++ — download", u:"https://www.starnetastro.com/download/"},
+    {t:"Astrometry.net — index files", u:"http://data.astrometry.net/"},
+    {t:"Siril platesolve command reference", u:"https://siril.readthedocs.io/en/stable/astrometry/platesolving.html"}
+  ]
+},
+{
+  id:"install", cluster:"c3",
+  title:{en:"Install & Quick Start", zh:"安裝與快速上手"},
+  html:{
+    en:`
+    <h3>Installing the script</h3>
+    <div class="why"><b>Since v1.43.0:</b> the script is split into <code>S30Pro_Pipeline.py</code> plus a <code>s30pro_pipeline/</code> helper-module folder that must sit right next to it. Always copy both together.</div>
+    <p><b>Option A — Scripts menu (recommended).</b> Copy <code>S30Pro_Pipeline.py</code> <b>and</b> the <code>s30pro_pipeline/</code> folder into Siril's scripts folder, then restart Siril; it appears in the <b>Scripts</b> menu.</p>
+    <div class="tbl-scroll"><table class="tbl">
+      <tr><th>OS</th><th>Scripts folder</th></tr>
+      <tr><td>macOS</td><td><code>~/Library/Application Support/org.free-astro.Siril/scripts</code></td></tr>
+      <tr><td>Windows</td><td><code>%LOCALAPPDATA%\\siril\\scripts</code></td></tr>
+      <tr><td>Linux</td><td><code>~/.local/share/siril/scripts</code></td></tr>
+    </table></div>
+    <p>You can also add any folder of your choice under <b>Preferences → Scripts</b> and press the refresh icon.</p>
+    <p><b>Option B — no install.</b> In Siril's command line: <code>pyscript /path/to/S30Pro_Pipeline.py</code></p>
+    <h3>Quick start</h3>
+    <ol>
+      <li>Set Siril's working directory to your session folder (the one <i>containing</i> <code>lights/</code>) — or just launch the script, it will ask.</li>
+      <li>Launch <b>S30Pro_Pipeline</b> from the Scripts menu. Your telescope is auto-detected from the file headers.</li>
+      <li>Review the stage cards; sensible defaults are pre-ticked. Optional stages (palette, histogram, final touch, watermark) are off by default.</li>
+      <li>Press <b>▶ Run Full Pipeline</b>, or run stage by stage and inspect each result with the draggable before/after divider.</li>
+      <li>Finished files land in your session folder: <code>*_stacked</code>, <code>final_stretched_*</code>, <code>final_touched_*</code>.</li>
+    </ol>
+    <div class="why"><b>Tip:</b> <b>⤓ Export settings</b> saves every knob to JSON. Keep one preset per target type (galaxy / nebula / Hubble palette) and re-import anytime.</div>`,
+    zh:`
+    <h3>安裝腳本</h3>
+    <div class="why"><b>自 v1.43.0 起：</b>腳本拆分為 <code>S30Pro_Pipeline.py</code> 和一個必須放在同一層的輔助模組資料夾 <code>s30pro_pipeline/</code>。請務必兩者一起複製。</div>
+    <p><b>方法 A — 腳本選單（建議）。</b>將 <code>S30Pro_Pipeline.py</code> <b>及</b> <code>s30pro_pipeline/</code> 資料夾一起複製到 Siril 的腳本資料夾，重啟 Siril 後即出現在 <b>Scripts</b> 選單中。</p>
+    <div class="tbl-scroll"><table class="tbl">
+      <tr><th>作業系統</th><th>腳本資料夾</th></tr>
+      <tr><td>macOS</td><td><code>~/Library/Application Support/org.free-astro.Siril/scripts</code></td></tr>
+      <tr><td>Windows</td><td><code>%LOCALAPPDATA%\\siril\\scripts</code></td></tr>
+      <tr><td>Linux</td><td><code>~/.local/share/siril/scripts</code></td></tr>
+    </table></div>
+    <p>也可以在<b>偏好設定 → Scripts</b> 中加入任意資料夾，然後按重新整理圖示。</p>
+    <p><b>方法 B — 免安裝。</b>在 Siril 命令列輸入：<code>pyscript /path/to/S30Pro_Pipeline.py</code></p>
+    <h3>快速上手</h3>
+    <ol>
+      <li>將 Siril 的工作目錄設為你的拍攝資料夾（<i>包含</i> <code>lights/</code> 的那一層）——或直接啟動腳本，它會詢問。</li>
+      <li>從 Scripts 選單啟動 <b>S30Pro_Pipeline</b>。腳本會從檔頭自動偵測望遠鏡型號。</li>
+      <li>檢視各步驟卡片；合理的預設值已勾選。選用步驟（色盤、直方圖、最後修飾、浮水印）預設關閉。</li>
+      <li>按下 <b>▶ Run Full Pipeline</b>，或逐步執行並用可拖曳的前後對比檢視每個結果。</li>
+      <li>成品會存到拍攝資料夾：<code>*_stacked</code>、<code>final_stretched_*</code>、<code>final_touched_*</code>。</li>
+    </ol>
+    <div class="why"><b>小技巧：</b><b>⤓ Export settings</b> 可將所有參數存成 JSON。針對不同目標類型（星系／星雲／哈伯色盤）各存一組，隨時匯入。</div>`
+  },
+  references:[
+    {t:"Siril scripting documentation", u:"https://siril.readthedocs.io/"}
+  ]
+},
+{
+  id:"stages", cluster:"c1",
+  title:{en:"The 13 Stages Explained", zh:"十三大步驟解說"},
+  html:{
+    en:`
+    <h3>What each stage does — and why it exists</h3>
+    <p><b>1 · Preprocess (stacking).</b> Aligns and averages hundreds of subs into one deep image, then calibrates colors against real star measurements (SPCC). A collapsible "Combine with an existing master" section can also merge this run's fresh stack with an already-stacked FITS from an earlier session that has no raw subs — registered against it and combined with Siril's <code>-weight=nbstack</code>, weighted by each session's <code>STACKCNT</code> header (with a manual override for masters that don't have one) instead of averaging two very different amounts of integration time 50/50. The combined result's total integration time (and the auto-saved "..._combined" filename) reflects the true sum of both sessions' subs, not just what Siril's own 2-frame stack would otherwise report.
+    <div class="why"><b>Why:</b> one 10-second exposure is faint and grainy. Averaging 300 of them behaves like a 50-minute exposure: the signal adds up while random noise cancels out. Options: calibration frames, drizzle (finer sampling), feathering for mosaics, quality-weighted stacking, FITS compression.</div></p>
+    <p><b>2 · Crop.</b> Optionally rotates the image first (slider + degree number input, -180° to 180°), then trims 5% (or custom margins) off each edge.
+    <div class="why"><b>Why:</b> the telescope drifts slightly between shots, so stacked edges are ragged. Rotating lets you square the frame up before trimming it.</div></p>
+    <p><b>3 · Remove Green (SCNR).</b> Removes the green color cast with Siril's <code>rmgreen</code>.
+    <div class="why"><b>Why:</b> color sensors tend to produce a greenish sky that isn't physically there — almost nothing in deep space glows green.</div></p>
+    <p><b>4 · Auto Gradient Removal.</b> A built-in port of the standalone AutoGradientRemoval script: an iterative, robust background/gradient estimator with adjustable Scale, Smoothness, Downsample, correction Mode (subtract/divide), structure Protection (threshold + amount, to keep it from fitting away stars/nebulae), and an optional Simplified polynomial model with its own Degree.
+    <div class="why"><b>Why:</b> gives a second, independently tunable gradient-flattening pass — useful on its own, or as a milder pre-pass ahead of stage 5's heavier background removal for wide, uneven sky glow.</div></p>
+    <p><b>5 · Remove background.</b> Flattens sky glow using GraXpert's AI, or Siril's built-in <code>subsky</code> (RBF / polynomial) if you prefer no AI. For Siril subsky, a "Preview &amp; edit sample boxes..." button opens an interactive canvas over the current image with an editable grid of sample boxes (green = kept, red = excluded) — click to toggle, click empty space to add, or Regenerate/Select All/Deselect All — and the kept boxes are pushed into Siril before <code>subsky</code> runs.
+    <div class="why"><b>Why:</b> light pollution and moonlight make one corner of the sky brighter than another. Removing this gradient lets the real object stand out. Hand-curated sample boxes help when automatic placement lands on stars or nebulosity instead of clean background.</div></p>
+    <p><b>6 · Remove Stars.</b> Separates stars from the rest of the image using StarNet, so later stages can work on nebulosity alone.
+    <div class="why"><b>Why:</b> lets stage 8's Hubble palette recolor nebulosity without also recoloring the stars.</div></p>
+    <p><b>7 · Denoise.</b> GraXpert's neural network smooths grain while keeping stars and structure, with a strength blend.
+    <div class="why"><b>Why:</b> even after stacking, faint regions stay noisy. The AI has learned what sensor noise looks like versus real detail.</div></p>
+    <p><b>8 · Hubble palette (optional).</b> For dual-band-filter shots of emission nebulae: extracts the hydrogen signal (red channel) and oxygen signal (green+blue), then remixes them into false-color presets — including a blue-highlights mix — with optional StarNet star protection so stars keep natural colors. Also has an optional "GIMP replacement polish" section (collapsed by default — click to expand) — Saturation, Shadows, Highlights, Contrast, Sharpen, Denoise, each independently tunable and off by default — folding the same Colors/Filters adjustments from a manual GIMP finishing pass (<code>gimp_replacement.py</code>) into one repeatable step, run after whichever recolor mode you picked.
+    <div class="why"><b>Why:</b> nebula gases glow at precise wavelengths. Remapping them reveals structure your eyes could never see — this is how the iconic gold-and-teal NASA images are made. A color camera has no real sulfur channel, so "SHO" here is synthetic. Turn SPCC off in stage 1 when using this. The GIMP replacement polish exists because that same tutorial's next step was a manual round-trip through GIMP (Colors ▸ Saturation, Colors ▸ Shadows-Highlights, Colors ▸ Brightness-Contrast, Filters ▸ Enhance ▸ Sharpen/Noise Reduction) — this makes that finishing touch a one-click, repeatable part of the pipeline instead.</div></p>
+    <p><b>9 · Stretch (VeraLux).</b> Lifts the image from nearly black to visible using an inverse hyperbolic stretch that preserves color ratios; includes an auto-solver for the key "Log D" strength parameter.
+    <div class="why"><b>Why:</b> cameras record light linearly, but deep-sky objects are ~1000× fainter than a screen can show. Naive brightening shifts colors and clips stars; VeraLux stretches luminance while protecting the color vectors.</div></p>
+    <p><b>10 · Histogram fine-tune.</b> An interactive histogram with three draggable points (shadows / midtones / highlights), per channel (RGB, R, G, B), with real-time preview.
+    <div class="why"><b>Why:</b> after the big stretch, small per-color corrections fix residual casts and set the final black point — the difference between "okay" and "wow".</div></p>
+    <p><b>11 · Final touch.</b> Phone-style brightness, contrast, saturation and sharpening sliders with live preview.
+    <div class="why"><b>Why:</b> the familiar last-mile polish, applied at full resolution only when you commit.</div></p>
+    <p><b>12 · Annotate.</b> Labels stars and deep-sky objects on the plate-solved field. Stars come from Siril's own <code>conesearch</code> (local Bright Star Catalogue, or the online BSC). Messier/NGC/IC come from the OpenNGC database (downloaded once, cached locally). Sharpless and Lynds Dark Nebulae come from live VizieR cone searches. Each catalog has its own checkbox and annotation color; a "Select objects to show..." dialog lets you tick/untick individual objects with the preview updating instantly, and Undo / "Save annotated image..." / a one-click "Remove all annotations" button (mirroring Watermark's clear-all) are all available. Object markers are sized to the object's real apparent diameter (from each catalog's size field, converted through the plate solve's pixel scale) rather than a fixed circle, and label text is placed by a layout pass that avoids overlapping other labels and never lets a label get cut off at the image edge.
+    <div class="why"><b>Why:</b> turns a plate-solved frame into a labeled reference view. This replaces the 1.18–1.24 approach of scraping Siril's <code>catsearch</code> console log, which had no documented, stable output format and never resolved reliably; 1.25 removed the stage entirely, and this rebuild sources catalog data independently instead. Real-size markers make a wide diffuse target like North America Nebula visually distinct from a small planetary nebula at a glance, and the label layout keeps crowded fields (a rich Messier region, a dense star field) readable instead of a pile of overlapping text.</div></p>
+    <p><b>13 · Watermark.</b> Draws a semi-transparent info block onto the image — object name, date, telescope, integration time, FOV, image size, Bortle estimate, plus an optional free-text "Author" credit line you type yourself — with position, opacity, and one/two-column layout controls.
+    <div class="why"><b>Why:</b> keeps your attribution and shot details attached to a photo once it leaves the folder it was processed in — the FITS data itself is left untouched.</div></p>
+    <p style="margin-top:1em"><i>Every stage also has a small "Use Siril's image" button in its header that refreshes that stage's preview from whatever is currently loaded in Siril — for continuing work that happened outside the pipeline (e.g. manual Siril commands, another script).</i></p>`,
+    zh:`
+    <h3>每個步驟做什麼——以及為什麼需要它</h3>
+    <p><b>1 · 前置處理（疊圖）。</b>將數百張子畫幅對齊並平均成一張深度影像，再以真實恆星測量值校正色彩（SPCC）。另有可收合的「與現有主影像合併」區塊，可將本次疊圖結果與先前工作階段中已疊好、但未保留原始子畫幅的 FITS 檔案合併——會先與該檔案對齊，再以 Siril 的 <code>-weight=nbstack</code> 依各工作階段的 <code>STACKCNT</code> 標頭加權合併（若該檔案沒有此標頭，可手動輸入子畫幅張數覆寫），而不是把兩個累積曝光時間差異懸殊的資料簡單地各半平均。合併結果的總曝光時間（以及自動儲存時使用的「..._combined」檔名）會反映兩個工作階段子畫幅的真實總和，而非 Siril 兩張影像疊圖時本身會回報的數字。
+    <div class="why"><b>原因：</b>單張 10 秒曝光既暗又粗糙。把 300 張平均起來，效果如同曝光 50 分鐘：訊號累加、隨機雜訊互相抵消。選項包括：校正幀、drizzle（更細取樣）、馬賽克羽化、品質加權疊圖、FITS 壓縮。</div></p>
+    <p><b>2 · 裁切。</b>可先用滑桿＋角度數字輸入（-180° 至 180°）旋轉影像，再裁掉四邊各 5%（或自訂邊距）。
+    <div class="why"><b>原因：</b>望遠鏡在拍攝間會些微漂移，疊出的邊緣參差不齊。先旋轉可在裁切前把畫面擺正。</div></p>
+    <p><b>3 · 去除綠色（SCNR）。</b>用 Siril 的 <code>rmgreen</code> 去除綠色色偏。
+    <div class="why"><b>原因：</b>彩色感光元件常產生實際不存在的綠色天空——深空幾乎沒有東西發綠光。</div></p>
+    <p><b>4 · 自動去梯度。</b>內建移植自獨立 AutoGradientRemoval 腳本的疊代式穩健背景／漸層估計器，可調整 Scale（尺度）、Smoothness（平滑度）、Downsample（降取樣）、校正 Mode（相減／相除）、結構保護（門檻與強度，避免星點或星雲被誤判為背景），以及選用的簡化多項式模型（附獨立 Degree 次數設定）。
+    <div class="why"><b>原因：</b>提供第二道可獨立調整的去漸層處理——可單獨使用，也可作為第 5 步較重度去背景之前的溫和前處理，適合大範圍不均勻的天空輝光。</div></p>
+    <p><b>5 · 移除背景。</b>用 GraXpert 的 AI 抹平天空輝光；不想用 AI 也可選 Siril 內建的 <code>subsky</code>（RBF／多項式）。使用 Siril subsky 時，「預覽並編輯取樣框...」按鈕會在目前影像上開啟互動式畫布，顯示可編輯的取樣框網格（綠色＝保留、紅色＝排除）——點擊取樣框可切換保留狀態，點擊空白處可新增，也可重新產生預設網格／全選／全部取消；確認後的取樣框會在執行 <code>subsky</code> 前送入 Siril。
+    <div class="why"><b>原因：</b>光害與月光讓天空一角比另一角亮。移除這種漸層，真正的天體才能突顯出來。當自動配置的取樣框落在星點或星雲上而非乾淨背景時，手動精選取樣框特別有幫助。</div></p>
+    <p><b>6 · 移除星點。</b>用 StarNet 將星點與影像其餘部分分離，讓後續步驟可單獨處理星雲本體。
+    <div class="why"><b>原因：</b>讓第 8 步的哈伯色盤只重新上色星雲，不會連帶影響星點的顏色。</div></p>
+    <p><b>7 · 降噪。</b>GraXpert 神經網路在保留星點與細節的同時撫平顆粒感，可調強度混合。
+    <div class="why"><b>原因：</b>即使疊圖之後，暗部仍有雜訊。AI 已學會分辨感光元件雜訊與真實細節。</div></p>
+    <p><b>8 · 哈伯色盤（選用）。</b>針對使用雙窄帶濾鏡拍攝的發射星雲：抽取氫訊號（紅色通道）與氧訊號（綠＋藍），重新混合成偽色預設——包括突顯藍色的配方——並可選 StarNet 移星保護，讓恆星保持自然色彩。另有選用的「GIMP 替代潤飾」區塊（預設收合——點擊可展開）——飽和度、陰影、亮部、對比、銳化、降噪，各自獨立可調，預設全部關閉——將手動 GIMP 潤飾步驟中相同的 Colors／Filters 調整（<code>gimp_replacement.py</code>）整合成單一可重複執行的步驟，在你選擇的重新上色模式之後套用。
+    <div class="why"><b>原因：</b>星雲氣體在特定波長發光，重新映射能揭露肉眼永遠看不到的結構——標誌性的金色與青色 NASA 影像正是這樣做出來的。彩色相機沒有真正的硫通道，這裡的「SHO」是合成的。使用此步驟時請關閉第 1 步的 SPCC。</div></p>
+    <p><b>9 · 拉伸（VeraLux）。</b>以保留色彩比例的反雙曲拉伸，把影像從幾乎全黑提升到可見，並內建關鍵參數「Log D」的自動求解器。
+    <div class="why"><b>原因：</b>相機以線性方式記錄光線，但深空天體比螢幕能顯示的暗上千倍。粗暴增亮會偏色並讓星點過曝；VeraLux 只拉伸亮度、同時保護色彩向量。</div></p>
+    <p><b>10 · 直方圖微調。</b>互動式直方圖，三個可拖曳控制點（陰影／中間調／亮部），可分別調整 RGB、R、G、B 通道，即時預覽。
+    <div class="why"><b>原因：</b>大拉伸之後，細微的各色修正能消除殘餘色偏並定好最終黑點——這是「還可以」與「驚豔」的差別。</div></p>
+    <p><b>11 · 最後修飾。</b>手機修圖式的亮度、對比、飽和度與銳化滑桿，即時預覽。
+    <div class="why"><b>原因：</b>熟悉的最後一哩潤飾，確認後才以全解析度套用。</div></p>
+    <p><b>12 · 標註。</b>在已完成天體測量解析的影像上標示恆星與深空天體。恆星資料來自 Siril 自身的 <code>conesearch</code>（本地明亮星表，或線上 BSC）。Messier／NGC／IC 來自 OpenNGC 資料庫（僅下載一次並快取於本機）。Sharpless 與 Lynds 暗星雲則來自即時的 VizieR 錐形搜尋。每個星表都有各自的核取方塊與標註顏色；「選擇要顯示的天體...」對話框可逐一勾選／取消天體，預覽即時更新，並提供還原、「儲存已標註影像...」，以及與浮水印步驟相同、可一鍵清除全部標註的「移除全部標註」按鈕。標記圓圈現在會依天體的實際視直徑（透過解析後的像素比例換算各星表的尺寸欄位）繪製，不再是固定大小；文字標籤則經過版面配置演算法安排，會避免互相重疊，也保證絕不會被影像邊緣裁切。
+    <div class="why"><b>原因：</b>把完成天體測量解析的影像變成可標示的參考圖。此功能取代了 1.18–1.24 版本中解析 Siril <code>catsearch</code> 主控台紀錄的做法——該做法沒有固定文件化的輸出格式，始終無法穩定運作；1.25 版曾完全移除此步驟，本版改為獨立取得星表資料重新建構。依實際大小繪製標記，能讓北美星雲這類大範圍瀰漫天體與行星狀星雲等小天體一眼區分；而智慧文字版面配置能讓密集星場或天體聚集的區域維持可讀，不再是一堆疊在一起的文字。</div></p>
+    <p><b>13 · 浮水印。</b>在影像上疊加半透明資訊區塊——目標名稱、日期、望遠鏡、累積曝光時間、視場、影像尺寸、Bortle 估計值，並可自行輸入「Author」署名欄位——並可調整位置、透明度與單／雙欄版面。
+    <div class="why"><b>原因：</b>讓照片離開處理資料夾後，仍保留署名與拍攝資訊——原始 FITS 資料完全不會被修改。</div></p>
+    <p style="margin-top:1em"><i>每個步驟的標題列也都有一個小小的「使用 Siril 目前影像」按鈕，可將該步驟的預覽重新整理為 Siril 目前載入的影像——方便接續在管線之外進行的操作（例如手動下達 Siril 指令，或執行其他腳本）。</i></p>`
+  },
+  references:[
+    {t:"Naztronomy — Smart Telescope Preprocessing", u:"https://www.naztronomy.com"},
+    {t:"GraXpert AI models", u:"https://graxpert.com"},
+    {t:"Siril command reference (rmgreen, subsky, platesolve)", u:"https://siril.readthedocs.io/en/stable/Commands.html"}
+  ]
+},
+{
+  id:"trouble", cluster:"c2",
+  title:{en:"Troubleshooting", zh:"疑難排解"},
+  html:{
+    en:`
+    <h3>Common issues</h3>
+    <div class="tbl-scroll"><table class="tbl">
+      <tr><th>Symptom</th><th>Fix</th></tr>
+      <tr><td>Script not in the Scripts menu</td><td>Siril must be ≥ 1.4; check the folder is listed under Preferences → Scripts; rescan or restart. File must end in <code>.py</code>.</td></tr>
+      <tr><td>"No GraXpert model found"</td><td>Open GraXpert once and run AI background extraction + denoising so it downloads its models (Prerequisites step 3).</td></tr>
+      <tr><td>"StarNet failed"</td><td>Check permissions (macOS <code>chmod</code> / <code>xattr</code>) and the executable path in Preferences → Miscellaneous (Prerequisites step 5).</td></tr>
+      <tr><td>Gaia status shows ❌</td><td>Download the catalogs and set both paths in Preferences → Astrometry (Prerequisites step 4).</td></tr>
+      <tr><td>First run is very slow</td><td>Python dependencies are installing — one time only.</td></tr>
+      <tr><td>Mosaic panels misaligned</td><td>The astrometry Gaia catalog is missing; without it the script falls back to simple star registration.</td></tr>
+      <tr><td>Palette output looks flat / colorless</td><td>The target must be an emission nebula shot with the LP / dual-band filter; galaxies and star clusters won't respond.</td></tr>
+      <tr><td>"Astrometry.net fallback also failed" / log mentions <code>-localasnet</code></td><td>Local Astrometry.net isn't installed, or has no index files for your field — see Prerequisites step 6.</td></tr>
+      <tr><td>Stacked image still won't plate-solve even with <code>-localasnet</code></td><td>Confirm <code>astrometry.cfg</code>'s <code>add_path</code> actually points at your index-file folder (Prerequisites step 6.3) — Siril's own "path" setting only locates the <code>solve-field</code> binary, not the indexes.</td></tr>
+      <tr><td>"Plate Solving failed. The image could not be aligned with the reference stars" on a Milky Way Mode stack</td><td>Very wide (~60–70°) fields usually need the wide-field index files (<code>download_wide_field_index.sh</code>) plus a full blind solve — the pipeline already retries this automatically (1.41.0) as a last resort, but the index files still need to be installed for it to succeed.</td></tr>
+      <tr><td><code>solve-field: command not found</code> typed into Siril's own command line</td><td><code>solve-field</code> is an external program, not a Siril command — run it from a regular Terminal window instead.</td></tr>
+    </table></div>
+    <h3>Credits &amp; license</h3>
+    <p>Built on: <b>Nazmus Nasir (Naztronomy)</b> — Smart Telescope Preprocessing · <b>Adrian Knagg-Baugh &amp; the GraXpert team</b> — AI background extraction &amp; denoising · <b>Riccardo Paterniti (VeraLux)</b> — HyperMetric Stretch. Released under <b>GPL-3.0-or-later</b>; GraXpert AI models are CC-BY-NC-SA-4.0 (non-commercial). Not affiliated with ZWO, Siril, GraXpert, or StarNet.</p>`,
+    zh:`
+    <h3>常見問題</h3>
+    <div class="tbl-scroll"><table class="tbl">
+      <tr><th>症狀</th><th>解法</th></tr>
+      <tr><td>Scripts 選單中看不到腳本</td><td>Siril 必須 ≥ 1.4；確認資料夾已列在偏好設定 → Scripts；重新掃描或重啟。檔名必須以 <code>.py</code> 結尾。</td></tr>
+      <tr><td>「No GraXpert model found」</td><td>開啟 GraXpert 各執行一次 AI 背景抽取與降噪，讓它下載模型（事前準備第 3 步）。</td></tr>
+      <tr><td>「StarNet failed」</td><td>檢查權限（macOS 的 <code>chmod</code>／<code>xattr</code>）與偏好設定 → 雜項中的執行檔路徑（事前準備第 5 步）。</td></tr>
+      <tr><td>Gaia 狀態顯示 ❌</td><td>下載星表並在偏好設定 → Astrometry 設定兩個路徑（事前準備第 4 步）。</td></tr>
+      <tr><td>首次執行非常慢</td><td>正在安裝 Python 相依套件——僅此一次。</td></tr>
+      <tr><td>馬賽克拼接錯位</td><td>缺少天體測量 Gaia 星表；沒有它腳本會退回簡單星點對齊。</td></tr>
+      <tr><td>色盤結果平淡無色</td><td>目標必須是以 LP／雙窄帶濾鏡拍攝的發射星雲；星系與星團不會有效果。</td></tr>
+      <tr><td>「Astrometry.net fallback also failed」／記錄中出現 <code>-localasnet</code></td><td>尚未安裝本機 Astrometry.net，或缺少涵蓋該視野的索引檔——見事前準備第 6 步。</td></tr>
+      <tr><td>已使用 <code>-localasnet</code> 但堆疊影像仍無法板解算</td><td>確認 <code>astrometry.cfg</code> 的 <code>add_path</code> 確實指向你的索引檔資料夾（事前準備第 6.3 步）——Siril 本身的「路徑」設定只是定位 <code>solve-field</code> 執行檔，並不知道索引檔位置。</td></tr>
+      <tr><td>銀河模式堆疊影像出現「Plate Solving failed. The image could not be aligned with the reference stars」</td><td>約 60–70° 的極寬視野通常需要廣角索引檔（<code>download_wide_field_index.sh</code>）加上完全盲解算——管線已會自動以此作為最後備援手段重試（1.41.0），但仍需先安裝好索引檔才會成功。</td></tr>
+      <tr><td>在 Siril 自身的指令列輸入 <code>solve-field</code> 出現找不到指令</td><td><code>solve-field</code> 是外部程式、不是 Siril 指令——請改在一般終端機視窗中執行。</td></tr>
+    </table></div>
+    <h3>致謝與授權</h3>
+    <p>建基於：<b>Nazmus Nasir（Naztronomy）</b>——智慧望遠鏡前置處理 · <b>Adrian Knagg-Baugh 與 GraXpert 團隊</b>——AI 背景抽取與降噪 · <b>Riccardo Paterniti（VeraLux）</b>——HyperMetric 拉伸。以 <b>GPL-3.0-or-later</b> 授權釋出；GraXpert AI 模型為 CC-BY-NC-SA-4.0（非商業）。與 ZWO、Siril、GraXpert、StarNet 皆無隸屬關係。</p>`
+  },
+  references:[
+    {t:"Naztronomy", u:"https://www.naztronomy.com"},
+    {t:"VeraLux", u:"mailto:info@veralux.space"},
+    {t:"GNU GPL-3.0 license text", u:"https://www.gnu.org/licenses/gpl-3.0.html"}
+  ]
+},
+{
+  id:"changelog", cluster:"c2",
+  title:{en:"Changelog", zh:"版本紀錄"},
+  html:{
+    en:`
+    <h3>Full version history</h3>
+    <p>The script's own docstring only keeps a short summary of the last
+    few releases so the file stays skimmable. The full, detailed history
+    lives in <code>CHANGELOG.md</code> alongside the script.</p>
+    <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>1.44.0</td><td>Internal refactor, no behavior change (Phase 2):
+        split the ~6,700-line <code>UnifiedPipelineWindow</code> class itself
+        into a base orchestrator plus thirteen per-stage mixin classes under
+        a new <code>s30pro_pipeline/stages/</code> subfolder — each pipeline
+        stage's UI-building and run logic (previously scattered across two
+        far-apart sections of the file) now lives together in its own file.
+        Main script is now about 1,770 lines. Verified against the full
+        87-test suite plus a per-file static-analysis pass before and
+        after. Still requires copying the <code>s30pro_pipeline/</code>
+        folder (now including <code>stages/</code>) alongside the script —
+        see Install above; nothing new to do if you already copy the whole
+        folder.</td></tr>
+      <tr><td>1.43.0</td><td>Internal refactor, no behavior change:
+        split the 8,862-line script into <code>S30Pro_Pipeline.py</code>
+        plus a new <code>s30pro_pipeline/</code> package holding
+        self-contained pieces (VeraLux stretch core, GraXpert helpers,
+        auto-gradient-removal math, stylesheet, shared constants,
+        Bortle estimator, catalog/constellation data, reusable UI
+        widgets). Main script is now about 6,970 lines. Verified against
+        the full 87-test suite before and after. Requires copying the
+        new folder alongside the script — see Install above.</td></tr>
+      <tr><td>1.42.0</td><td>Annotate's constellation lines and name
+        labels now have independent colors — separate "Line color..." /
+        "Name color..." pickers instead of one shared color — plus a new
+        "Color preset" dropdown with six curated matched color schemes
+        (Pale Lavender, Sky Blue, Warm Gold, Classic White, Muted Red,
+        Soft Green) to quick-pick from. Picking a preset sets both
+        colors at once; picking either color manually switches the
+        dropdown back to "Custom". Both colors round-trip through
+        Export/Import settings.</td></tr>
+      <tr><td>1.41.0</td><td>Milky Way Mode's SPCC plate-solve step now
+        falls back a step further: if the plain <code>-localasnet</code>
+        attempt (1.40.0) also fails, it retries once more with
+        <code>-blindpos -blindres</code> (full blind Astrometry.net
+        solve) before giving up — confirmed by hand that the wide
+        ~60-70&deg; stacked field reliably needs a blind solve rather
+        than the header-hinted near-search, even with the right index
+        files installed. Only runs once on the final stack, not
+        per-frame.</td></tr>
+      <tr><td>1.40.0</td><td>Fixed stacked Seestar images failing to
+        plate-solve ("No valid plate-solve solution" during Annotate)
+        even though the same image solves fine on nova.astrometry.net —
+        the SPCC plate-solve step now retries once with
+        <code>-localasnet</code> (local Astrometry.net) before giving
+        up. Also: "Median (Milky Way Mode)" stacking now passes the wide
+        camera's real optics (6mm focal length, ~1.7 micron pixel size)
+        to every plate-solve call instead of trusting the header, since
+        some firmware versions carry the tele camera's values (160mm /
+        2.9 micron) into wide-camera FITS headers.</td></tr>
+      <tr><td>1.39.0</td><td>Control panel narrowed to roughly 1/3 of the
+        window width, with every stage's layout reworked to stay fully
+        readable at that width — no horizontal scrolling needed. Wide
+        multi-column grids collapsed to 2 columns, long non-wrapping
+        button/checkbox labels shortened, stage headers reflowed so long
+        titles don't force the row wider, and the splitter now resizes
+        proportionally (1:2) instead of pinning the left panel at a
+        fixed width.</td></tr>
+      <tr><td>1.38.0</td><td>The bottom 4 buttons (Save File / Export
+        settings / Reset / Close Pipeline) are now split across two rows
+        of 2 instead of one row of 4, so the left panel isn't as wide.
+        Order unchanged.</td></tr>
+      <tr><td>1.37.0</td><td>Annotate: new "Constellation lines" option
+        draws stick-figure lines (and optional name labels) between
+        bright stars for the 88 IAU constellations, from a fully offline
+        embedded dataset — configurable line width, color, gap (so lines
+        don't touch the stars), and a "Select constellations..." dialog
+        to leave specific ones out. A separate layer from the DSO/star
+        markers, unaffected by "Select objects to show..."/"Remove all
+        annotations".</td></tr>
+      <tr><td>1.36.0</td><td>Stacking method: "Median" is now labeled
+        "Median (Milky Way Mode)" in the dropdown, so the recommended
+        choice for Seestar's Milky Way Mode is visible at a glance.
+        Older saved settings files with the plain "Median" value still
+        restore correctly. Each option now has its own tooltip that
+        pops up while hovering it in the open dropdown list, not just
+        the closed combo box. Button row reorganized: Export settings
+        moved from the top to the bottom row, next to Save File and
+        Close Pipeline, and a new Reset button was added — order is
+        now Save File / Export settings / Reset / Close Pipeline.
+        Reset resets every stage's settings to their defaults, clears
+        all previews and undo history, and asks you to pick a new
+        session folder, for starting a fresh pipeline run without
+        closing and reopening the window (asks for confirmation
+        first).</td></tr>
+      <tr><td>1.35.0</td><td>Fixed: Median/Sum stacking crashed with
+        "Cannot upscale or maximize framing with median stacking.
+        Disabling" followed by "input images have different sizes.
+        Stacking failed". Siril's <code>-maximize</code> framing (pads
+        every frame to the union/max canvas at stack time) only works
+        with Average — Median/Sum reject it outright, and once
+        disabled there was nothing left to reconcile mismatched frame
+        sizes. Registration now applies with <code>-framing=min</code>
+        (crop to common overlap) instead of <code>-framing=max</code>
+        whenever Median or Sum is selected, guaranteeing uniform sizes
+        without needing <code>-maximize</code> at all. Trade-off:
+        Median/Sum results cover only the area common to every frame,
+        not the full union each frame touched — Average still gets the
+        wider union canvas. Feather, Normalize on overlaps, and Stack
+        weighting are now automatically greyed out for Median/Sum since
+        none of them apply there.</td></tr>
+      <tr><td>1.34.0</td><td>Fixed: Preprocess's main registration step
+        had no fallback when plate-solving failed
+        (<code>Image ... did not solve</code>) — a real crash hit with,
+        e.g., Seestar's Milky Way Mode, whose field of view is far
+        wider than a typical target and much harder for Siril's
+        astrometric solver to handle per-frame. Whenever a local Gaia
+        astrometry catalog is configured, registration always went
+        through <code>seqplatesolve</code> with no fallback if it
+        failed — previously it just logged a warning and continued
+        with broken/missing registration data. Now falls back to
+        ordinary star-pattern registration (<code>register -2pass</code>)
+        automatically, mirroring the same fallback pattern "Combine
+        with existing master" already used for its own registration
+        step.</td></tr>
+      <tr><td>1.33.0</td><td>Preprocess: new "Stacking method" dropdown
+        — Average (rejection) / Median / Sum, default Average
+        (unchanged from before). Median is recommended for Seestar's
+        Milky Way Mode and other wide, satellite/plane-trail-prone
+        shots, since it's more robust than sigma-clip rejection at
+        erasing a trail that only shows up in a handful of frames.
+        Stack weighting only applies to Average and is automatically
+        greyed out for Median/Sum.</td></tr>
+      <tr><td>1.32.0</td><td>Watermark: the Integration time field now
+        has a Minutes / Hours / Seconds unit dropdown (default:
+        Minutes) controlling how the total exposure time is displayed
+        — e.g. "180 min", "3.0 h", or "10800 s". The sub-count ×
+        per-sub-exposure detail (e.g. "360×30s") is still shown
+        alongside it when available, regardless of unit.</td></tr>
+      <tr><td>1.31.0</td><td>Preprocess: new "Normalize on overlaps"
+        checkbox next to Feather in the mosaic settings — wires up Siril's
+        <code>-overlap_norm</code> flag on the stack call, computing
+        normalization from only the overlap between tiles instead of
+        whole images. Useful when tiles have very different content
+        (e.g. one mostly nebula, another mostly blank sky) and a seam
+        persists with plain normalization; off by default since it's
+        slower to compute. Also added a Degree spinner (1–4) next to
+        "Per-frame background (mosaic seams)" — the underlying
+        <code>seqsubsky</code> call was previously hardcoded to a
+        linear (degree-1) polynomial; now it's adjustable for panels
+        with a more complex gradient than a flat tilt.</td></tr>
+      <tr><td>1.30.0</td><td>Five additions: (1) Crop stage gained a
+        rotate slider + degree number input (-180° to 180°), applied
+        before any margin crop. (2) New "Auto Gradient Removal" stage
+        (4 of 13, right before Remove Background) — a built-in port of
+        the standalone AutoGradientRemoval script's iterative
+        background/gradient estimator, with structure protection and an
+        optional simplified polynomial model. (3) Remove Background's
+        Siril-subsky method now has a "Preview &amp; edit sample
+        boxes..." button opening an interactive canvas to hand-curate
+        which sample boxes get used, instead of relying purely on
+        automatic placement. (4) Every stage got a small "Use Siril's
+        image" button to refresh its preview from whatever's currently
+        loaded in Siril, for continuing work done outside the pipeline.
+        (5) Annotate got a one-click "Remove all annotations" button,
+        mirroring Watermark's existing clear-all action.</td></tr>
+      <tr><td>1.29.5</td><td>Two "Combine with existing master"
+        improvements: (1) total integration time is now the true sum of
+        this run's own subs and the existing master's — read via a new
+        <code>_read_integration_seconds</code> helper (LIVETIME, else
+        STACKCNT × EXPTIME) and patched into the combined result's
+        header — instead of whatever Siril's own 2-frame stack naturally
+        wrote (STACKCNT=2, one inherited EXPTIME). (2) The auto-saved
+        filename now gets a "_combined" suffix instead of "_stacked"
+        when combine ran, matching the pre-built-descriptive-name
+        convention the other stages' save actions already use.</td></tr>
+      <tr><td>1.29.4</td><td>1.29.3's fix for "input images have
+        different precision" (<code>set32bits</code> plus a Siril
+        <code>load</code>/<code>save</code> round trip) didn't actually
+        work — the same crash persisted. Replaced it with a direct,
+        reliable fix: both copies are now rewritten in Python (new
+        <code>_ensure_float32_fits</code> helper, using astropy) to
+        genuine normalized 32-bit float — matching Siril's own on-disk
+        float convention — before Siril's <code>convert</code>/
+        <code>stack</code> ever touch them.</td></tr>
+      <tr><td>1.29.3</td><td>Fixed yet another follow-on crash in
+        "Combine with existing master": <code>Stacking error: input
+        images have different precision</code> / "Opening image 1
+        failed". Siril's <code>convert</code> command only symlinks or
+        copies FITS files as-is — it doesn't re-encode them, so it
+        never unified precision/bit depth between this run's own
+        32-bit float stack and an existing master saved at a different
+        bit depth (e.g. 16-bit integer). Now forces
+        <code>set32bits</code> and re-saves both frames (via
+        <code>load</code>/<code>save</code>) before converting,
+        registering, or stacking, so both inputs are guaranteed to be
+        32-bit float going in.</td></tr>
+      <tr><td>1.29.2</td><td>Fixed a follow-on crash from 1.29.1's
+        registration-fallback fix: <code>Command 'stack' failed:
+        Argument error</code> / "Unexpected argument to stacking
+        <code>-weight_from_nbstack</code>, aborting." — that flag
+        syntax isn't recognized by this Siril build. Every other
+        weighted stack call in this script (Preprocess's own optional
+        weighting method) already uses <code>-weight=&lt;mode&gt;</code>
+        successfully, so the combine step was switched to match:
+        <code>-weight=nbstack</code>.</td></tr>
+      <tr><td>1.29.1</td><td>Fixed "Combine with existing master" crashing
+        with <code>seqapplyreg failed: Generic error</code> ("Existing
+        registration data is a set of identity matrices... aborting")
+        when registering two independently-processed masters from
+        different sessions — plain star-pattern matching can fail to
+        find enough common stars and falls back to identity transforms.
+        Now prefers plate-solve registration (WCS/sky-coordinate based,
+        same approach used for mosaic registration) when local Gaia
+        astrometry is available, falls back to plain star-based
+        registration otherwise, and if both fail, stacks without
+        re-aligning instead of crashing — with a clear log warning to
+        check the combined result for misalignment.</td></tr>
+      <tr><td>1.29.0</td><td>Preprocess: new collapsible "Combine with an
+        existing master" section — for a stacked FITS from an earlier
+        session with no saved raw subs. After this run's own lights are
+        stacked, it registers your existing master against the fresh
+        stack and combines the two with Siril's
+        <code>-weight_from_nbstack</code>, weighted by each session's
+        <code>STACKCNT</code> header (with a manual sub-count override
+        for masters missing one) — instead of averaging two very
+        different amounts of integration time 50/50. Uses
+        <code>convert</code> rather than <code>link</code> to build the
+        sequence, so mismatched formats between sessions don't hit the
+        same failure mode as the earlier "stray stacked file in the
+        lights folder" bug. Your original master file is never
+        modified.</td></tr>
+      <tr><td>1.28.2</td><td>Fixed a Qt startup warning ("Populating font
+        family aliases... missing font family 'Segoe UI'") on platforms
+        without that font installed (e.g. Linux) — switched the global
+        stylesheet from hardcoded Windows/macOS font names to the
+        generic <code>sans-serif</code> CSS family. No visual
+        change.</td></tr>
+      <tr><td>1.28.1</td><td>The "GIMP replacement polish" section is now
+        collapsed by default (click its header to expand), and its
+        description no longer opens with the "Ports the manual GIMP
+        finishing pass..." sentence. UI consistency pass: every "Reset"
+        button across Stretch/Histogram/Final Touch/Hubble Palette now
+        uses the same "↺ Reset" label, and every slider's numeric
+        readout shares one consistent minimum width instead of each
+        stage picking its own.</td></tr>
+      <tr><td>1.28.0</td><td>Hubble Palette: added an optional "GIMP
+        replacement polish" block — Saturation, Shadows, Highlights,
+        Contrast, Sharpen, and Denoise, each independently tunable and
+        off by default. Ports the manual GIMP finishing pass from the
+        "Rosette Nebula Hubble Palette" tutorial workflow (GIMP Colors ▸
+        Saturation, Colors ▸ Shadows-Highlights, Colors ▸
+        Brightness-Contrast, Filters ▸ Enhance ▸ Sharpen, Filters ▸
+        Enhance ▸ Noise Reduction) into one tunable, repeatable step —
+        a direct port of the standalone <code>gimp_replacement.py</code>
+        prototype (HSV saturation, tone-curve shadow/highlight nudges,
+        midpoint contrast, unsharp-mask sharpen, bilateral denoise).
+        Runs after the recolor, whichever palette mode is
+        selected.</td></tr>
+      <tr><td>1.27.0</td><td>Annotate: object markers are now sized to
+        their real apparent diameter — OpenNGC's <code>MajAx</code> for
+        Messier/NGC/IC, VizieR's <code>Diam</code> for Sharpless, and an
+        equivalent diameter derived from VizieR's <code>Area</code> for
+        Lynds Dark Nebulae — converted to pixels via the plate solve's
+        actual pixel scale, and clamped so huge or point-like entries
+        stay reasonable. Also replaced the fixed offset-from-marker label
+        placement with a greedy layout pass that tries a ring of
+        candidate positions per label, avoids overlapping already-placed
+        labels, and guarantees every label stays fully inside the image
+        — fixing both overlapping text in crowded fields and labels
+        clipped at the frame edge.</td></tr>
+      <tr><td>1.26.0</td><td>Annotate is back (stage 11 again, Watermark
+        moves to stage 12) — rebuilt on the OpenNGC database
+        (Messier/NGC/IC, cached locally after first download) and live
+        VizieR cone searches (Sharpless, Lynds Dark Nebulae) instead of
+        Siril's <code>catsearch</code>. Stars still come from Siril's own
+        <code>conesearch</code>, unchanged. New: per-catalog checkboxes
+        and colors, a "Select objects to show..." dialog with live
+        preview updates, and Undo / "Save annotated image..." are back.</td></tr>
+      <tr><td>1.25.0</td><td>Removed the Annotate stage entirely — despite
+        several rounds of fixes, resolving Siril's bundled Messier/NGC/IC
+        catalogs reliably from a script never panned out. Siril's own
+        Annotate tool (Tools → Astrometry → Annotate... in Siril itself)
+        remains the way to label deep-sky objects. Watermark is now the
+        last stage (stage 11, previously 12).</td></tr>
+      <tr><td>1.24.1</td><td>Annotate: fixed a bug where catsearch-based
+        DSO lookup reported zero results for every object — Siril's real
+        log wording separates RA and Dec with a comma
+        (e.g. <code>17h01m12.87s, -30d06m44.70s</code>), which the parsing
+        regex added in 1.23.1 didn't accept (it only matched whitespace
+        there).</td></tr>
+      <tr><td>1.24.0</td><td>Watermark: added a free-text "Author" credit
+        field. Detailed changelog moved out of the script into
+        <code>CHANGELOG.md</code> / this page.</td></tr>
+      <tr><td>1.23.2</td><td>Annotate: added an "Open Siril's Annotate
+        tool..." button — opens Siril's own native catalogue browser as a
+        manual companion (doesn't feed the pipeline's own preview).</td></tr>
+      <tr><td>1.23.1</td><td>Annotate: redesigned deep-sky-object lookup
+        to use Siril's own <code>catsearch</code> command (Messier/NGC/IC)
+        instead of PGC/SIMBAD cone-search or a hardcoded coordinate
+        table.</td></tr>
+      <tr><td>1.23.0</td><td>(superseded by 1.23.1) Briefly shipped a
+        134-entry hardcoded Messier/NGC/IC coordinate table.</td></tr>
+      <tr><td>1.22.2</td><td>Annotate: fixed the SIMBAD named-DSO query,
+        which was being over-restricted by the star magnitude limit.</td></tr>
+      <tr><td>1.22.1</td><td>Preview orientation now matches Siril's own
+        display (top-bottom flip fix); fixed a related Watermark
+        baked-text orientation bug.</td></tr>
+      <tr><td>1.22.0</td><td>Annotate: added SIMBAD-based named-DSO
+        coverage. Watermark: "Remove all watermarks" button, optional
+        two-column layout.</td></tr>
+      <tr><td>1.21.1</td><td>Crop stage: locked the preview scale while
+        drawing a crop box.</td></tr>
+      <tr><td>1.21.0</td><td>New final stage: Watermark — a
+        semi-transparent info block (object, date, telescope, etc.) drawn
+        onto the image, plus a "Save watermarked image..." export
+        button.</td></tr>
+      <tr><td>1.20.0</td><td>Fixed mirrored annotation text in the
+        preview; live preview updates in the Remove Annotations
+        dialog.</td></tr>
+      <tr><td>1.19.0</td><td>Annotate: Undo button, and a "Remove
+        Annotations" dialog to selectively delete individual
+        annotations.</td></tr>
+      <tr><td>1.18.0</td><td>Annotate stage rewired to use Siril's
+        <code>conesearch</code> command for star catalogues.</td></tr>
+      <tr><td>1.17.0 – 1.17.2</td><td>UI sizing polish for the preview
+        panel; fixed faint re-added stars.</td></tr>
+      <tr><td>1.16.0 – 1.16.5</td><td>Save File / Close Pipeline buttons;
+        Annotate marker/label scaling and overlay toggle; NebulaChrome
+        background color-cast fix; disabled-state styling; crop-box
+        preview fixes; before/after preview refresh fix.</td></tr>
+      <tr><td>1.15.0</td><td>Hubble Palette: replaced the Color
+        Calibration trick with NebulaChrome (background neutralization +
+        white reference + polish pass + Richardson-Lucy sharpen).</td></tr>
+      <tr><td>1.14.0 – 1.14.1</td><td>Final Touch: Shadows/Highlights
+        sliders and Richardson-Lucy Deconvolution sharpen mode. Crop stage
+        and preview-panel zoom-retention fixes.</td></tr>
+    </table>
+    <p>See <code>CHANGELOG.md</code> for the complete entry-by-entry
+    history.</p>`,
+    zh:`
+    <h3>完整版本紀錄</h3>
+    <p>腳本自身的文件字串只保留最近幾個版本的簡短摘要，以維持檔案簡潔易讀。完整詳細紀錄請見腳本旁的
+    <code>CHANGELOG.md</code>（英文）。</p>
+    <p>以下摘要（英文）列出近期重要版本的重點：</p>
+    <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>1.44.0</td><td>內部重構，行為不變（第二階段）：將約 6,700 行的 <code>UnifiedPipelineWindow</code> 類別本身，拆分為一個基礎協調類別，加上十三個各自對應單一處理步驟的「mixin」類別，全部放在新的 <code>s30pro_pipeline/stages/</code> 子資料夾中——每個步驟的介面建構與執行邏輯（先前分散在檔案裡相隔甚遠的兩個區段）現在都集中放在同一個檔案裡。主腳本現在約 1,770 行。已以完整的 87 項測試，加上逐檔案的靜態分析檢查，在拆分前後分別驗證。安裝時仍需連同 <code>s30pro_pipeline/</code> 資料夾（現已包含 <code>stages/</code>）一併複製——見上方「安裝」章節；若你原本就整個資料夾一起複製，則無需額外動作。</td></tr>
+      <tr><td>1.43.0</td><td>內部重構，行為不變：將原本 8,862 行的單一腳本拆分為 <code>S30Pro_Pipeline.py</code> 加上新的 <code>s30pro_pipeline/</code> 套件，裡面放置與主視窗 Qt 狀態無關、可獨立存在的部分（VeraLux 拉伸核心、GraXpert 輔助函式、自動漸層移除演算法、樣式表、共用常數、Bortle 估算、星表／星座資料、可重複使用的 UI 元件）。主腳本現在約 6,970 行。已在拆分前後分別以完整的 87 項測試驗證。安裝時請務必連同新資料夾一併複製——見上方「安裝」章節。</td></tr>
+      <tr><td>1.42.0</td><td>標註步驟的星座連線與星座名稱現在可各自設定顏色——分別提供「Line color...」與「Name color...」兩個選色按鈕，不再共用同一種顏色——並新增「Color preset」下拉選單，內含六組精選的搭配色（淡薰衣草紫、天空藍、暖金色、經典白、柔和紅、柔和綠）可直接套用。選擇預設集會同時套用連線與名稱兩種顏色；之後手動選色會自動將下拉選單切回「Custom」。兩種顏色皆會隨匯出／匯入設定一併儲存與還原。</td></tr>
+      <tr><td>1.41.0</td><td>銀河模式（Milky Way Mode）的 SPCC 板解算步驟現在會再多一層備援：如果一般的 <code>-localasnet</code>（1.40.0 新增）也失敗，會再重試一次 <code>-blindpos -blindres</code>（完全盲解算）後才放棄——經實測確認，約 60-70 度的寬廣堆疊視野即使已安裝正確的索引檔，仍經常需要完全盲解算才能成功，帶有標頭提示的鄰近搜尋並不可靠。此步驟只會在最終堆疊影像上執行一次，不會逐張套用於原始畫幅。</td></tr>
+      <tr><td>1.40.0</td><td>修正堆疊後的 Seestar 影像持續無法板解算的問題（後續執行標註時出現「No valid plate-solve solution in the image header」），即使同一張影像在 nova.astrometry.net 上可以順利解算成功。前置處理的 SPCC 板解算步驟現在會在 Siril 自身解算器失敗時，自動重試一次 <code>-localasnet</code>（本機 Astrometry.net 的 solve-field）後才放棄——需要在本機安裝 Astrometry.net（Windows 上為 ansvr，Mac 上可用 <code>brew install astrometry-net</code>）並具備涵蓋該視野的索引檔；若未安裝，備援同樣會失敗，SPCC／標註會如先前一樣被跳過，並在記錄中說明原因。另外：選用「Median (Milky Way Mode)」疊圖方式時，所有板解算呼叫現在都會帶入廣角相機真實的光學參數（焦距 6mm、有效像元尺寸約 1.7 微米），而不是完全信任影像標頭——部分韌體版本會把主鏡頭相機的數值（160mm／2.9 微米）誤寫入廣角相機的 FITS 標頭，光是這樣就足以導致解算失敗。</td></tr>
+      <tr><td>1.39.0</td><td>控制面板寬度收窄為視窗寬度的約 1/3，並重新調整每個步驟的版面配置，確保在此寬度下所有選項都能完整顯示、無需水平捲動即可看到全部內容。將原本 4-5 欄並排的密集參數表格改為 2 欄（或每列一個項目），過長、不會自動換行的按鈕／勾選框文字予以精簡，步驟標題列重新編排，避免過長標題把整列撐寬，並將分割條改為 1:2 的比例縮放，取代原本固定像素寬度的左側面板。</td></tr>
+      <tr><td>1.38.0</td><td>底部的 4 個按鈕（儲存檔案／匯出設定／重設／關閉管線）現在改為兩列、每列 2 個，取代原本一列 4 個的排列，讓左側面板不會過寬。按鈕順序不變。</td></tr>
+      <tr><td>1.37.0</td><td>標註：新增「星座連線」選項，會為視野內（哪怕只是部分涵蓋）的 88 個國際天文聯合會（IAU）星座，在亮星之間繪製連線圖形，並可選擇顯示星座名稱——連線資料完全內建於腳本中，離線可用，不需網路或快取，與上方的梅西耶／NGC／Sharpless 星表不同。可調整線條寬度、顏色、與星星保持的間距（避免線條直接碰到星星），以及是否顯示名稱，並可透過「選擇星座...」對話框排除特定星座。這是獨立於深空天體／恆星標記之外的圖層，不受「選擇要顯示的物件...」或「移除所有標註」影響。</td></tr>
+      <tr><td>1.36.0</td><td>疊圖方式：下拉選單中的「中位數」現已標示為「Median (Milky Way Mode)」（中位數／銀河模式），讓 Seestar 銀河模式建議選用的選項一眼可見。先前已儲存、值為純「Median」的舊設定檔仍可正確還原對應選項。下拉選單展開時，滑鼠停在各選項上也會各自彈出說明（先前僅收合狀態的下拉框本身有提示）。按鈕列重新編排：「匯出設定」已從頂端移到底部列，與「儲存檔案」及「關閉管線」並排，並新增「重設」按鈕——目前順序為：儲存檔案／匯出設定／重設／關閉管線。「重設」會將每個步驟的設定還原為預設值、清除所有預覽與復原紀錄，並提示重新選擇工作階段資料夾，方便在不關閉並重新開啟視窗的情況下開始全新的處理流程（會先要求確認）。</td></tr>
+      <tr><td>1.35.0</td><td>修正：選擇中位數／加總疊圖時會當機，出現「Cannot upscale or maximize framing with median stacking. Disabling」，接著又出現「input images have different sizes. Stacking failed」。Siril 的 <code>-maximize</code> 版面配置（在疊圖時將每張影像補邊到聯集／最大畫布）僅平均模式支援——中位數與加總會直接拒絕此選項，一旦停用後就沒有任何機制能調和尺寸不一致的畫幅，導致疊圖失敗。現在只要選擇中位數或加總，套用對齊時就會改用 <code>-framing=min</code>（裁切至所有畫幅共同重疊區域）取代 <code>-framing=max</code>，確保畫幅尺寸一致，完全不需要 <code>-maximize</code>。取捨：中位數／加總的結果僅涵蓋所有畫幅共同重疊的區域，而非每張畫幅各自觸及的聯集範圍——平均模式仍保有較大的聯集畫布。選擇中位數或加總時，「羽化」、「重疊區域正規化」與「疊圖加權」現在都會自動變灰停用，因為這些選項皆不適用。</td></tr>
+      <tr><td>1.34.0</td><td>修正：前置處理主要的對齊步驟在板解算失敗時（<code>Image ... did not solve</code>）先前沒有任何備援機制——這是實際會遇到的當機情形，例如 Seestar 銀河模式的視場遠比一般拍攝目標寬廣，Siril 天體測量解算器逐張處理時更容易失敗。只要本機設定了 Gaia 天體測量星表，對齊步驟就一律會執行 <code>seqplatesolve</code>，先前若失敗只會記錄警告並在對齊資料不完整甚至完全缺失的情況下繼續執行，導致後續步驟出錯。現在會在板解算失敗時自動退回一般星點比對式對齊（<code>register -2pass</code>），與「與現有主影像合併」功能自身對齊步驟已採用的備援方式一致。</td></tr>
+      <tr><td>1.33.0</td><td>前置處理新增「疊圖方式」下拉選單——平均（拒絕演算法）／中位數／加總，預設為平均（拒絕演算法，與先前相同）。中位數適合 Seestar 銀河模式與其他容易出現衛星或飛機軌跡的大範圍拍攝，因為在只有少數畫幅出現軌跡時，中位數合成比 sigma-clip 拒絕演算法更能穩定將其消除。疊圖加權僅適用於平均模式，選擇中位數或加總時會自動變灰停用。</td></tr>
+      <tr><td>1.32.0</td><td>浮水印：「累積曝光時間」欄位現在新增分鐘／小時／秒的單位下拉選單（預設：分鐘），控制總曝光時間的顯示方式——例如「180 min」、「3.0 h」或「10800 s」。若可取得子畫幅數量與單張曝光時間，仍會一併顯示「360×30s」這類細節，與所選單位無關。</td></tr>
+      <tr><td>1.31.0</td><td>前置處理新增「重疊區域正規化」核取方塊，位於「羽化」旁邊——串接 Siril <code>stack</code> 指令的 <code>-overlap_norm</code> 旗標，只用各影像磚塊的重疊區域計算正規化係數，而非整張影像。適用於各影像磚塊內容差異很大（例如一塊主要是星雲、另一塊主要是空白天空）、且一般正規化仍出現接縫的情況；預設關閉，因為運算較慢。另外在「單張畫幅背景移除（拼接接縫）」旁新增次數選擇器（1–4）——底層的 <code>seqsubsky</code> 呼叫先前寫死為線性（1 次）多項式，現在可依需要調整，適合漸層比單純傾斜更複雜（例如類似暈影的放射狀衰減）的影像磚塊。</td></tr>
+      <tr><td>1.30.0</td><td>五項新增功能：(1) 裁切步驟新增旋轉滑桿與角度數字輸入（-180° 至 180°），會在裁邊之前先套用。(2) 新增「自動去梯度」步驟（第 4 步／共 13 步，緊接在移除背景之前）——內建移植自獨立 AutoGradientRemoval 腳本的疊代式背景／漸層估計器，具備結構保護與選用的簡化多項式模型。(3) 移除背景步驟中 Siril subsky 方式新增「預覽並編輯取樣框...」按鈕，開啟互動式畫布讓你手動精選要使用的取樣框，不再只依賴自動配置。(4) 每個步驟都新增小巧的「使用 Siril 目前影像」按鈕，可將該步驟預覽重新整理為 Siril 目前載入的影像，方便接續管線之外完成的工作。(5) 標註步驟新增可一鍵清除全部標註的「移除全部標註」按鈕，與浮水印步驟原有的清除全部功能一致。</td></tr>
+      <tr><td>1.29.4</td><td>1.29.3 針對「input images have different precision」問題所做的修正（<code>set32bits</code> 加上 Siril 的 <code>load</code>／<code>save</code> 來回操作）實際上並未生效，同樣的錯誤仍然發生。已改為直接、可靠的做法：以 Python（新增 <code>_ensure_float32_fits</code>，使用 astropy）將兩份檔案重寫為真正規範化的 32 位元浮點格式——符合 Siril 自身的磁碟儲存慣例——再交給 Siril 的 <code>convert</code>／<code>stack</code> 處理。</td></tr>
+      <tr><td>1.29.5</td><td>「與現有主影像合併」功能新增兩項改進：(1) 總曝光時間現在會是本次疊圖與既有主影像兩者子畫幅數的真實總和——透過新的 <code>_read_integration_seconds</code> 輔助函式讀取（優先使用 LIVETIME，否則以 STACKCNT × EXPTIME 推算），並寫入合併結果的標頭，而不再只是 Siril 疊圖兩張影像時本身會產生的數字（STACKCNT=2、繼承自其中一張的 EXPTIME）。(2) 合併完成時自動儲存的檔名現在會加上「_combined」後綴，取代原本的「_stacked」，與其他步驟儲存動作已使用的「預先建立描述性檔名」慣例一致。</td></tr>
+      <tr><td>1.29.3</td><td>修正「與現有主影像合併」功能再一次接續出現的錯誤：<code>Stacking error: input images have different precision</code>／「Opening image 1 failed」。Siril 的 <code>convert</code> 指令僅會建立符號連結或直接複製 FITS 檔案，並不會重新編碼，因此無法統一本次疊圖結果（32 位元浮點）與既有主影像（例如 16 位元整數）之間的精度差異，導致 <code>stack</code> 在實際讀取兩個檔案時拒絕合併。現在會先執行 <code>set32bits</code>，並在轉換、對齊、疊圖之前以 <code>load</code>／<code>save</code> 重新儲存兩個檔案，確保兩者輸入時都已統一為 32 位元浮點格式。</td></tr>
+      <tr><td>1.29.2</td><td>修正 1.29.1 對齊備援修正之後接續出現的錯誤：<code>Command 'stack' failed: Argument error</code>／「Unexpected argument to stacking <code>-weight_from_nbstack</code>, aborting.」——這個旗標語法本機安裝的 Siril 版本並不支援。腳本中其他所有加權疊圖呼叫（包含前置處理本身的加權選項）都已成功使用 <code>-weight=&lt;mode&gt;</code> 語法，因此將合併步驟改為一致寫法：<code>-weight=nbstack</code>。</td></tr>
+      <tr><td>1.29.1</td><td>修正「與現有主影像合併」功能在對齊兩份不同工作階段的主影像時，可能因星點比對找不到足夠共同星點、導致對齊矩陣退化為單位矩陣，使 <code>seqapplyreg</code> 直接中止並拋出 <code>Generic error</code> 的問題。現在會優先使用板解算（plate-solve，以星圖座標比對，與鑲嵌拼接所用的方式相同）進行對齊——前提是本機已設定 Gaia 星表；若無法使用或失敗，則退回星點比對方式；若兩者皆失敗，則不再直接中止，而是略過對齊直接合併疊圖，並在紀錄中明確提示應檢查合併結果是否有錯位。</td></tr>
+      <tr><td>1.29.0</td><td>前置處理：新增可收合的「與現有主影像合併」區塊——適用於先前工作階段已疊好、但未保留原始子畫幅的 FITS 檔案。本次疊圖完成後，會將既有主影像與新疊圖結果對齊，再以 Siril 的 <code>-weight_from_nbstack</code> 依各工作階段的 <code>STACKCNT</code> 標頭加權合併（可手動輸入子畫幅張數覆寫沒有此標頭的檔案），而非把累積曝光時間差異懸殊的兩份資料各半平均。使用 <code>convert</code> 而非 <code>link</code> 建立序列，避免不同工作階段格式不一致時，重蹈先前「lights 資料夾中混入已疊圖檔案」錯誤的覆轍。原始主影像檔案不會被修改。</td></tr>
+      <tr><td>1.28.2</td><td>修正 Qt 啟動警告（「Populating font family aliases...missing font family 'Segoe UI'」）——在沒有安裝該字型的平台（例如 Linux）上，將全域樣式表改用通用的 <code>sans-serif</code> 字型家族，取代寫死的 Windows／macOS 字型名稱。畫面外觀不受影響。</td></tr>
+      <tr><td>1.28.1</td><td>「GIMP 替代潤飾」區塊現在預設收合（點擊標題可展開），說明文字也移除了開頭「移植自手動 GIMP 潤飾步驟……」那句。UI 一致性調整：Stretch／直方圖／最後修飾／哈伯色盤中所有「重設」按鈕現在統一使用「↺ 重設」標籤，所有滑桿的數值欄位也統一採用相同的最小寬度，不再各步驟各自為政。</td></tr>
+      <tr><td>1.28.0</td><td>哈伯色盤：新增選用的「GIMP 替代潤飾」區塊——飽和度、陰影、亮部、對比、銳化、降噪，各自獨立可調，預設全部關閉。將「玫瑰星雲哈伯色盤」教學影片中手動 GIMP 潤飾步驟（Colors ▸ Saturation、Colors ▸ Shadows-Highlights、Colors ▸ Brightness-Contrast、Filters ▸ Enhance ▸ Sharpen、Filters ▸ Enhance ▸ Noise Reduction）移植成單一可重複執行的步驟——直接移植自獨立原型腳本 <code>gimp_replacement.py</code>（HSV 飽和度、色調曲線陰影／亮部調整、中點對比、unsharp mask 銳化、雙邊濾波降噪）。在你選擇的重新上色模式之後套用。</td></tr>
+      <tr><td>1.27.0</td><td>標註：天體標記現在依實際視直徑繪製——Messier／NGC／IC 使用 OpenNGC 的
+        <code>MajAx</code>、Sharpless 使用 VizieR 的 <code>Diam</code>、Lynds 暗星雲則由 VizieR 的
+        <code>Area</code> 換算出等效直徑——並透過解析後的實際像素比例換算成像素，同時限制上下限避免過大或過小。也以貪婪版面配置演算法取代原本固定偏移的文字標籤位置：會嘗試標記周圍一圈候選位置、避開已放置的標籤，並保證每個標籤都完全落在影像範圍內——同時解決了密集區域文字重疊與邊緣標籤被裁切的問題。</td></tr>
+      <tr><td>1.26.0</td><td>「標註」步驟回歸（再次成為第 11 步，浮水印移至第
+        12 步）——改以 OpenNGC 資料庫（Messier/NGC/IC，首次下載後快取於本機）與即時
+        VizieR 錐形搜尋（Sharpless、Lynds 暗星雲）取代 Siril 的
+        <code>catsearch</code>；恆星資料仍沿用 Siril 自身的
+        <code>conesearch</code>，未變動。新增：各星表獨立的核取方塊與顏色、可即時更新預覽的「選擇要顯示的天體...」對話框，並恢復還原與「儲存已標註影像...」功能。</td></tr>
+      <tr><td>1.25.0</td><td>完全移除「標註」步驟——即使經過多次修正，仍無法從腳本可靠地解析 Siril 內建的 Messier/NGC/IC 星表。如需標示深空天體，請改用 Siril 本身的標註工具（Tools → Astrometry → Annotate...）。浮水印現為最後一個步驟（第 11 步，原為第 12 步）。</td></tr>
+      <tr><td>1.24.1</td><td>標註：修正 catsearch 深空天體查詢一律回傳 0 筆結果的問題——Siril 實際的紀錄格式以逗號分隔赤經與赤緯，1.23.1 版的解析規則只接受空白，因此完全解析不到座標。</td></tr>
+      <tr><td>1.24.0</td><td>浮水印新增可自行輸入的「Author」署名欄位；詳細版本紀錄已移出腳本，改置於
+        <code>CHANGELOG.md</code> 與本頁。</td></tr>
+      <tr><td>1.23.2</td><td>標註：新增「開啟 Siril 標註工具」按鈕，可瀏覽 Siril 原生星表（僅供手動查詢，不會回饋到本管線自己的預覽）。</td></tr>
+      <tr><td>1.23.1</td><td>標註：改用 Siril 自身的 <code>catsearch</code> 指令解析 Messier/NGC/IC，取代 PGC/SIMBAD 圓錐搜尋或寫死的座標表。</td></tr>
+      <tr><td>1.22.x</td><td>修正 SIMBAD 具名深空天體查詢；預覽方向改為與 Siril 顯示一致；浮水印新增「移除全部浮水印」與雙欄版面選項。</td></tr>
+      <tr><td>1.21.x</td><td>新增浮水印最終步驟（含位置／透明度設定）；修正裁切框繪製時預覽縮放的問題。</td></tr>
+    </table>
+    <p>完整逐版紀錄請參閱 <code>CHANGELOG.md</code>。</p>`
+  },
+  references:[
+    {t:"CHANGELOG.md (full history)", u:"CHANGELOG.md"}
+  ]
+}
+];
+
+/* ---------- Pipeline flow diagram nodes/edges ---------- */
+const FLOW_NODES = [
+  {id:"n-setup", label:{en:"Setup", zh:"安裝設定"}, cluster:"c3", tab:"prereq"},
+  {id:"n1", label:{en:"1 Stack", zh:"1 疊圖"}, cluster:"c1", tab:"stages"},
+  {id:"n2", label:{en:"2 Crop", zh:"2 裁切"}, cluster:"c1", tab:"stages"},
+  {id:"n3", label:{en:"3 SCNR", zh:"3 去綠"}, cluster:"c1", tab:"stages"},
+  {id:"n4", label:{en:"4 Auto Gradient", zh:"4 自動去梯度"}, cluster:"c1", tab:"stages"},
+  {id:"n5", label:{en:"5 Background", zh:"5 去背景"}, cluster:"c1", tab:"stages"},
+  {id:"n6", label:{en:"6 Remove Stars", zh:"6 移除星點"}, cluster:"c1", tab:"stages"},
+  {id:"n7", label:{en:"7 Denoise", zh:"7 降噪"}, cluster:"c1", tab:"stages"},
+  {id:"n8", label:{en:"8 Palette", zh:"8 色盤"}, cluster:"c1", tab:"stages"},
+  {id:"n9", label:{en:"9 Stretch", zh:"9 拉伸"}, cluster:"c1", tab:"stages"},
+  {id:"n10", label:{en:"10 Histogram", zh:"10 直方圖"}, cluster:"c2", tab:"stages"},
+  {id:"n11", label:{en:"11 Final touch", zh:"11 修飾"}, cluster:"c2", tab:"stages"},
+  {id:"n12", label:{en:"12 Annotate", zh:"12 標註"}, cluster:"c2", tab:"stages"},
+  {id:"n13", label:{en:"13 Watermark", zh:"13 浮水印"}, cluster:"c2", tab:"stages"}
+];
+const FLOW_EDGES = [
+  ["n-setup","n1"],["n1","n2"],["n2","n3"],["n3","n4"],["n4","n5"],
+  ["n5","n6"],["n6","n7"],["n7","n8"],["n8","n9"],["n9","n10"],
+  ["n10","n11"],["n11","n12"],["n12","n13"]
+];
+const CLUSTER_HEX = { c1:"#4763ff", c2:"#14b8a6", c3:"#f59e0b" };
+const LEGEND = {
+  c3:{en:"Setup (once)", zh:"安裝設定（一次）"},
+  c1:{en:"Image processing", zh:"影像處理"},
+  c2:{en:"Finishing", zh:"最後修飾"}
+};
+
+/* ---------- State + rendering ---------- */
+let lang = "en";
+let activeTab = "overview";
+
+function setLang(l){
+  lang = l;
+  document.getElementById("btn-en").classList.toggle("active", l==="en");
+  document.getElementById("btn-zh").classList.toggle("active", l==="zh");
+  document.documentElement.lang = (l==="zh") ? "zh-Hant" : "en";
+  renderAll();
+}
+
+function switchTab(id){
+  activeTab = id;
+  document.querySelectorAll("nav.tabs button").forEach(b=> b.classList.toggle("active", b.dataset.id === id));
+  document.querySelectorAll(".panel").forEach(p=> p.classList.toggle("active", p.dataset.id === id));
+  if(id === "overview"){ setTimeout(buildGraph, 0); }
+}
+
+function el(tag, cls, html){
+  const e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(html !== undefined) e.innerHTML = html;
+  return e;
+}
+
+function buildTabsNav(){
+  const nav = document.getElementById("tabs");
+  nav.innerHTML = "";
+  const ov = document.createElement("button");
+  ov.dataset.id = "overview";
+  ov.innerHTML = `<span class="dot" style="background:#1c2033"></span><span>${UI[lang].overviewTab}</span>`;
+  ov.onclick = ()=>switchTab("overview");
+  nav.appendChild(ov);
+  TOPICS.forEach(t=>{
+    const b = document.createElement("button");
+    b.dataset.id = t.id;
+    b.innerHTML = `<span class="dot" style="background:${CLUSTER_HEX[t.cluster] || 'var(--accent)'}"></span><span>${t.title[lang]}</span>`;
+    b.onclick = ()=>switchTab(t.id);
+    nav.appendChild(b);
+  });
+}
+
+function buildOverviewPanel(){
+  const panel = el("div","panel");
+  panel.dataset.id = "overview";
+  const card = el("div","card");
+  card.appendChild(el("div", null, OVERVIEW.summary[lang]));
+
+  const gwrap = el("div","graph-wrap");
+  gwrap.innerHTML = `<svg id="network-graph"></svg>`;
+  card.appendChild(gwrap);
+  card.appendChild(el("p","graph-hint", UI[lang].graphHint));
+
+  const legend = el("div","legend");
+  Object.keys(LEGEND).forEach(c=>{
+    legend.appendChild(el("span", null, `<i style="background:${CLUSTER_HEX[c]}"></i>${LEGEND[c][lang]}`));
+  });
+  card.appendChild(legend);
+
+  panel.appendChild(card);
+  return panel;
+}
+
+function buildTopicPanel(topic){
+  const panel = el("div","panel");
+  panel.dataset.id = topic.id;
+  const card = el("div","card");
+  card.appendChild(el("h2","topic-title",
+    `<span class="badge" style="background:${CLUSTER_HEX[topic.cluster] || 'var(--accent)'}"></span>${topic.title[lang]}`));
+  card.appendChild(el("div", null, topic.html[lang]));
+
+  if(topic.references && topic.references.length){
+    const details = el("details","refs");
+    details.appendChild(el("summary", null, `${UI[lang].references} (${topic.references.length})`));
+    const ol = el("ol");
+    topic.references.forEach(r=> ol.appendChild(el("li", null, `<a href="${r.u}" target="_blank" rel="noopener">${r.t}</a>`)) );
+    details.appendChild(ol);
+    card.appendChild(details);
+  }
+  panel.appendChild(card);
+  return panel;
+}
+
+function renderAll(){
+  document.querySelectorAll("[data-i18n]").forEach(node=>{
+    const key = node.getAttribute("data-i18n");
+    if(UI[lang][key] !== undefined) node.textContent = UI[lang][key];
+  });
+  buildTabsNav();
+  const content = document.getElementById("content");
+  content.innerHTML = "";
+  content.appendChild(buildOverviewPanel());
+  TOPICS.forEach(t=> content.appendChild(buildTopicPanel(t)) );
+  switchTab(activeTab);
+}
+
+/* ---------- D3 pipeline flowchart (static, wrapped left-to-right) ---------- */
+function buildGraph(){
+  const svgEl = document.getElementById("network-graph");
+  if(!svgEl) return;
+  svgEl.innerHTML = "";
+  const wrapEl = svgEl.parentElement;
+  const width = Math.max(320, (wrapEl && wrapEl.clientWidth) ||
+    svgEl.getBoundingClientRect().width || 900) - 12;
+
+  const nodes = FLOW_NODES.map(n => Object.assign({}, n));
+  const links = FLOW_EDGES.map(([s,t]) => ({ source:s, target:t }));
+
+  const boxW = 132, boxH = 46, gapX = 30, gapY = 44, pad = 26;
+  const cols = Math.max(2, Math.min(nodes.length,
+    Math.floor((width - pad*2 + gapX) / (boxW + gapX))));
+  const rows = Math.ceil(nodes.length / cols);
+  const height = pad*2 + rows*boxH + Math.max(0, rows-1)*gapY;
+
+  // boustrophedon (snake) grid: row 0 left-to-right, row 1 right-to-left, etc.
+  // — reads as a single continuous flowchart path instead of a scattered graph.
+  nodes.forEach((d,i)=>{
+    const row = Math.floor(i / cols);
+    const ltr = row % 2 === 0;
+    const posInRow = i % cols;
+    const col = ltr ? posInRow : (cols - 1 - posInRow);
+    d.row = row;
+    d.ltr = ltr;
+    d.cx = pad + boxW/2 + col*(boxW+gapX);
+    d.cy = pad + boxH/2 + row*(boxH+gapY);
+  });
+
+  const svg = d3.select(svgEl)
+    .attr("viewBox", [0,0,width,height])
+    .attr("width", width).attr("height", height);
+
+  svg.append("defs").append("marker")
+    .attr("id","arrow").attr("viewBox","0 -5 10 10").attr("refX",9).attr("refY",0)
+    .attr("markerWidth",6).attr("markerHeight",6).attr("orient","auto")
+    .append("path").attr("d","M0,-5L10,0L0,5").attr("fill","#c7c9dd");
+
+  const byId = {};
+  nodes.forEach(n=> byId[n.id] = n);
+
+  const linkG = svg.append("g");
+  links.forEach(({source,target})=>{
+    const a = byId[source], b = byId[target];
+    if(!a || !b) return;
+    let d;
+    if(a.row === b.row){
+      // same row: straight arrow between the facing edges of the two boxes
+      const x1 = a.ltr ? a.cx + boxW/2 : a.cx - boxW/2;
+      const x2 = a.ltr ? b.cx - boxW/2 : b.cx + boxW/2;
+      d = `M${x1},${a.cy} L${x2},${b.cy}`;
+    } else {
+      // row wrap: elbow connector down from the bottom of a into the top of b
+      const x1 = a.cx, y1 = a.cy + boxH/2;
+      const x2 = b.cx, y2 = b.cy - boxH/2;
+      const midY = (y1+y2)/2;
+      d = `M${x1},${y1} L${x1},${midY} L${x2},${midY} L${x2},${y2}`;
+    }
+    linkG.append("path").attr("class","link").attr("d", d).attr("marker-end","url(#arrow)");
+  });
+
+  const node = svg.append("g").selectAll("g")
+    .data(nodes).join("g").attr("class","node")
+    .attr("transform", d=>`translate(${d.cx},${d.cy})`)
+    .on("click", (event,d)=> switchTab(d.tab));
+
+  node.append("rect")
+    .attr("x", -boxW/2).attr("y", -boxH/2)
+    .attr("width", boxW).attr("height", boxH)
+    .attr("rx", 10).attr("ry", 10)
+    .attr("fill", d=>CLUSTER_HEX[d.cluster] || "#4763ff");
+
+  node.append("text").attr("class","node-label")
+    .attr("text-anchor","middle").attr("dy","0.32em")
+    .text(d=> d.label[lang]);
+
+  node.append("title").text(d=> d.label[lang]);
+}
+
+/* ---------- Init ---------- */
+setLang("en");
+</script>
+</body>
+</html>
