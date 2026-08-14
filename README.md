@@ -19,6 +19,8 @@ Built on top of three excellent open-source projects, all credit to their author
 License: **GPL-3.0-or-later** (same as all three source scripts).
 GraXpert AI models are licensed CC-BY-NC-SA-4.0.
 
+![S30 Pro Pipeline screenshot — Remove Background stage with live before/after split preview](assets/screenshot.png)
+
 ---
 
 ## The big picture — what actually happens to your photo
