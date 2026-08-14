@@ -48,7 +48,7 @@
   .btn-repo:hover{ background: var(--accent); }
   .btn-repo svg{ width:16px; height:16px; flex-shrink:0; }
 
-  .hero-shot{ margin: 4px 0 20px; border-radius: var(--radius-lg); overflow:hidden; box-shadow: var(--shadow); border:1px solid var(--border); background:#141724; }
+  .hero-shot{ margin: 0 0 18px; border-radius: var(--radius-md); overflow:hidden; box-shadow: var(--shadow); border:1px solid var(--border); background:#141724; }
   .hero-shot img{ display:block; width:100%; height:auto; }
   .hero-shot figcaption{ padding:10px 14px; font-size:0.8rem; color:var(--muted); background: var(--surface); border-top:1px solid var(--border); }
 
@@ -138,11 +138,6 @@
       </div>
     </div>
   </header>
-
-  <figure class="hero-shot">
-    <img src="assets/screenshot.png" alt="S30 Pro Pipeline window showing the Remove Background stage with a live before/after split preview" loading="lazy">
-    <figcaption data-i18n="heroShotCaption"></figcaption>
-  </figure>
 
   <nav class="tabs" id="tabs"></nav>
 
@@ -935,6 +930,12 @@ function buildOverviewPanel(){
   const panel = el("div","panel");
   panel.dataset.id = "overview";
   const card = el("div","card");
+
+  const shot = el("figure","hero-shot",
+    `<img src="assets/screenshot.png" alt="S30 Pro Pipeline window showing the Remove Background stage with a live before/after split preview" loading="lazy">
+     <figcaption>${UI[lang].heroShotCaption}</figcaption>`);
+  card.appendChild(shot);
+
   card.appendChild(el("div", null, OVERVIEW.summary[lang]));
 
   const gwrap = el("div","graph-wrap");
