@@ -292,6 +292,15 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
     snapshot_ready = pyqtSignal(int)
     log_d_solved = pyqtSignal(float)
     palette_cache_updated = pyqtSignal(str)
+    # Comet Stack mode's two GUI-only steps (comet registration, Star
+    # Recomposition — see stage1_preprocess.py) have to pause execution
+    # mid-stage and show instructions in a modal dialog, but _exec_stage1
+    # runs on the worker QThread where QDialog can't be shown directly.
+    # Same cross-thread pattern as snapshot_ready/_on_snapshot_ready:
+    # emitting this from the worker thread queues _on_guided_pause_requested
+    # to run on the GUI thread; _guided_pause() (called from the worker)
+    # blocks on a threading.Event until that slot sets it.
+    guided_pause_requested = pyqtSignal(object)
 
     def __init__(self):
         super().__init__()
@@ -366,6 +375,7 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         self.date_range = None
         self.snapshot_ready.connect(self._on_snapshot_ready)
         self.log_d_solved.connect(self._on_log_d_solved)
+        self.guided_pause_requested.connect(self._on_guided_pause_requested)
 
         self._resolve_working_dir()
         self._build_ui()
@@ -950,6 +960,74 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
             f"{stage_label}: loaded Siril's current image as this "
             "stage's preview.", LogColor.BLUE)
 
+    def _guided_pause(self, title, instructions, verify_fn=None,
+                      verify_error=None):
+        """Pause the calling stage (called from the worker thread, e.g.
+        from within an `_exec_stage*` function) and show a modal dialog
+        with `instructions` + Continue/Cancel on the GUI thread, blocking
+        the worker until the user responds — used by Comet Stack mode's
+        two GUI-only manual steps (comet registration, Star
+        Recomposition), which have no Siril console command equivalent.
+
+        If `verify_fn` is given, it's called (also on the GUI thread,
+        right after Continue is clicked) to confirm the manual step
+        actually happened (e.g. checking that an expected .seq file now
+        exists on disk); if it returns falsy, `verify_error` is shown and
+        the same dialog reappears rather than silently proceeding.
+        Raises RuntimeError (aborting the stage, same as any other
+        _exec_stage* failure) if the user clicks Cancel.
+
+        Uses the same cross-thread signal pattern already established by
+        snapshot_ready/_on_snapshot_ready — see the guided_pause_requested
+        signal above — plus a threading.Event so the worker thread
+        actually blocks until the GUI-thread dialog is dismissed."""
+        event = threading.Event()
+        state = {"cancelled": False}
+        self.guided_pause_requested.emit({
+            "title": title, "instructions": instructions,
+            "verify_fn": verify_fn, "verify_error": verify_error,
+            "event": event, "state": state,
+        })
+        event.wait()
+        if state["cancelled"]:
+            raise RuntimeError(f"{title}: cancelled by user.")
+
+    def _on_guided_pause_requested(self, payload):
+        """GUI-thread slot for guided_pause_requested — see _guided_pause
+        above for why this two-part (emit + slot) split exists."""
+        title = payload["title"]
+        verify_fn = payload["verify_fn"]
+        verify_error = payload["verify_error"]
+        try:
+            while True:
+                dlg = QDialog(self)
+                dlg.setWindowTitle(title)
+                dlg.setMinimumWidth(480)
+                dv = QVBoxLayout(dlg)
+                lbl = QLabel(payload["instructions"])
+                lbl.setWordWrap(True)
+                dv.addWidget(lbl)
+                buttons = QDialogButtonBox(
+                    QDialogButtonBox.StandardButton.Ok |
+                    QDialogButtonBox.StandardButton.Cancel)
+                ok_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
+                ok_btn.setText("Continue")
+                buttons.accepted.connect(dlg.accept)
+                buttons.rejected.connect(dlg.reject)
+                dv.addWidget(buttons)
+                if dlg.exec() != QDialog.DialogCode.Accepted:
+                    payload["state"]["cancelled"] = True
+                    break
+                if verify_fn is None or verify_fn():
+                    break
+                QMessageBox.warning(
+                    self, "Not ready yet",
+                    verify_error or
+                    "That manual step doesn't look like it finished yet — "
+                    "please complete it, then click Continue again.")
+        finally:
+            payload["event"].set()
+
     def _finish_stage(self, idx, before, after, done_msg, log_msg,
                       before_linear=True, after_linear=True,
                       autosave_name=None, progress=None):
@@ -1289,6 +1367,10 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
                 "combine_master_path": self.combine_master_path_edit.text(),
                 "combine_master_subcount":
                     self.combine_master_subcount_spin.value(),
+                "comet_sigma_low": self.comet_sigma_low_spin.value(),
+                "comet_sigma_high": self.comet_sigma_high_spin.value(),
+                "comet_subsky_degree": self.comet_subsky_degree_spin.value(),
+                "comet_subsky_samples": self.comet_subsky_samples_spin.value(),
             },
             "crop": {
                 "auto": self.crop_auto_checkbox.isChecked(),
@@ -1512,6 +1594,14 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
             p.get("combine_master_path", ""))
         self.combine_master_subcount_spin.setValue(
             int(p.get("combine_master_subcount", 0)))
+        self.comet_sigma_low_spin.setValue(
+            float(p.get("comet_sigma_low", 5.0)))
+        self.comet_sigma_high_spin.setValue(
+            float(p.get("comet_sigma_high", 5.0)))
+        self.comet_subsky_degree_spin.setValue(
+            int(p.get("comet_subsky_degree", 1)))
+        self.comet_subsky_samples_spin.setValue(
+            int(p.get("comet_subsky_samples", 20)))
 
         c = sd.get("crop", {})
         self.crop_auto_checkbox.setChecked(c.get("auto", True))
