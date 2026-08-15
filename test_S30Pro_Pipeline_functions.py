@@ -780,6 +780,108 @@ def test_read_integration_seconds(pipeline, np):
               live == 900.0, f"got {live}")
 
 
+def test_splice_seq_registration(pipeline, np):
+    print("\n== Comet Stack: _splice_seq_registration() "
+          "(.seq registration-data patch) ==")
+    splice = pipeline.UnifiedPipelineWindow._splice_seq_registration
+
+    with tempfile.TemporaryDirectory() as tmp:
+        # Case 1: source has one R-line per frame (multi-line block) —
+        # dest has M0/M1 adjacent (no R lines at all, as seqstarnet
+        # actually leaves it). The whole block should land verbatim
+        # between dest's own M0 and M1, in the same order.
+        src_path = os.path.join(tmp, "bkg_r_lights_.seq")
+        with open(src_path, "w") as f:
+            f.write("S 'bkg_r_lights_' 0\n"
+                    "L 1\n"
+                    "M0 1\n"
+                    "R1 0.12 -0.34 1.0 0.0 0.0 1.0 850\n"
+                    "R2 0.08 -0.31 1.0 0.0 0.0 1.0 861\n"
+                    "R3 0.15 -0.29 1.0 0.0 0.0 1.0 843\n"
+                    "M1 1\n"
+                    "Bias 0\n")
+        dst_path = os.path.join(tmp, "starless_bkg_r_lights_.seq")
+        with open(dst_path, "w") as f:
+            f.write("S 'starless_bkg_r_lights_' 0\n"
+                    "L 1\n"
+                    "M0 1\n"
+                    "M1 1\n"
+                    "Bias 0\n")
+
+        n = splice(src_path, dst_path)
+        check("returns the number of R-lines copied (3)", n == 3, f"got {n}")
+
+        with open(dst_path) as f:
+            out_lines = f.readlines()
+        check("dest gained exactly the 3 R-lines from the source",
+              sum(1 for ln in out_lines if ln.startswith("R")) == 3,
+              f"R-line count: {sum(1 for ln in out_lines if ln.startswith('R'))}")
+        m0_i = next(i for i, ln in enumerate(out_lines)
+                   if ln.startswith("M0"))
+        m1_i = next(i for i, ln in enumerate(out_lines)
+                   if ln.startswith("M1"))
+        between = out_lines[m0_i + 1:m1_i]
+        check("the 3 R-lines sit directly between dest's M0 and M1, "
+              "in original order",
+              between == ["R1 0.12 -0.34 1.0 0.0 0.0 1.0 850\n",
+                          "R2 0.08 -0.31 1.0 0.0 0.0 1.0 861\n",
+                          "R3 0.15 -0.29 1.0 0.0 0.0 1.0 843\n"],
+              f"got {between}")
+        check("everything outside the M0..M1 span is left untouched",
+              out_lines[0] == "S 'starless_bkg_r_lights_' 0\n"
+              and out_lines[-1] == "Bias 0\n",
+              f"got first={out_lines[0]!r} last={out_lines[-1]!r}")
+
+        # Case 2: source has a single multi-value R1 line instead of one
+        # per frame — should still be copied verbatim as a 1-line block.
+        src_single = os.path.join(tmp, "single_r.seq")
+        with open(src_single, "w") as f:
+            f.write("S 'x' 0\nM0 1\nR1 0.5 -0.2 1.0 0.0 0.0 1.0 900\nM1 1\n")
+        dst_single = os.path.join(tmp, "single_r_dest.seq")
+        with open(dst_single, "w") as f:
+            f.write("S 'y' 0\nM0 1\nM1 1\n")
+        n2 = splice(src_single, dst_single)
+        check("single multi-value R1 line: copies exactly 1 line",
+              n2 == 1, f"got {n2}")
+
+        # Case 3: re-running splice on an already-spliced destination
+        # (e.g. stage re-run) replaces the old R-block rather than
+        # duplicating it.
+        n3 = splice(src_single, dst_single)
+        with open(dst_single) as f:
+            out3 = f.readlines()
+        check("re-splicing the same dest doesn't duplicate R-lines",
+              sum(1 for ln in out3 if ln.startswith("R")) == 1,
+              f"got {sum(1 for ln in out3 if ln.startswith('R'))} "
+              f"(n3={n3})")
+
+        # Case 4: source missing M0/M1 markers entirely — should raise a
+        # clear RuntimeError, not write anything or crash obscurely.
+        bad_src = os.path.join(tmp, "no_markers.seq")
+        with open(bad_src, "w") as f:
+            f.write("S 'z' 0\nsomething else entirely\n")
+        raised = False
+        try:
+            splice(bad_src, dst_single)
+        except RuntimeError:
+            raised = True
+        check("source missing M0/M1 markers: raises RuntimeError",
+              raised, "no exception raised")
+
+        # Case 5: source has M0/M1 but no R-lines between them — should
+        # also raise rather than silently splicing an empty block.
+        empty_src = os.path.join(tmp, "empty_r.seq")
+        with open(empty_src, "w") as f:
+            f.write("S 'z' 0\nM0 1\nM1 1\n")
+        raised2 = False
+        try:
+            splice(empty_src, dst_single)
+        except RuntimeError:
+            raised2 = True
+        check("source with no R-lines between M0/M1: raises RuntimeError",
+              raised2, "no exception raised")
+
+
 def test_auto_gradient_removal(pipeline, np):
     print("\n== Auto Gradient Removal stage (agr_* core functions) ==")
     correct_image = pipeline.agr_correct_image
@@ -1014,6 +1116,7 @@ def main():
     test_patch_stackcnt_header(pipeline, np)
     test_ensure_float32_fits(pipeline, np)
     test_read_integration_seconds(pipeline, np)
+    test_splice_seq_registration(pipeline, np)
     test_auto_gradient_removal(pipeline, np)
     test_subsky_box_editor_helpers(pipeline, np)
     test_annotate_catalog_helpers(pipeline, np)
