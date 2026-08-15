@@ -470,6 +470,28 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>1.45.0</td><td>New feature: <b>Comet Stack</b> mode, a fourth
+        option in Preprocess's Stacking method dropdown for comets and
+        asteroids. Produces a comet-sharp stack and a stars-sharp stack from
+        the same subs — a moving object needs two different registrations,
+        one on the stars and one on its own motion, which no other stacking
+        mode here can produce at once — then hands both to Star
+        Recomposition to combine. Along the way, <code>seqstarnet</code>
+        regenerates its sequence file without the registration data Siril
+        had already computed for it; since there's no console command to
+        reattach it, a new <code>_splice_seq_registration()</code> helper
+        patches it back in directly as text (with its own unit tests).
+        Adjustable rejection sigmas and background-removal degree/samples
+        appear in a new settings group when this mode is selected, which
+        also auto-disables Remove Background and Remove Stars below it
+        (both already happen as part of Comet Stack's own workflow) and
+        restores them if you switch away. Two steps can't be scripted and
+        pause the pipeline with on-screen instructions and a Continue
+        button: picking the comet's nucleus for Siril's own "Comet/Asteroid
+        registration" tool, and running Star Recomposition (Image
+        Processing → Star Processing) by hand. Everything after that —
+        Stretch, Histogram, Final touch, Annotate, Watermark — runs
+        unchanged on the result.</td></tr>
       <tr><td>1.44.0</td><td>Internal refactor, no behavior change (Phase 2):
         split the ~6,700-line <code>UnifiedPipelineWindow</code> class itself
         into a base orchestrator plus thirteen per-stage mixin classes under
@@ -805,6 +827,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>1.45.0</td><td>新功能：<b>彗星堆疊（Comet Stack）</b>模式，是「前處理」堆疊方式下拉選單中新增的第四個選項，專為彗星與小行星目標設計。它會用同一批子圖產生兩張堆疊結果——一張以恆星對齊（彗星拖出尾跡），一張以彗星自身移動對齊（恆星拖線、彗星銳利）——因為移動天體需要兩種不同的對齊方式，這是其他堆疊模式都做不到的，然後把兩者交給「星點重組（Star Recomposition）」合成一張兩者皆銳利的影像。過程中有一個技術細節需要手動解決：<code>seqstarnet</code> 會重新產生它輸出序列的 .seq 檔，而不會保留 Siril 先前已算好的對齊資料；由於沒有對應的主控台指令可以把它接回去，因此新增了 <code>_splice_seq_registration()</code> 輔助函式，直接以文字檔案的方式把對齊資料補回去（並附有專屬單元測試）。選擇此模式時會出現新的設定區塊，可調整堆疊拒斥的 sigma 值與背景移除的階數／取樣點數，同時會自動關閉（並以提示說明灰化）下方的「移除背景」與「移除星點」兩個步驟（彗星堆疊本身的流程已經包含這兩者），切換回其他堆疊方式時會還原原本的勾選狀態。有兩個步驟無法用指令自動化，會暫停流程並顯示畫面說明與「繼續」按鈕：在 Siril 自己的「彗星／小行星對齊」工具中手動框選彗核，以及手動執行「星點重組」（影像處理 → 星點處理）。完成後，後續的拉伸、直方圖、最終潤飾、標註、浮水印等步驟會照常在合成結果上執行，不受影響。</td></tr>
       <tr><td>1.44.0</td><td>內部重構，行為不變（第二階段）：將約 6,700 行的 <code>UnifiedPipelineWindow</code> 類別本身，拆分為一個基礎協調類別，加上十三個各自對應單一處理步驟的「mixin」類別，全部放在新的 <code>s30pro_pipeline/stages/</code> 子資料夾中——每個步驟的介面建構與執行邏輯（先前分散在檔案裡相隔甚遠的兩個區段）現在都集中放在同一個檔案裡。主腳本現在約 1,770 行。已以完整的 87 項測試，加上逐檔案的靜態分析檢查，在拆分前後分別驗證。安裝時仍需連同 <code>s30pro_pipeline/</code> 資料夾（現已包含 <code>stages/</code>）一併複製——見上方「安裝」章節；若你原本就整個資料夾一起複製，則無需額外動作。</td></tr>
       <tr><td>1.43.0</td><td>內部重構，行為不變：將原本 8,862 行的單一腳本拆分為 <code>S30Pro_Pipeline.py</code> 加上新的 <code>s30pro_pipeline/</code> 套件，裡面放置與主視窗 Qt 狀態無關、可獨立存在的部分（VeraLux 拉伸核心、GraXpert 輔助函式、自動漸層移除演算法、樣式表、共用常數、Bortle 估算、星表／星座資料、可重複使用的 UI 元件）。主腳本現在約 6,970 行。已在拆分前後分別以完整的 87 項測試驗證。安裝時請務必連同新資料夾一併複製——見上方「安裝」章節。</td></tr>
       <tr><td>1.42.0</td><td>標註步驟的星座連線與星座名稱現在可各自設定顏色——分別提供「Line color...」與「Name color...」兩個選色按鈕，不再共用同一種顏色——並新增「Color preset」下拉選單，內含六組精選的搭配色（淡薰衣草紫、天空藍、暖金色、經典白、柔和紅、柔和綠）可直接套用。選擇預設集會同時套用連線與名稱兩種顏色；之後手動選色會自動將下拉選單切回「Custom」。兩種顏色皆會隨匯出／匯入設定一併儲存與還原。</td></tr>

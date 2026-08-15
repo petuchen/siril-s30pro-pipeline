@@ -39,7 +39,7 @@ progressively cleaning the result. Here is the whole journey, in order:
 
 | # | Stage | What it does | Why you need it |
 |---|-------|--------------|-----------------|
-| 1 | **Preprocess** | Aligns and averages hundreds of subs into one deep image ("stacking"), then calibrates the colors against star catalogs (SPCC). Optionally combines the result with an already-stacked master from an earlier session (no raw subs needed), weighted by sub count | One 10-second exposure is faint and noisy. Averaging 300 of them is like exposing for 50 minutes — the signal adds up, the random noise cancels out |
+| 1 | **Preprocess** | Aligns and averages hundreds of subs into one deep image ("stacking"), then calibrates the colors against star catalogs (SPCC). Stacking method can be Average / Median (Milky Way Mode) / Sum, or **Comet Stack** for moving objects — see below. Optionally combines the result with an already-stacked master from an earlier session (no raw subs needed), weighted by sub count | One 10-second exposure is faint and noisy. Averaging 300 of them is like exposing for 50 minutes — the signal adds up, the random noise cancels out |
 | 2 | **Crop** | Trims the messy edges — with an optional rotate (slider + degree number) applied first | Because the telescope drifts slightly between shots, the stacked edges are ragged. Rotating first lets you square up the frame before trimming |
 | 3 | **Remove Green (SCNR)** | Removes the green color cast | Color cameras tend to produce a greenish sky that isn't really there |
 | 4 | **Auto Gradient Removal** | A second, tunable gradient-flattening pass (scale, smoothness, structure protection, optional simplified polynomial model) — same engine as the standalone AutoGradientRemoval script, now built in | Useful either on its own or as a milder pre-pass before stage 5's heavier background removal, especially for wide, uneven sky glow |
@@ -52,6 +52,26 @@ progressively cleaning the result. Here is the whole journey, in order:
 | 11 | **Final touch** | Brightness / contrast / saturation / sharpening — like editing a phone photo | The familiar last-mile polish, with live preview |
 | 12 | **Annotate** | Labels stars and deep-sky objects (Messier/NGC/IC/Sharpless/LdN) in the field, with per-catalog colors and a select/deselect list, plus a one-click "Remove all annotations" | Turns a plate-solved image into a labeled reference view; pick exactly which objects to show, then save the annotated frame |
 | 13 | **Watermark** | Draws a semi-transparent info block (object, date, telescope, your own "Author" credit line, etc.) onto the image | Great for sharing — keeps your attribution and shot details attached to the picture |
+
+**Comet Stack mode** (Preprocess's "Stacking method" dropdown): for comets
+and asteroids, where the object moves against the stars between subs. It
+produces a comet-sharp stack and a stars-sharp stack from the same subs,
+then combines them so both look sharp — something none of the other
+stacking methods can do, since they only ever produce one stack aligned
+one way. Picking it auto-disables Remove Background and Remove Stars
+below it (Comet Stack already does both itself). It also pauses **twice**
+partway through for a few seconds of manual work in Siril's own window,
+with clear on-screen instructions each time — these two steps genuinely
+have no console-command equivalent, so they can't be automated away:
+1. **Comet registration** — pick the comet's nucleus on the first and
+   last frame in Siril's Registration tab ("Comet/Asteroid registration").
+2. **Star Recomposition** — combine the comet stack and star stack in
+   Image Processing → Star Processing → Star Recomposition.
+
+Click Continue after each, and the rest of the pipeline (Stretch,
+Histogram, Final touch, Annotate, Watermark, ...) picks up the
+recomposited result and runs exactly as it would for any other stacking
+method.
 
 Every stage shows a **before/after comparison** (drag the divider!) and can be
 **undone**. Every stage also has a small "Use Siril's image" button to pull in
@@ -281,6 +301,7 @@ Recent highlights:
 
 | Version | Highlights |
 | --- | --- |
+| 1.45.0 | New "Comet Stack" stacking method in Preprocess, for comets and asteroids: produces a comet-sharp stack and a stars-sharp stack from the same subs (two separate registrations, since a moving object needs star-based alignment for one and its own motion for the other) and combines them. Pauses twice for brief manual steps in Siril's own window (comet registration, Star Recomposition) that have no console-command equivalent — see the big-picture table above for details. |
 | 1.42.0 | Annotate's constellation lines and name labels now have independent colors (separate "Line color..." / "Name color..." pickers), plus a new "Color preset" dropdown with six curated matched color schemes (Pale Lavender, Sky Blue, Warm Gold, Classic White, Muted Red, Soft Green) to quick-pick from. Picking a preset sets both colors; picking either color manually switches the dropdown back to "Custom". Both colors round-trip through Export/Import settings. |
 | 1.41.0 | Milky Way Mode's SPCC plate-solve step now falls back a step further: if the plain `-localasnet` attempt (1.40.0) also fails, it retries once more with `-blindpos -blindres` (full blind Astrometry.net solve) before giving up — confirmed by hand that the wide ~60-70° stacked field reliably needs a blind solve rather than the header-hinted near-search, even with the right index files installed. Only runs once on the final stack, not per-frame. |
 | 1.40.0 | Fixed stacked Seestar images failing to plate-solve ("No valid plate-solve solution" during Annotate) even though the same image solves fine on nova.astrometry.net — the SPCC plate-solve step now retries once with `-localasnet` (local Astrometry.net) before giving up. Also: "Median (Milky Way Mode)" stacking now passes the wide camera's real optics (6mm focal length, ~1.7 micron pixel size) to every plate-solve call instead of trusting the header, since some firmware versions carry the tele camera's values (160mm / 2.9 micron) into wide-camera FITS headers. |

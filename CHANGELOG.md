@@ -1,5 +1,49 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.45.0
+
+* **New feature: Comet Stack mode.** A fourth option in Preprocess's
+  Stacking method dropdown, alongside Average/Median/Sum, for comet and
+  asteroid targets. The problem it solves: a moving object needs two
+  *different* registrations from the same subs — one aligned on the
+  stars (so the comet trails/smudges) and one aligned on the comet's own
+  motion (so the stars trail and the comet is sharp) — and Siril has no
+  single stacking mode that produces both from one sequence. Comet Stack
+  registers the sequence on the stars, runs a whole-sequence background
+  removal and star removal (`seqstarnet`) to isolate the comet, then
+  re-applies the *original* star-based registration to both the starless
+  (comet) and the background-subtracted (star) sequences with matched
+  framing — so the two eventual stacks come out pixel-dimension-matched
+  and ready to recombine. One wrinkle had to be worked around by hand:
+  `seqstarnet` regenerates its output sequence's `.seq` file from scratch
+  and drops the registration data Siril had already computed for it —
+  there's no console command to reattach it, so this splices it back in
+  directly as a text-file patch (new `_splice_seq_registration()` helper,
+  with its own unit tests) before continuing. Adjustable rejection
+  sigmas (default 5.0/5.0) and background-removal degree/samples are
+  exposed in a new settings group that appears when Comet Stack is
+  selected; picking it also auto-disables (and greys out, with a
+  tooltip) the Remove Background and Remove Stars stages below, since
+  Comet Stack already does both of those itself as part of its own
+  workflow — switching back to another stacking method restores whatever
+  those two checkboxes were set to before.
+
+  Two steps genuinely can't be scripted and need a few seconds of manual
+  work in Siril's own window — the pipeline pauses for each with clear
+  on-screen instructions and a Continue button:
+  1. **Comet registration** — Siril's "Comet/Asteroid registration" tool
+     needs you to pick the comet's nucleus on the first and last frame by
+     hand; there's no equivalent console command.
+  2. **Star Recomposition** — combining the comet stack and star stack
+     into one sharp image is a GUI-only tool (Image Processing → Star
+     Processing → Star Recomposition) with no scriptable counterpart
+     either.
+
+  Once you click Continue after Star Recomposition, the rest of the
+  pipeline (Stretch, Histogram, Final Touch, Annotate, Watermark, ...)
+  runs completely unchanged on the recomposited result, same as any
+  other stacking method.
+
 ## 1.44.0
 
 * **Internal refactor: split the ~6,700-line `UnifiedPipelineWindow` class
