@@ -504,6 +504,22 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>1.54.1</td><td><b>"Expand All"/"Collapse All" now also
+        select/deselect every stage.</b> Follow-up to 1.54.0: those two
+        buttons previously only changed visibility, leaving every
+        stage's own enabled checkbox untouched — they now check/uncheck
+        every stage too, matching the header-checkbox behavior already
+        in place (checking a stage expands it, unchecking one collapses
+        it). Also fixed an edge case this surfaced: a stage already
+        sitting at the target checked state (e.g. Auto Gradient
+        Removal, off by default but expanded) wouldn't fire its usual
+        checkbox→arrow sync, so "Collapse All" could silently leave it
+        expanded — both buttons now set each stage's checkbox and arrow
+        directly instead of relying on that signal firing. The three
+        buttons ("Import settings", "Expand All", "Collapse All") also
+        moved onto one row with equal widths. Also: new README badges
+        (version, license, minimum Siril version, platforms,
+        last-commit date).</td></tr>
       <tr><td>1.54.0</td><td>New "⌄ Expand All" / "⌃ Collapse All"
         buttons, next to "⤒ Import settings" at the top of the left
         panel — show or hide every stage's settings at once, exactly
@@ -990,6 +1006,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>1.54.1</td><td><b>「Expand All（全部展開）」／「Collapse All（全部收合）」現在也會一併勾選／取消勾選所有步驟。</b>承接 1.54.0 版：這兩個按鈕原本只會改變顯示狀態，不會動到每個步驟自己的啟用核取方塊——現在會一併勾選／取消勾選所有步驟，與標題列核取方塊原本的行為一致（勾選某步驟會展開它，取消勾選則會收合它）。同時也修正了因此發現的邊界情況：如果某個步驟原本就已經處於目標的勾選狀態（例如「自動去梯度」預設未勾選但預設展開），就不會觸發原本的「核取方塊→箭頭」同步機制，導致按下「Collapse All」時該步驟仍可能維持展開——現在這兩個按鈕會直接設定每個步驟的核取方塊與箭頭狀態，不再仰賴訊號是否觸發。「Import settings」「Expand All」「Collapse All」三個按鈕也改為同一列、等寬顯示。另外：README 新增徽章（版本、授權、最低 Siril 版本、支援平台、最後提交時間）。</td></tr>
       <tr><td>1.54.0</td><td>左側面板頂端的「⤒ Import settings（匯入設定）」旁，新增「⌄ Expand All（全部展開）」／「⌃ Collapse All（全部收合）」兩個按鈕——可一次展開或收合所有步驟的設定內容，效果等同逐一點擊每個步驟自己的 ▸／▾ 箭頭，不會改變任何步驟是否啟用。</td></tr>
       <tr><td>1.53.1</td><td>取消勾選某個步驟時，現在也會一併收合該步驟——1.53.0 版新增的 ▸／▾ 箭頭，先前只有在勾選核取方塊時會自動展開，之後若取消勾選卻不會自動收合。現在兩個方向都會保持同步：勾選某個步驟會展開它，取消勾選則會將它收合回去、保持面板簡潔。箭頭本身仍可隨時獨立操作，因此還是可以在不啟用某個步驟的情況下，先點開看看它的設定內容。</td></tr>
       <tr><td>1.53.0</td><td><b>步驟卡片改為可收合，並預設為適合新手的簡潔版面。</b>13 個步驟卡片現在各自在標題旁多了一個 ▸／▾ 箭頭，與標題列的核取方塊（控制該步驟是否會實際執行）彼此獨立——點擊箭頭只會顯示或隱藏該步驟的設定內容，不會改變是否啟用。第 1 步（前置處理）、第 2 步（裁切）、第 3 步（去除綠色／SCNR）、第 4 步（自動去梯度）、第 5 步（移除背景）、第 7 步（降噪）、第 9 步（拉伸）——也就是完成一張成品所需的最短路徑——預設為展開狀態；其餘 6 個步驟則預設收合，直到你自己點開為止。勾選某個步驟的核取方塊時，也會一併自動展開該步驟。另外：「十三大步驟解說」文件頁新增「新手快速上手路徑」小節，只涵蓋以上同樣 7 個步驟，每個步驟僅用一句話說明該怎麼做。</td></tr>

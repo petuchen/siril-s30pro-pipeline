@@ -1,5 +1,24 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.54.1
+
+* **"Expand All"/"Collapse All" now also select/deselect every stage,
+  and one row with "Import settings".** Follow-up to 1.54.0: those two
+  buttons previously only changed visibility, leaving every stage's
+  own enabled checkbox untouched — they now check/uncheck every
+  stage too, matching the header-checkbox behavior already in place
+  (checking a stage expands it, unchecking one collapses it). Also
+  fixed an edge case this surfaced: a stage that's already sitting at
+  the target checked state (e.g. Auto Gradient Removal, off by default
+  but expanded) wouldn't fire its usual checkbox->arrow sync, so
+  "Collapse All" could silently leave it expanded — both buttons now
+  set each stage's checkbox and arrow directly instead of relying on
+  that signal firing. "Import settings", "Expand All", and "Collapse
+  All" also moved onto one row with equal-width buttons, instead of
+  two rows with "Import settings" alone on top.
+* **New: README badges** — version, license, minimum Siril version,
+  supported platforms, and last-commit date, right under the title.
+
 ## 1.54.0
 
 * **New "⌄ Expand All" / "⌃ Collapse All" buttons**, next to "⤒ Import

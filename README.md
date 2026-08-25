@@ -1,5 +1,18 @@
 # S30 Pro Pipeline
 
+<!-- Version badge is a static shields.io badge (no GitHub Releases/tags
+     exist for this repo yet), so it must be bumped by hand alongside
+     VERSION in S30Pro_Pipeline.py and the version-history table below —
+     same checklist as CHANGELOG.md/index.html on every release. Once
+     tags/Releases exist, swap it for the dynamic
+     https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
+     badge instead, which updates itself. -->
+[![Version](https://img.shields.io/badge/version-1.54.1-blue)](CHANGELOG.md)
+[![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
+[![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
+[![Last commit](https://img.shields.io/github/last-commit/petuchen/siril-s30pro-pipeline)](https://github.com/petuchen/siril-s30pro-pipeline/commits/main)
+
 **One-click astrophotography processing for smart telescopes, inside Siril.**
 
 A single Python script that takes the raw files from your smart telescope
@@ -301,6 +314,7 @@ Recent highlights:
 
 | Version | Highlights |
 | --- | --- |
+| 1.54.1 | "Expand All"/"Collapse All" now also select/deselect every stage (previously visibility-only), fixed an edge case where an already-unchecked-but-expanded stage could be left out of sync, and moved onto one row with "Import settings". New README badges. |
 | 1.54.0 | New "Expand All" / "Collapse All" buttons next to "Import settings" — show or hide every stage's settings at once, without changing which stages are enabled. |
 | 1.53.1 | Unchecking a stage now collapses it too (1.53.0 only auto-expanded on check) — checking/unchecking a stage now keeps its arrow in sync both ways. |
 | 1.53.0 | Stage cards are now collapsible via a ▸/▾ arrow, independent of the enable checkbox. Stages 1, 2, 3, 4, 5, 7, 9 (the minimum path to a finished image) start expanded; the other 6 start collapsed. Checking a stage always expands it too. New "Beginner quick path" section added to the HTML guide's "13 Stages Explained" page. |
