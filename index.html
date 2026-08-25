@@ -504,6 +504,11 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>1.54.0</td><td>New "⌄ Expand All" / "⌃ Collapse All"
+        buttons, next to "⤒ Import settings" at the top of the left
+        panel — show or hide every stage's settings at once, exactly
+        like clicking each stage's own ▸/▾ arrow one at a time, without
+        changing which stages are actually enabled to run.</td></tr>
       <tr><td>1.53.1</td><td>Unchecking a stage now collapses it too —
         1.53.0's new ▸/▾ arrow only auto-expanded a stage when its
         header checkbox was checked, but left it expanded if you later
@@ -985,6 +990,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>1.54.0</td><td>左側面板頂端的「⤒ Import settings（匯入設定）」旁，新增「⌄ Expand All（全部展開）」／「⌃ Collapse All（全部收合）」兩個按鈕——可一次展開或收合所有步驟的設定內容，效果等同逐一點擊每個步驟自己的 ▸／▾ 箭頭，不會改變任何步驟是否啟用。</td></tr>
       <tr><td>1.53.1</td><td>取消勾選某個步驟時，現在也會一併收合該步驟——1.53.0 版新增的 ▸／▾ 箭頭，先前只有在勾選核取方塊時會自動展開，之後若取消勾選卻不會自動收合。現在兩個方向都會保持同步：勾選某個步驟會展開它，取消勾選則會將它收合回去、保持面板簡潔。箭頭本身仍可隨時獨立操作，因此還是可以在不啟用某個步驟的情況下，先點開看看它的設定內容。</td></tr>
       <tr><td>1.53.0</td><td><b>步驟卡片改為可收合，並預設為適合新手的簡潔版面。</b>13 個步驟卡片現在各自在標題旁多了一個 ▸／▾ 箭頭，與標題列的核取方塊（控制該步驟是否會實際執行）彼此獨立——點擊箭頭只會顯示或隱藏該步驟的設定內容，不會改變是否啟用。第 1 步（前置處理）、第 2 步（裁切）、第 3 步（去除綠色／SCNR）、第 4 步（自動去梯度）、第 5 步（移除背景）、第 7 步（降噪）、第 9 步（拉伸）——也就是完成一張成品所需的最短路徑——預設為展開狀態；其餘 6 個步驟則預設收合，直到你自己點開為止。勾選某個步驟的核取方塊時，也會一併自動展開該步驟。另外：「十三大步驟解說」文件頁新增「新手快速上手路徑」小節，只涵蓋以上同樣 7 個步驟，每個步驟僅用一句話說明該怎麼做。</td></tr>
       <tr><td>1.52.1</td><td>在檢視標註面板程式碼時發現並修正的錯誤：個別物件樣式編輯視窗的「↶ Undo（復原）」按鈕，在選取顏色後可能會跳過一個步驟——原本這個以「快照」為基礎的復原堆疊，是在套用剛選好的標記／十字／文字顏色「之前」就記錄快照，而不是「之後」（視窗裡其他所有欄位都是在數值真正改變之後才記錄快照），因此同一次開啟視窗內若連續選取兩次顏色，中間那個狀態就會被悄悄從復原紀錄中遺漏。使用上唯一可能注意到的現象，是連續選色後點擊 Undo 有時會一次跳過兩個變更；此問題已修正為與其他欄位一致，改成在顏色套用「之後」才記錄快照。</td></tr>

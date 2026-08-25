@@ -1,5 +1,13 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.54.0
+
+* **New "⌄ Expand All" / "⌃ Collapse All" buttons**, next to "⤒ Import
+  settings" at the top of the left panel. Show or hide every stage's
+  settings at once — a pure visibility toggle, exactly like clicking
+  each stage's own ▸/▾ arrow one at a time, and doesn't change which
+  stages are actually enabled to run.
+
 ## 1.53.1
 
 * **Unchecking a stage now collapses it too.** 1.53.0's new ▸/▾ arrow

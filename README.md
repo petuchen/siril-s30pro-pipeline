@@ -301,6 +301,7 @@ Recent highlights:
 
 | Version | Highlights |
 | --- | --- |
+| 1.54.0 | New "Expand All" / "Collapse All" buttons next to "Import settings" — show or hide every stage's settings at once, without changing which stages are enabled. |
 | 1.53.1 | Unchecking a stage now collapses it too (1.53.0 only auto-expanded on check) — checking/unchecking a stage now keeps its arrow in sync both ways. |
 | 1.53.0 | Stage cards are now collapsible via a ▸/▾ arrow, independent of the enable checkbox. Stages 1, 2, 3, 4, 5, 7, 9 (the minimum path to a finished image) start expanded; the other 6 start collapsed. Checking a stage always expands it too. New "Beginner quick path" section added to the HTML guide's "13 Stages Explained" page. |
 | 1.52.1 | Bugfix found in a code review pass: the per-object style editor's Undo could skip a step after picking colors (checkpoint happened before the color was applied instead of after). |

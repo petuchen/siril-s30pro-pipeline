@@ -228,7 +228,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "1.53.1"
+VERSION = "1.54.0"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -518,6 +518,13 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         lv.addWidget(header)
         lv.addWidget(sub)
 
+        # Populated by _stage_box, one entry per stage card, so "Expand
+        # All"/"Collapse All" below can reach every stage's arrow button
+        # without each stage mixin needing to expose its own box/widgets
+        # for this. Must exist before the first _stage_box() call, a few
+        # lines down (see iv.addWidget(self._build_stage1()) etc.).
+        self._stage_expand_btns = []
+
         io_row = QHBoxLayout()
         io_row.setSpacing(8)
         import_btn = QPushButton("⤒  Import settings")
@@ -526,6 +533,27 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         io_row.addWidget(import_btn)
         io_row.addStretch()
         lv.addLayout(io_row)
+
+        # Own row below Import settings, same "split wide rows in two"
+        # reasoning as the Save/Export/Close buttons further down — three
+        # labeled buttons side by side would push this ~1/3-window-width
+        # panel wider than it needs to be.
+        expand_row = QHBoxLayout()
+        expand_row.setSpacing(8)
+        expand_all_btn = QPushButton("⌄  Expand All")
+        expand_all_btn.setToolTip(
+            "Show every stage's settings at once — independent of which "
+            "stages are actually enabled.")
+        expand_all_btn.clicked.connect(self.on_expand_all_stages)
+        expand_row.addWidget(expand_all_btn)
+        collapse_all_btn = QPushButton("⌃  Collapse All")
+        collapse_all_btn.setToolTip(
+            "Hide every stage's settings at once, back to just the "
+            "numbered header rows — doesn't change which stages are "
+            "enabled.")
+        collapse_all_btn.clicked.connect(self.on_collapse_all_stages)
+        expand_row.addWidget(collapse_all_btn)
+        lv.addLayout(expand_row)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -751,6 +779,14 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
             "settings without enabling it.")
         head.addWidget(expand_btn)
         outer.addLayout(head)
+        # Registered so the left panel's "Expand All"/"Collapse All"
+        # buttons (see _build_ui) can reach every stage's arrow —
+        # getattr guards this in case _stage_box is ever exercised
+        # before that list is initialized (e.g. a future standalone
+        # unit test of a single stage's UI).
+        stage_expand_btns = getattr(self, "_stage_expand_btns", None)
+        if stage_expand_btns is not None:
+            stage_expand_btns.append(expand_btn)
 
         # Everything below the header — the "Use Siril's image" button and
         # every one of this stage's own settings — lives in one `body`
@@ -1861,6 +1897,25 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
             progress(f"Saved: {os.path.basename(path)}", 1.0)
             self.siril.log(f"Image saved: {path}", LogColor.GREEN)
         self._launch([job])
+
+    def on_expand_all_stages(self):
+        """'⌄ Expand All' — shows every stage's settings at once, purely
+        a visibility change (each stage's own enabled/disabled checkbox
+        state is untouched). Just flips every registered arrow button
+        to checked — _stage_box's own _on_expand_toggle handler (wired
+        per-stage) does the actual body.setVisible(True) + arrow-glyph
+        update for each one."""
+        for btn in self._stage_expand_btns:
+            btn.setChecked(True)
+        self.status_label.setText("Expanded all stages.")
+
+    def on_collapse_all_stages(self):
+        """'⌃ Collapse All' — the reverse of on_expand_all_stages: hides
+        every stage's settings at once without changing which stages
+        are enabled to run."""
+        for btn in self._stage_expand_btns:
+            btn.setChecked(False)
+        self.status_label.setText("Collapsed all stages.")
 
     def on_import_settings(self):
         path, _ = QFileDialog.getOpenFileName(
