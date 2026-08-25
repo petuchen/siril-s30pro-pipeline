@@ -1,5 +1,16 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.53.1
+
+* **Unchecking a stage now collapses it too.** 1.53.0's new ▸/▾ arrow
+  auto-expanded a stage when its header checkbox was checked, but left
+  it expanded if you later unchecked it. It now stays in sync both
+  ways: checking a stage expands it, unchecking one collapses it back
+  out of the way — so the panel stays as short as possible once you've
+  settled on which stages you want. The arrow itself still works
+  independently at any time, so you can still peek at a stage's
+  settings without enabling it.
+
 ## 1.53.0
 
 * **Stage cards are now collapsible, defaulting to a clean beginner

@@ -228,7 +228,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "1.53.0"
+VERSION = "1.53.1"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -707,11 +707,13 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         callers can override it — e.g. Auto Gradient Removal starts
         unchecked (most images don't need it) yet still starts expanded,
         since it's one of the small set of stages a beginner is expected
-        to look at and decide on. Checking the header checkbox always
-        auto-expands the stage (so "enabling something" never leaves it
-        hidden), but unchecking never auto-collapses it — a stage you've
-        deliberately opened to look at stays open until you collapse it
-        yourself, whether or not you end up leaving it checked."""
+        to look at and decide on. After that initial state, though,
+        checking/unchecking the header checkbox always keeps the arrow
+        in sync — checking a stage expands it, unchecking one collapses
+        it back out of the way — so the panel stays as short as
+        possible once you've settled on which stages you want; the
+        arrow itself still works independently at any time if you just
+        want to peek at a stage's settings without enabling it."""
         if start_expanded is None:
             start_expanded = enabled_check
         box = QGroupBox()
@@ -744,7 +746,9 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         expand_btn.setToolTip(
             "Show/hide this stage's settings — independent of the "
             "checkbox above, which is whether the stage actually runs. "
-            "Checking that checkbox always expands the stage too.")
+            "Checking/unchecking that checkbox always expands/collapses "
+            "the stage too; use this arrow to peek at a stage's "
+            "settings without enabling it.")
         head.addWidget(expand_btn)
         outer.addLayout(head)
 
@@ -803,11 +807,18 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
 
         def _on_enabled_toggle(checked):
             content.setEnabled(checked)
-            if checked and not expand_btn.isChecked():
-                expand_btn.setChecked(True)  # -> _on_expand_toggle expands it
-        box.toggled.connect(_on_enabled_toggle)
+            # Keep the arrow in sync with the checkbox: checking a stage
+            # expands it, unchecking one collapses it — connected only
+            # after the initial box.setChecked() call just below, so a
+            # stage's own start_expanded default (e.g. Auto Gradient
+            # Removal starting expanded even though unchecked) isn't
+            # immediately undone at construction time; from then on
+            # every actual check/uncheck (by the user, or by settings
+            # import via setChecked) re-syncs it.
+            expand_btn.setChecked(checked)
         box.setChecked(enabled_check)
         content.setEnabled(enabled_check)
+        box.toggled.connect(_on_enabled_toggle)
         return box, v
 
     def _collapsible_section(self, title, start_expanded=False):

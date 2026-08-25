@@ -301,6 +301,7 @@ Recent highlights:
 
 | Version | Highlights |
 | --- | --- |
+| 1.53.1 | Unchecking a stage now collapses it too (1.53.0 only auto-expanded on check) — checking/unchecking a stage now keeps its arrow in sync both ways. |
 | 1.53.0 | Stage cards are now collapsible via a ▸/▾ arrow, independent of the enable checkbox. Stages 1, 2, 3, 4, 5, 7, 9 (the minimum path to a finished image) start expanded; the other 6 start collapsed. Checking a stage always expands it too. New "Beginner quick path" section added to the HTML guide's "13 Stages Explained" page. |
 | 1.52.1 | Bugfix found in a code review pass: the per-object style editor's Undo could skip a step after picking colors (checkpoint happened before the color was applied instead of after). |
 | 1.52.0 | "Label distance" now applies to every marker style (was silently a no-op for Circle style) and allows negative values so labels can sit tighter than before, floor-clamped to avoid overlapping the marker. Custom lines / Label lines are now a single multi-line text box instead of add-one-line-at-a-time. |
