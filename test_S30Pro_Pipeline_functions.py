@@ -795,6 +795,33 @@ def test_annotate_per_object_style(pipeline, np):
           "catalogue color",
           style["cross_color"] == (9, 9, 9), f"got {style}")
 
+    # _default_style_for_object: no panel-level text-color control exists,
+    # so "default" text_color is always the object's own catalogue color
+    # (i.e. no override) regardless of any circle/cross color override.
+    check("_default_style_for_object: default text_color is the object's "
+          "own catalogue color, not the cross color override",
+          style["text_color"] == (1, 2, 3), f"got {style}")
+
+    # _render_annotations: an explicit per-object "text_color" overrides
+    # the catalogue color for the label text, independent of the circle/
+    # cross colors — checked by rendering the same label in two colors
+    # and confirming only the override color's channel is painted.
+    canvas = np.zeros((60, 200, 3), dtype=np.uint8)
+    base_drawable = {
+        "label": "Test", "kind": "ngc", "x": 100, "y": 30, "r": 10,
+        "color": (0, 0, 0), "fs": 1.0, "th": 2, "tx": 20, "ty": 40,
+        "style": "circle", "circle_color": (0, 0, 0),
+    }
+    default_out = pipeline.UnifiedPipelineWindow._render_annotations(
+        canvas, [dict(base_drawable)])
+    override_out = pipeline.UnifiedPipelineWindow._render_annotations(
+        canvas, [dict(base_drawable, text_color=(0, 255, 0))])
+    check("_render_annotations: text_color overrides the label color "
+          "(green channel painted where black text painted nothing)",
+          int(override_out[:, :, 1].max()) > int(default_out[:, :, 1].max()),
+          f"default max G={default_out[:, :, 1].max()} "
+          f"override max G={override_out[:, :, 1].max()}")
+
 
 def test_palette_nebulachrome(pipeline, np):
     print("\n== UnifiedPipelineWindow._palette_nebulachrome() ==")

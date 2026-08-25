@@ -470,6 +470,21 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>1.50.0</td><td>Open Cross's "Label distance (× radius)"
+        default lowered from 0.3 to 0.1 for tighter default spacing. The
+        🎨 per-object style editor gains a <b>Text color</b> picker
+        (independent of the marker colors), a <b>"🔄 Update"</b> button
+        that applies the dialog's settings to the live preview
+        immediately without closing it, and an <b>"↶ Undo"</b> button
+        that steps back through the dialog's own edit history one field
+        change at a time (Reset to panel default counts as one step).
+        Cancelling after an Update now correctly reverts the object to
+        its pre-dialog state. New panel-level <b>"🔄 Update preview"</b>
+        button re-renders every currently shown object from the
+        Annotation style panel's current settings — no catalogue
+        re-query or plate-solve needed — much faster than Run for
+        iterating on style, though it resets any per-object
+        overrides.</td></tr>
       <tr><td>1.49.0</td><td>New feature: <b>per-object annotation style
         overrides</b>. Every row in "Select objects to show..." now has a
         🎨 button opening a small editor for just that object — marker
@@ -877,6 +892,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>1.50.0</td><td>開放式十字的「Label distance（標籤距離，以半徑倍數表示）」預設值從 0.3 調降為 0.1，讓標籤與中心的預設間距更緊湊。🎨 個別物件樣式編輯視窗新增「Text color（文字顏色）」選色按鈕（獨立於標記顏色之外）、「🔄 Update（更新）」按鈕（可立即將目前設定套用到即時預覽，不需關閉視窗）、以及「↶ Undo（復原）」按鈕（可依序一步步復原視窗內的欄位修改，「還原為面板預設值」也視為一個可復原的步驟）。點擊過 Update 後再取消對話框，現在會正確還原成開啟視窗前的狀態。另外新增面板層級的「🔄 Update preview（更新預覽）」按鈕，可直接依目前「Annotation style」面板設定重新繪製所有已顯示的物件，不需重新查詢星表或重新板解算，比執行（Run）快上許多，但會重置所有個別物件的覆寫設定。</td></tr>
       <tr><td>1.49.0</td><td>新功能：<b>個別物件的標註樣式覆寫</b>。「Select objects to show...（選擇要顯示的物件）」對話框中，每一列現在都新增一個 🎨 按鈕，可開啟一個小編輯視窗，只針對該單一物件調整——標記樣式、圓圈／十字的顏色與粗細、十字的間隙／臂長／標籤位置／標籤距離，以及該標籤自己的文字內容——完全獨立於「Annotation style（標註樣式）」面板，其他物件仍會照常套用該面板的設定。修改會立即套用到即時預覽，編輯視窗內的「Reset to panel default（還原為面板預設值）」按鈕可捨棄覆寫，重新依目前面板設定計算出該物件的樣式。取消「Select objects to show...」對話框現在也會一併還原個別物件的樣式修改，而不只是還原顯示／隱藏的勾選狀態。與「Select objects to show...」的其他功能一樣，這些覆寫僅是執行後、匯出前的預覽調整——重新執行標註步驟時，每個物件都會依照面板預設值重新產生。</td></tr>
       <tr><td>1.48.0</td><td>標註面板重新整理為清楚的三步驟流程：「① Objects to show（顯示哪些天體）」（星表勾選項與所有星座連線相關設定）、「② Annotation style（標註樣式）」（標籤大小、標記樣式、圓圈／開放式十字設定區塊、Label detail 詳細標籤、以及是否顯示疊加層的選項——切換「Marker style」下拉選單時，對應的樣式子區塊仍會立即顯示或隱藏），最後才是原本的執行／復原按鈕列與執行後可用的動作按鈕。開放式十字（Open Cross）樣式設定區塊現在移到物件星表區塊之後，而不是在它上面。開放式十字新增「Label distance（標籤與中心距離，以半徑倍數表示）」設定：在原本的臂長之外，額外提供標籤文字與標記中心之間的緩衝距離，讓（可能是多行的）標籤能進一步拉遠，避免與十字的臂線太過擁擠。</td></tr>
       <tr><td>1.47.0</td><td>標註步驟的物件名稱現在可以顯示更多資訊。新增「Label detail（標籤詳細資訊）」設定區塊，提供四個取自 OpenNGC 星表的選用欄位——天體類型、星等、所屬星座、視大小——各自獨立勾選；另外新增「Custom lines（自訂內容）」清單，可自行輸入額外文字（雙擊即可編輯，並可用 Add／Remove 新增或移除）。每一項啟用的內容都會顯示在物件名稱下方各自一行，並依標籤所在的方向（在標記的左側或右側）自動靠左或靠右對齊，讓多行標籤仍然清楚「附著」在對應的標記上。若使用開放式十字（Open Cross）樣式，標籤所在那一側的南／北臂會隨行數增加自動加長，向外延伸至貼近較高的標籤區塊。以上設定皆會隨匯出／匯入設定一併儲存與還原。</td></tr>

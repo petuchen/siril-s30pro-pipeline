@@ -414,7 +414,7 @@ class AnnotateMixin:
         self.ann_cross_label_dist_spin = QDoubleSpinBox()
         self.ann_cross_label_dist_spin.setRange(0.0, 3.0)
         self.ann_cross_label_dist_spin.setSingleStep(0.1)
-        self.ann_cross_label_dist_spin.setValue(0.3)
+        self.ann_cross_label_dist_spin.setValue(0.1)
         self.ann_cross_label_dist_spin.setToolTip(
             "Extra breathing room between the label text and the marker "
             "center, as a multiple of the marker's own radius — added on "
@@ -556,6 +556,22 @@ class AnnotateMixin:
         v.addLayout(save_row1)
 
         save_row2 = QHBoxLayout()
+        self.ann_update_preview_btn = QPushButton("🔄  Update preview")
+        self.ann_update_preview_btn.setToolTip(
+            "Re-renders every currently shown object using the "
+            "Annotation style panel's *current* settings — marker style, "
+            "colors, thickness, cross geometry, label detail lines — "
+            "without re-querying any catalogue or re-running plate "
+            "solving, so it's much faster than Run when you're just "
+            "iterating on how things look. Resets every object to the "
+            "panel defaults, so any per-object 🎨 overrides are "
+            "discarded — re-open \"Select objects...\" afterward to "
+            "reapply them if you still want them. Doesn't affect "
+            "constellation lines (uncheck \"Constellation lines\" and "
+            "re-run to remove those).")
+        self.ann_update_preview_btn.clicked.connect(
+            self._update_annotation_preview)
+        save_row2.addWidget(self.ann_update_preview_btn)
         self.ann_remove_all_btn = QPushButton("🗑  Remove all")
         self.ann_remove_all_btn.setToolTip(
             "Hide every labeled object at once — one click, no need to "
@@ -964,6 +980,10 @@ class AnnotateMixin:
                            if marker_style in ("cross", "both") else 0),
             "label_lines": self._build_default_label_lines(
                 d["label"], d.get("extra", {})),
+            # No panel-level text color control exists (labels have always
+            # used the catalogue color) — "default" simply means no
+            # per-object override, same as before this option existed.
+            "text_color": d["color"],
         }
 
     def _exec_stage_ann(self, progress):
@@ -1561,7 +1581,8 @@ class AnnotateMixin:
                            cv2.FONT_HERSHEY_SIMPLEX, d["fs"], (0, 0, 0),
                            d["th"] + 2, cv2.LINE_AA)
                 cv2.putText(canvas, line, (line_tx, line_ty),
-                           cv2.FONT_HERSHEY_SIMPLEX, d["fs"], d["color"],
+                           cv2.FONT_HERSHEY_SIMPLEX, d["fs"],
+                           d.get("text_color", d["color"]),
                            d["th"], cv2.LINE_AA)
         return canvas
 
@@ -1600,6 +1621,52 @@ class AnnotateMixin:
             "Annotate: all annotations removed from the preview/export "
             "(FITS image untouched). Re-run the stage to bring them "
             "back.", LogColor.GREEN)
+
+    def _update_annotation_preview(self):
+        """'🔄 Update preview' — re-renders every currently shown object
+        (self._ann_drawn) using the Annotation style panel's *current*
+        settings, without re-querying any catalogue or re-running plate
+        solving. Lets you tweak marker style/color/thickness/cross
+        geometry/label detail in the panel and see the result on the
+        actual annotated objects immediately, instead of having to
+        re-run the whole stage (which re-queries every catalogue and
+        re-detects stars) just to check how a style change looks.
+        Recomputes every object from scratch via
+        _default_style_for_object, so any per-object 🎨 overrides made
+        through "Select objects to show..." are discarded — same
+        trade-off as re-running the stage itself, just much faster."""
+        base = getattr(self, "_ann_base_canvas", None)
+        drawn = getattr(self, "_ann_drawn", None)
+        if base is None:
+            QMessageBox.information(
+                self, "No annotated image",
+                "Run the Annotate stage at least once first.")
+            return
+        if not drawn:
+            QMessageBox.information(
+                self, "Nothing to update",
+                "The last Annotate run didn't label any objects.")
+            return
+
+        for d in drawn:
+            d.update(self._default_style_for_object(d))
+        H, W = base.shape[0], base.shape[1]
+        self._layout_annotation_labels(drawn, W, H)
+        new_canvas = self._render_annotations(base, drawn)
+        self._ann_drawn = drawn
+        self._last_annotated_canvas = new_canvas
+        annotated_rgb = cv2.cvtColor(new_canvas, cv2.COLOR_BGR2RGB).astype(
+            np.float32) / 255.0
+        snap = self.snapshots.get(IDX_ANN, {})
+        snap["after"] = make_qimage(annotated_rgb, fits_orientation=False)
+        self.snapshots[IDX_ANN] = snap
+        self.snapshot_ready.emit(IDX_ANN)
+        self.status_label.setText(
+            "Annotate: preview updated from the current panel settings.")
+        self.siril.log(
+            "Annotate: preview updated from the Annotation style panel's "
+            "current settings (any per-object overrides were reset).",
+            LogColor.GREEN)
 
     def _pick_marker_color(self, which):
         """'Circle color...' / 'Cross color...' — opens a standard color
@@ -1730,30 +1797,60 @@ class AnnotateMixin:
         self.status_label.setText(msg)
         self.siril.log(f"Select constellations: {msg}", LogColor.GREEN)
 
-    def _show_object_style_dialog(self, d):
+    _STYLE_KEY_TO_TEXT = {"circle": "Circle", "cross": "Open Cross",
+                          "both": "Circle + Open Cross"}
+    _TEXT_TO_STYLE_KEY = {v: k for k, v in _STYLE_KEY_TO_TEXT.items()}
+    _POS_KEY_TO_TEXT = {(1, -1): "NE", (-1, -1): "NW",
+                        (1, 1): "SE", (-1, 1): "SW"}
+    _TEXT_TO_POS_KEY = {v: k for k, v in _POS_KEY_TO_TEXT.items()}
+    _MISSING = object()  # sentinel: "this key didn't exist on d at all"
+
+    def _show_object_style_dialog(self, d, on_update=None):
         """'🎨' per-row button inside "Select objects to show..." —
         customize a single object's marker style, colors/thickness, cross
-        geometry, and label lines, independent of the Annotation style
-        panel's defaults (which keep applying to every other object).
-        Mutates `d` (one entry of self._ann_drawn) in place on OK, using
-        the exact same dict keys _render_annotations already reads — no
-        separate per-object override plumbing needed anywhere else.
-        Returns True if anything changed (caller should re-layout and
-        redraw), False on Cancel (nothing touched)."""
+        geometry, and label lines/text color, independent of the
+        Annotation style panel's defaults (which keep applying to every
+        other object).
+
+        "🔄 Update" applies the dialog's current settings to `d`
+        immediately and calls `on_update()` (if given — the caller's
+        re-layout+redraw) without closing the dialog, so you can nudge a
+        value and see the result right away, then keep adjusting. "↶
+        Undo" steps back through the dialog's own edit history one field
+        change at a time (not tied to Update — it works whether or not
+        you've clicked Update yet). "↺ Reset to panel default" discards
+        everything and recomputes from the Annotation style panel's
+        current settings.
+
+        On OK, does one final commit and returns True. On Cancel, if
+        Update was ever clicked during this session, `d` is restored to
+        exactly what it held when this dialog opened (so a "preview via
+        Update, then Cancel" round-trip leaves nothing changed) and
+        returns True so the caller redraws once more to show that
+        reverted state; if Update was never clicked, nothing was ever
+        touched and it returns False."""
         r = d.get("r", 1) or 1
-        style_map = {"circle": "Circle", "cross": "Open Cross",
-                    "both": "Circle + Open Cross"}
-        pos_map = {(1, -1): "NE", (-1, -1): "NW",
-                  (1, 1): "SE", (-1, 1): "SW"}
+        style_map = self._STYLE_KEY_TO_TEXT
+        pos_map = self._POS_KEY_TO_TEXT
+
+        # Snapshot every key this dialog can touch, remembering which ones
+        # were genuinely absent (vs. present-but-falsy) so Cancel-after-
+        # Update can restore `d` exactly, not leave stray None entries.
+        style_keys = ("style", "circle_color", "circle_th", "cross_color",
+                     "cross_th", "cross_gap", "cross_arm", "label_pref",
+                     "label_extra", "label_lines", "text_color")
+        orig_d = {k: d.get(k, self._MISSING) for k in style_keys}
+        applied_update = {"flag": False}
 
         dlg = QDialog(self)
         dlg.setWindowTitle(f"Object Style — {d['label']}")
-        dlg.resize(360, 560)
+        dlg.resize(360, 620)
         dv = QVBoxLayout(dlg)
 
         info = QLabel("Overrides just this object — the Annotation style "
                       "panel's settings are untouched and still apply to "
-                      "every other object.")
+                      "every other object. \"Update\" previews changes "
+                      "immediately without closing this dialog.")
         info.setObjectName("SubHeader")
         info.setWordWrap(True)
         dv.addWidget(info)
@@ -1773,15 +1870,19 @@ class AnnotateMixin:
         gr += 1
 
         state = {"circle_color": d.get("circle_color", d["color"]),
-                 "cross_color": d.get("cross_color", d["color"])}
+                 "cross_color": d.get("cross_color", d["color"]),
+                 "text_color": d.get("text_color", d["color"])}
+        swatches = {}
 
         def make_color_picker(key, title):
             swatch = self._color_swatch(state[key])
+            swatches[key] = swatch
 
             def pick():
                 b_, g_, r_ = state[key]
                 color = QColorDialog.getColor(QColor(r_, g_, b_), dlg, title)
                 if color.isValid():
+                    checkpoint()
                     state[key] = (color.blue(), color.green(), color.red())
                     swatch.setStyleSheet(
                         f"background-color: rgb({color.red()},"
@@ -1851,6 +1952,17 @@ class AnnotateMixin:
         dist_spin.setValue(round(d.get("label_extra", 0) / r, 2))
         g.addWidget(dist_spin, gr, 1)
         gr += 1
+
+        text_swatch, pick_text_color = make_color_picker(
+            "text_color", "Text color")
+        text_color_btn = QPushButton("Text color...")
+        text_color_btn.setToolTip(
+            "Color of the label text itself, independent of the marker "
+            "color(s) above.")
+        text_color_btn.clicked.connect(pick_text_color)
+        g.addWidget(text_swatch, gr, 0)
+        g.addWidget(text_color_btn, gr, 1)
+        gr += 1
         dv.addLayout(g)
 
         dv.addWidget(QLabel("Label lines (double-click to edit):"))
@@ -1880,12 +1992,16 @@ class AnnotateMixin:
             text = line_edit.text().strip()
             if not text:
                 return
+            checkpoint()
             item = QListWidgetItem(text)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
             lines_list.addItem(item)
             line_edit.clear()
 
         def remove_line():
+            if not lines_list.selectedItems():
+                return
+            checkpoint()
             for item in lines_list.selectedItems():
                 lines_list.takeItem(lines_list.row(item))
 
@@ -1893,38 +2009,163 @@ class AnnotateMixin:
         line_edit.returnPressed.connect(add_line)
         remove_line_btn.clicked.connect(remove_line)
 
+        # ---------------------------------------------------- undo history
+        # A lazy "checkpoint on change" stack: `last_state` always holds a
+        # snapshot of every field taken right after the most recent change
+        # (or the dialog's opening values, if nothing has changed yet).
+        # Each checkpoint() call — wired to every field's change signal,
+        # plus the add/remove-line and color-pick actions above, which
+        # don't fire a plain valueChanged/currentTextChanged — pushes that
+        # snapshot onto the undo stack, then re-captures the (now current)
+        # state as the new `last_state`. Undo pops the stack and restores
+        # it; `restoring` suppresses checkpoint() while that restore is
+        # itself in progress, so undoing/resetting never pollutes its own
+        # history.
+        undo_stack = []
+        restoring = {"flag": False}
+
+        def capture_state():
+            return {
+                "style": style_combo.currentText(),
+                "circle_color": state["circle_color"],
+                "cross_color": state["cross_color"],
+                "text_color": state["text_color"],
+                "circle_th": circle_th_spin.value(),
+                "cross_th": cross_th_spin.value(),
+                "gap": gap_spin.value(),
+                "arm": arm_spin.value(),
+                "pos": pos_combo.currentText(),
+                "dist": dist_spin.value(),
+                "lines": [lines_list.item(i).text()
+                         for i in range(lines_list.count())],
+            }
+
+        last_state = {"ref": capture_state()}
+
+        def checkpoint():
+            if restoring["flag"]:
+                return
+            undo_stack.append(last_state["ref"])
+            last_state["ref"] = capture_state()
+            undo_btn.setEnabled(True)
+
+        def apply_state(st):
+            restoring["flag"] = True
+            try:
+                style_combo.setCurrentText(st["style"])
+                for key in ("circle_color", "cross_color", "text_color"):
+                    state[key] = st[key]
+                    rr, gg, bb = st[key][2], st[key][1], st[key][0]
+                    swatches[key].setStyleSheet(
+                        f"background-color: rgb({rr},{gg},{bb}); "
+                        "border-radius: 3px; "
+                        "border: 1px solid rgba(255,255,255,60);")
+                circle_th_spin.setValue(int(round(st["circle_th"])))
+                cross_th_spin.setValue(int(round(st["cross_th"])))
+                gap_spin.setValue(st["gap"])
+                arm_spin.setValue(st["arm"])
+                pos_combo.setCurrentText(st["pos"])
+                dist_spin.setValue(st["dist"])
+                lines_list.clear()
+                for line in st["lines"]:
+                    item = QListWidgetItem(line)
+                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+                    lines_list.addItem(item)
+            finally:
+                restoring["flag"] = False
+
+        def do_undo():
+            if not undo_stack:
+                return
+            prev = undo_stack.pop()
+            apply_state(prev)
+            last_state["ref"] = prev
+            undo_btn.setEnabled(bool(undo_stack))
+
+        style_combo.currentTextChanged.connect(lambda _t: checkpoint())
+        circle_th_spin.valueChanged.connect(lambda _v: checkpoint())
+        cross_th_spin.valueChanged.connect(lambda _v: checkpoint())
+        gap_spin.valueChanged.connect(lambda _v: checkpoint())
+        arm_spin.valueChanged.connect(lambda _v: checkpoint())
+        pos_combo.currentTextChanged.connect(lambda _t: checkpoint())
+        dist_spin.valueChanged.connect(lambda _v: checkpoint())
+        lines_list.itemChanged.connect(lambda _item: checkpoint())
+
+        btn_row = QHBoxLayout()
+        undo_btn = QPushButton("↶  Undo")
+        undo_btn.setEnabled(False)
+        undo_btn.setToolTip(
+            "Steps back one field change at a time within this dialog "
+            "(marker style, colors, thickness, cross geometry, or label "
+            "lines) — independent of whether you've clicked Update.")
+        undo_btn.clicked.connect(do_undo)
+        btn_row.addWidget(undo_btn)
+
         reset_btn = QPushButton("↺  Reset to panel default")
         reset_btn.setToolTip(
             "Discards every override above and recomputes this object's "
             "style and label lines exactly as the Annotation style panel "
-            "would produce them right now.")
+            "would produce them right now. Counts as a single undoable "
+            "step.")
 
         def do_reset():
             defaults = self._default_style_for_object(d)
-            style_combo.setCurrentText(style_map[defaults["style"]])
-            for key, swatch in (("circle_color", circle_swatch),
-                                ("cross_color", cross_swatch)):
-                state[key] = defaults[key]
-                rr, gg, bb = defaults[key][2], defaults[key][1], defaults[key][0]
-                swatch.setStyleSheet(
-                    f"background-color: rgb({rr},{gg},{bb}); "
-                    "border-radius: 3px; "
-                    "border: 1px solid rgba(255,255,255,60);")
-            circle_th_spin.setValue(int(round(defaults["circle_th"])))
-            cross_th_spin.setValue(int(round(defaults["cross_th"])))
-            gap_spin.setValue(round(defaults["cross_gap"] / r, 2))
-            arm_spin.setValue(round(defaults["cross_arm"] / r, 2))
-            pos_combo.setCurrentText(
-                pos_map.get(defaults["label_pref"], "Auto (avoid overlap)"))
-            dist_spin.setValue(round(defaults["label_extra"] / r, 2))
-            lines_list.clear()
-            for line in defaults["label_lines"]:
-                item = QListWidgetItem(line)
-                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
-                lines_list.addItem(item)
+            new_state = {
+                "style": style_map[defaults["style"]],
+                "circle_color": defaults["circle_color"],
+                "cross_color": defaults["cross_color"],
+                "text_color": defaults["text_color"],
+                "circle_th": defaults["circle_th"],
+                "cross_th": defaults["cross_th"],
+                "gap": defaults["cross_gap"] / r,
+                "arm": defaults["cross_arm"] / r,
+                "pos": pos_map.get(defaults["label_pref"],
+                                   "Auto (avoid overlap)"),
+                "dist": defaults["label_extra"] / r,
+                "lines": defaults["label_lines"],
+            }
+            apply_state(new_state)
+            checkpoint()
 
         reset_btn.clicked.connect(do_reset)
-        dv.addWidget(reset_btn)
+        btn_row.addWidget(reset_btn)
+        dv.addLayout(btn_row)
+
+        def commit_to_d():
+            style = self._TEXT_TO_STYLE_KEY[style_combo.currentText()]
+            label_pref = (None if style == "circle" else
+                         self._TEXT_TO_POS_KEY.get(pos_combo.currentText()))
+            lines = [lines_list.item(i).text().strip()
+                    for i in range(lines_list.count())
+                    if lines_list.item(i).text().strip()]
+            if not lines:
+                lines = [d["label"]]
+            d["style"] = style
+            d["circle_color"] = state["circle_color"]
+            d["circle_th"] = circle_th_spin.value()
+            d["cross_color"] = state["cross_color"]
+            d["cross_th"] = cross_th_spin.value()
+            d["cross_gap"] = r * gap_spin.value()
+            d["cross_arm"] = r * arm_spin.value()
+            d["label_pref"] = label_pref
+            d["label_extra"] = (r * dist_spin.value()
+                                if style in ("cross", "both") else 0)
+            d["label_lines"] = lines
+            d["text_color"] = state["text_color"]
+            applied_update["flag"] = True
+
+        def do_update():
+            commit_to_d()
+            if on_update:
+                on_update()
+
+        update_btn = QPushButton("🔄  Update")
+        update_btn.setToolTip(
+            "Applies these settings to the preview immediately, without "
+            "closing this dialog — keep adjusting and clicking Update to "
+            "see each change.")
+        update_btn.clicked.connect(do_update)
+        dv.addWidget(update_btn)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok |
@@ -1934,33 +2175,19 @@ class AnnotateMixin:
         dv.addWidget(buttons)
 
         if dlg.exec() != QDialog.DialogCode.Accepted:
-            return False
+            if not applied_update["flag"]:
+                return False
+            # Update was clicked at least once — put `d` back exactly as
+            # it was before this dialog opened, deleting any key that
+            # didn't exist originally rather than leaving a stray None.
+            for k, v in orig_d.items():
+                if v is self._MISSING:
+                    d.pop(k, None)
+                else:
+                    d[k] = v
+            return True
 
-        style_rev = {"Circle": "circle", "Open Cross": "cross",
-                    "Circle + Open Cross": "both"}
-        style = style_rev[style_combo.currentText()]
-        pos_rev = {"NE": (1, -1), "NW": (-1, -1),
-                  "SE": (1, 1), "SW": (-1, 1)}
-        label_pref = pos_rev.get(pos_combo.currentText())
-        if style == "circle":
-            label_pref = None
-        lines = [lines_list.item(i).text().strip()
-                for i in range(lines_list.count())
-                if lines_list.item(i).text().strip()]
-        if not lines:
-            lines = [d["label"]]
-
-        d["style"] = style
-        d["circle_color"] = state["circle_color"]
-        d["circle_th"] = circle_th_spin.value()
-        d["cross_color"] = state["cross_color"]
-        d["cross_th"] = cross_th_spin.value()
-        d["cross_gap"] = r * gap_spin.value()
-        d["cross_arm"] = r * arm_spin.value()
-        d["label_pref"] = label_pref
-        d["label_extra"] = (r * dist_spin.value()
-                            if style in ("cross", "both") else 0)
-        d["label_lines"] = lines
+        commit_to_d()
         return True
 
     def _show_object_selector_dialog(self):
@@ -2037,11 +2264,18 @@ class AnnotateMixin:
         def on_visibility_changed(_checked=None):
             apply_preview(rebuild_kept())
 
+        def redo_layout_and_preview():
+            self._layout_annotation_labels(drawn, W, H)
+            apply_preview(rebuild_kept())
+
         def open_style_editor(target_d):
-            changed = self._show_object_style_dialog(target_d)
+            # on_update: fires on every "🔄 Update" click inside the style
+            # dialog, so the live preview reflects each change while the
+            # dialog is still open, not just after it closes.
+            changed = self._show_object_style_dialog(
+                target_d, on_update=redo_layout_and_preview)
             if changed:
-                self._layout_annotation_labels(drawn, W, H)
-                apply_preview(rebuild_kept())
+                redo_layout_and_preview()
 
         for d in drawn:
             cat_label = CATALOG_LABELS.get(d["kind"], d["kind"].title())

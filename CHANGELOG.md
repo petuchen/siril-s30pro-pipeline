@@ -1,5 +1,37 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.50.0
+
+* **Open Cross "Label distance (× radius)" default lowered from 0.3 to
+  0.1** — a tighter default spacing between the label and the marker
+  center, closer to what most objects need; still a 0.1-step slider from
+  0 to 3, so any distance remains reachable.
+* **New: per-object text color, in the 🎨 per-object style editor.** A
+  "Text color..." picker alongside the existing Circle/Cross color
+  pickers lets one object's label text use a different color than its
+  marker(s) or the panel's per-catalogue default — independent of every
+  other object, same as the rest of that dialog.
+* **New: "🔄 Update" button inside the per-object style editor.** Applies
+  the dialog's current settings to the live preview immediately, without
+  closing the dialog — nudge a value, see the result, keep adjusting.
+  Cancelling after clicking Update now correctly reverts the object to
+  exactly what it held before the dialog opened.
+* **New: "↶ Undo" button inside the per-object style editor.** Steps
+  back through the dialog's own edit history one field change at a
+  time — marker style, either color, thickness, cross geometry, label
+  position/distance, or label-line edits — independent of whether
+  Update has been clicked. "↺ Reset to panel default" now counts as a
+  single undoable step too.
+* **New: "🔄 Update preview" button on the Annotate panel itself.**
+  Re-renders every currently shown object using the Annotation style
+  panel's *current* settings (marker style, colors, thickness, cross
+  geometry, label detail lines) without re-querying any catalogue or
+  re-running plate solving — much faster than the full Run button for
+  iterating on how things look. Resets every object to the panel
+  defaults, so per-object 🎨 overrides are discarded by this (same
+  trade-off as re-running the stage, just far quicker); doesn't affect
+  constellation lines, which still need a full re-run to change.
+
 ## 1.49.0
 
 * **New feature: per-object annotation style overrides.** Every row in
