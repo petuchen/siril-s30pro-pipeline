@@ -1,5 +1,30 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.48.0
+
+* **Annotate panel reorganized into a clear 3-step flow.** The stage card
+  is now three collapsible/ordered sections instead of one long wall of
+  controls: "① Objects to show" (catalogue toggles, star magnitude limit,
+  online BSC, and all constellation-line settings, including "Select
+  constellations..."), "② Annotation style" (label size, marker style,
+  the Circle/Open Cross style panels, Label detail, and the overlay
+  toggle — sub-panels still show/hide immediately as the marker style
+  dropdown changes), and the existing Run/Undo row plus action buttons
+  (Save image, Select objects, Remove all) for updating the result
+  in place after running.
+* **Open Cross style moved after the object catalogue section** (was
+  previously above it), so the panel now reads top-to-bottom in the
+  same order you'd actually use it: pick objects, then pick style.
+* **New "Label distance (× radius)" control for Open Cross style.**
+  Separate from the existing arm length, this adds extra breathing room
+  between the label text and the marker center — a multiple of the
+  marker's radius, on top of the arm length — so a label (especially a
+  multi-line one from the Label detail feature) can be pulled further
+  out to clear the cross's arms instead of crowding them. Defaults to
+  0.3, matching the prior fixed spacing closely enough that existing
+  saved settings look the same until adjusted. Round-trips through
+  Export/Import settings.
+
 ## 1.47.0
 
 * **New feature: OpenNGC label detail + custom label lines for Annotate.**

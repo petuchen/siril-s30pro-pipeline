@@ -228,7 +228,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "1.47.0"
+VERSION = "1.48.0"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -1314,6 +1314,7 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
                 "cross_gap_mult": self.ann_cross_gap_spin.value(),
                 "cross_arm_mult": self.ann_cross_arm_spin.value(),
                 "cross_label_pos": self.ann_cross_label_pos_combo.currentText(),
+                "cross_label_dist_mult": self.ann_cross_label_dist_spin.value(),
                 "detail_type": self.ann_detail_type_checkbox.isChecked(),
                 "detail_mag": self.ann_detail_mag_checkbox.isChecked(),
                 "detail_const": self.ann_detail_const_checkbox.isChecked(),
@@ -1514,6 +1515,8 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         if cross_label_pos not in ("Auto (avoid overlap)", "NE", "NW", "SE", "SW"):
             cross_label_pos = "Auto (avoid overlap)"
         self.ann_cross_label_pos_combo.setCurrentText(cross_label_pos)
+        self.ann_cross_label_dist_spin.setValue(
+            float(an.get("cross_label_dist_mult", 0.3)))
         self.ann_detail_type_checkbox.setChecked(an.get("detail_type", False))
         self.ann_detail_mag_checkbox.setChecked(an.get("detail_mag", False))
         self.ann_detail_const_checkbox.setChecked(an.get("detail_const", False))

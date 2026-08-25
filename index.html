@@ -470,6 +470,18 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>1.48.0</td><td>Annotate panel reorganized into a clear 3-step
+        flow: <b>① Objects to show</b> (catalogue toggles and all
+        constellation-line settings), <b>② Annotation style</b> (label size,
+        marker style, the Circle/Open Cross panels, Label detail, and the
+        overlay toggle — sub-panels still show/hide immediately as you
+        change the marker style dropdown), then the existing Run/Undo row
+        and action buttons for updating the result afterward. Open Cross
+        style now sits after the object catalogue section instead of above
+        it. New <b>Label distance (× radius)</b> control for Open Cross:
+        extra breathing room between the label text and the marker center,
+        separate from arm length, so a (possibly multi-line) label can be
+        pulled further out to clear the cross's arms.</td></tr>
       <tr><td>1.47.0</td><td>Annotate: object labels can now show more than
         the name. A new <b>Label detail</b> panel adds optional
         OpenNGC-sourced lines — object type, magnitude, constellation,
@@ -851,6 +863,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>1.48.0</td><td>標註面板重新整理為清楚的三步驟流程：「① Objects to show（顯示哪些天體）」（星表勾選項與所有星座連線相關設定）、「② Annotation style（標註樣式）」（標籤大小、標記樣式、圓圈／開放式十字設定區塊、Label detail 詳細標籤、以及是否顯示疊加層的選項——切換「Marker style」下拉選單時，對應的樣式子區塊仍會立即顯示或隱藏），最後才是原本的執行／復原按鈕列與執行後可用的動作按鈕。開放式十字（Open Cross）樣式設定區塊現在移到物件星表區塊之後，而不是在它上面。開放式十字新增「Label distance（標籤與中心距離，以半徑倍數表示）」設定：在原本的臂長之外，額外提供標籤文字與標記中心之間的緩衝距離，讓（可能是多行的）標籤能進一步拉遠，避免與十字的臂線太過擁擠。</td></tr>
       <tr><td>1.47.0</td><td>標註步驟的物件名稱現在可以顯示更多資訊。新增「Label detail（標籤詳細資訊）」設定區塊，提供四個取自 OpenNGC 星表的選用欄位——天體類型、星等、所屬星座、視大小——各自獨立勾選；另外新增「Custom lines（自訂內容）」清單，可自行輸入額外文字（雙擊即可編輯，並可用 Add／Remove 新增或移除）。每一項啟用的內容都會顯示在物件名稱下方各自一行，並依標籤所在的方向（在標記的左側或右側）自動靠左或靠右對齊，讓多行標籤仍然清楚「附著」在對應的標記上。若使用開放式十字（Open Cross）樣式，標籤所在那一側的南／北臂會隨行數增加自動加長，向外延伸至貼近較高的標籤區塊。以上設定皆會隨匯出／匯入設定一併儲存與還原。</td></tr>
       <tr><td>1.46.0</td><td>標註步驟新增「Marker style（標記樣式）」選項——圓圈（原本預設，行為不變）、<b>開放式十字（Open Cross）</b>（由 4 段短線組成的準星，兩端都在碰到物體前停下，不會像圓圈那樣蓋住物體本身），或兩者同時顯示——圓圈與十字各自擁有獨立的粗細與顏色設定（粗細可自動或指定像素值；顏色預設沿用各星表原本的顏色，也可切換成單一自訂顏色覆蓋）。十字的中心間隙與臂長皆以標記自身半徑的倍數設定，因此會隨每個天體的視大小自動縮放。由於開放式十字會讓四個對角方向保持淨空，因此新增「Label position（名稱位置）」選項（NE／NW／SE／SW，或 Auto），可指定既有的防重疊排版優先選用哪個角落。以上設定皆會隨匯出／匯入設定一併儲存與還原。</td></tr>
       <tr><td>1.45.0</td><td>新功能：<b>彗星堆疊（Comet Stack）</b>模式，是「前處理」堆疊方式下拉選單中新增的第四個選項，專為彗星與小行星目標設計。它會用同一批子圖產生兩張堆疊結果——一張以恆星對齊（彗星拖出尾跡），一張以彗星自身移動對齊（恆星拖線、彗星銳利）——因為移動天體需要兩種不同的對齊方式，這是其他堆疊模式都做不到的，然後把兩者交給「星點重組（Star Recomposition）」合成一張兩者皆銳利的影像。過程中有一個技術細節需要手動解決：<code>seqstarnet</code> 會重新產生它輸出序列的 .seq 檔，而不會保留 Siril 先前已算好的對齊資料；由於沒有對應的主控台指令可以把它接回去，因此新增了 <code>_splice_seq_registration()</code> 輔助函式，直接以文字檔案的方式把對齊資料補回去（並附有專屬單元測試）。選擇此模式時會出現新的設定區塊，可調整堆疊拒斥的 sigma 值與背景移除的階數／取樣點數，同時會自動關閉（並以提示說明灰化）下方的「移除背景」與「移除星點」兩個步驟（彗星堆疊本身的流程已經包含這兩者），切換回其他堆疊方式時會還原原本的勾選狀態。有兩個步驟無法用指令自動化，會暫停流程並顯示畫面說明與「繼續」按鈕：在 Siril 自己的「彗星／小行星對齊」工具中手動框選彗核，以及手動執行「星點重組」（影像處理 → 星點處理）。完成後，後續的拉伸、直方圖、最終潤飾、標註、浮水印等步驟會照常在合成結果上執行，不受影響。</td></tr>

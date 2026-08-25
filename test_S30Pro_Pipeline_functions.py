@@ -593,6 +593,26 @@ def test_annotate_catalog_helpers(pipeline, np):
           d0["tx"] > d0["x"] and d0["ty"] < d0["y"],
           f"marker=({d0['x']},{d0['y']}) label anchor=({d0['tx']},{d0['ty']})")
 
+    # _layout_annotation_labels: "label_extra" (the Open Cross panel's
+    # "Label distance" spin box) pushes the label further from the marker
+    # center — checked on an isolated marker with a fixed east placement
+    # (dy=0) so the comparison is a clean 1-D distance, not affected by
+    # the greedy ring search picking a different direction.
+    near_items = [
+        {"label": "Test Obj", "kind": "ngc", "x": 200, "y": 150, "r": 20,
+         "fs": 0.85, "th": 2, "label_pref": (1, 0), "label_extra": 0},
+    ]
+    far_items = [
+        {"label": "Test Obj", "kind": "ngc", "x": 200, "y": 150, "r": 20,
+         "fs": 0.85, "th": 2, "label_pref": (1, 0), "label_extra": 40},
+    ]
+    pipeline.UnifiedPipelineWindow._layout_annotation_labels(near_items, 400, 300)
+    pipeline.UnifiedPipelineWindow._layout_annotation_labels(far_items, 400, 300)
+    check("_layout_annotation_labels: label_extra pushes the label further "
+          "from the marker center",
+          far_items[0]["tx"] > near_items[0]["tx"],
+          f"near tx={near_items[0]['tx']} far tx={far_items[0]['tx']}")
+
     # _render_annotations: Open Cross style must leave the object's own
     # center pixel untouched (that's the entire point of an *open* cross —
     # unlike a filled marker, it never covers the object it's pointing

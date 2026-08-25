@@ -58,33 +58,41 @@ class AnnotateMixin:
         self.stage_ann_box = box
 
         info = QLabel("Labels stars and deep-sky objects for whatever's "
-                      "actually in the plate-solved field. Messier/NGC/IC "
-                      "come from OpenNGC (downloaded once, cached on disk); "
-                      "Sharpless and Lynds Dark Nebulae come from live "
-                      "VizieR cone searches — real structured data, not "
-                      "guessed from Siril's console log. Each catalogue "
-                      "gets its own color, shown next to its checkbox "
-                      "below. Use \"Select objects to show...\" after "
-                      "running to pick individual objects — changes apply "
-                      "to the preview immediately. Constellation "
-                      "stick-figure lines are a separate, always-offline "
-                      "layer — pick which constellations to include with "
-                      "\"Select constellations...\". Saves an annotated "
-                      "JPG next to your data — the FITS image itself is "
-                      "not modified.")
+                      "actually in the plate-solved field. Three steps "
+                      "below: pick which objects to show, pick how they're "
+                      "drawn (updates this panel immediately as you "
+                      "change it), then run — after running, use the "
+                      "action buttons to update, select, remove, or save "
+                      "the result without re-querying any catalogue. "
+                      "Messier/NGC/IC come from OpenNGC (downloaded once, "
+                      "cached on disk); Sharpless and Lynds Dark Nebulae "
+                      "come from live VizieR cone searches — real "
+                      "structured data, not guessed from Siril's console "
+                      "log. Saves an annotated JPG next to your data — "
+                      "the FITS image itself is not modified.")
         info.setObjectName("SubHeader")
         info.setWordWrap(True)
         v.addWidget(info)
+
+        # ============================================== ① Objects to show
+        # Everything that decides *which* stars/DSOs/constellations get
+        # queried and labeled at all — catalogue toggles, magnitude/online
+        # settings, and constellation-line settings. Collapsible (like the
+        # Hubble Palette advanced-options pattern) so the common case
+        # (defaults are fine, just run it) doesn't force scrolling past a
+        # wall of catalogue checkboxes to reach step 2/3 below.
+        obj_box, obj_v, _ = self._collapsible_section(
+            "① Objects to show", start_expanded=True)
 
         # 2 columns throughout (swatch+checkbox, or label+control), one
         # item per row — keeps every row readable at the ~1/3-window-width
         # target; several checkbox labels here are long enough that a
         # wider multi-column layout would either overflow or force the
         # (non-wrapping) checkbox text to clip.
-        g = QGridLayout()
-        g.setHorizontalSpacing(10)
-        g.setVerticalSpacing(8)
-        g.setColumnStretch(1, 1)
+        og = QGridLayout()
+        og.setHorizontalSpacing(10)
+        og.setVerticalSpacing(8)
+        og.setColumnStretch(1, 1)
         row = 0
 
         self.ann_stars_checkbox = QCheckBox("Stars (local catalogue)")
@@ -95,15 +103,15 @@ class AnnotateMixin:
             "magnitude limit. Falls back to this script's own small "
             "bundled star list if Siril's conesearch command isn't "
             "available (Siril < 1.3).")
-        g.addWidget(self._color_swatch(CATALOG_COLORS["star"]), row, 0)
-        g.addWidget(self.ann_stars_checkbox, row, 1)
+        og.addWidget(self._color_swatch(CATALOG_COLORS["star"]), row, 0)
+        og.addWidget(self.ann_stars_checkbox, row, 1)
         row += 1
-        g.addWidget(QLabel("Star mag limit:"), row, 0)
+        og.addWidget(QLabel("Star mag limit:"), row, 0)
         self.ann_mag_spin = QDoubleSpinBox()
         self.ann_mag_spin.setRange(0.0, 12.0)
         self.ann_mag_spin.setSingleStep(0.5)
         self.ann_mag_spin.setValue(6.0)
-        g.addWidget(self.ann_mag_spin, row, 1)
+        og.addWidget(self.ann_mag_spin, row, 1)
         row += 1
 
         self.ann_cat_messier_checkbox = QCheckBox("Messier")
@@ -112,8 +120,8 @@ class AnnotateMixin:
             "The 110 Messier objects, from OpenNGC (real RA/Dec, no "
             "coordinate guessing). Downloaded once and cached on disk — "
             "later runs use the cached copy, no internet needed.")
-        g.addWidget(self._color_swatch(CATALOG_COLORS["messier"]), row, 0)
-        g.addWidget(self.ann_cat_messier_checkbox, row, 1)
+        og.addWidget(self._color_swatch(CATALOG_COLORS["messier"]), row, 0)
+        og.addWidget(self.ann_cat_messier_checkbox, row, 1)
         row += 1
 
         self.ann_cat_ngc_checkbox = QCheckBox("NGC (New General Catalogue)")
@@ -121,8 +129,8 @@ class AnnotateMixin:
         self.ann_cat_ngc_checkbox.setToolTip(
             "~8,000 NGC objects, from the same cached OpenNGC data as "
             "Messier above.")
-        g.addWidget(self._color_swatch(CATALOG_COLORS["ngc"]), row, 0)
-        g.addWidget(self.ann_cat_ngc_checkbox, row, 1)
+        og.addWidget(self._color_swatch(CATALOG_COLORS["ngc"]), row, 0)
+        og.addWidget(self.ann_cat_ngc_checkbox, row, 1)
         row += 1
 
         self.ann_cat_ic_checkbox = QCheckBox("IC (Index Catalogue)")
@@ -130,8 +138,8 @@ class AnnotateMixin:
         self.ann_cat_ic_checkbox.setToolTip(
             "~5,000 IC objects, from the same cached OpenNGC data as "
             "Messier above.")
-        g.addWidget(self._color_swatch(CATALOG_COLORS["ic"]), row, 0)
-        g.addWidget(self.ann_cat_ic_checkbox, row, 1)
+        og.addWidget(self._color_swatch(CATALOG_COLORS["ic"]), row, 0)
+        og.addWidget(self.ann_cat_ic_checkbox, row, 1)
         row += 1
 
         self.ann_cat_sh2_checkbox = QCheckBox("Sharpless (Sh2)")
@@ -140,8 +148,8 @@ class AnnotateMixin:
             "live from VizieR (catalogue VII/20) for the current field. "
             "Needs internet on every run — off by default for that "
             "reason.")
-        g.addWidget(self._color_swatch(CATALOG_COLORS["sh2"]), row, 0)
-        g.addWidget(self.ann_cat_sh2_checkbox, row, 1)
+        og.addWidget(self._color_swatch(CATALOG_COLORS["sh2"]), row, 0)
+        og.addWidget(self.ann_cat_sh2_checkbox, row, 1)
         row += 1
 
         self.ann_cat_ldn_checkbox = QCheckBox("Lynds Dark Nebulae (LdN)")
@@ -149,19 +157,140 @@ class AnnotateMixin:
             "Lynds Catalogue of Dark Nebulae, queried live from VizieR "
             "(catalogue VII/7A) for the current field. Needs internet on "
             "every run — off by default for that reason.")
-        g.addWidget(self._color_swatch(CATALOG_COLORS["ldn"]), row, 0)
-        g.addWidget(self.ann_cat_ldn_checkbox, row, 1)
+        og.addWidget(self._color_swatch(CATALOG_COLORS["ldn"]), row, 0)
+        og.addWidget(self.ann_cat_ldn_checkbox, row, 1)
         row += 1
 
-        g.addWidget(QLabel("Label size:"), row, 0)
+        self.ann_online_checkbox = QCheckBox("All stars < mag limit (online BSC)")
+        self.ann_online_checkbox.setToolTip(
+            "Siril's local star catalogue covers the field well already; "
+            "this additionally runs Siril's own online conesearch against "
+            "the VizieR Bright Star Catalogue for every star below the "
+            "star magnitude limit, for denser coverage. Needs internet.")
+        og.addWidget(self.ann_online_checkbox, row, 0, 1, 2)
+        row += 1
+
+        # -------------------------------------------------- constellation lines
+        # Selection defaults to every constellation; picked by abbreviation
+        # (CONSTELLATION_NAMES keys) via the "Select constellations..."
+        # dialog below, not a per-item checkbox in this grid (88 of them
+        # wouldn't fit).
+        self.ann_const_selected = set(CONSTELLATION_NAMES.keys())
+        _default_preset = "Pale Lavender (default)"
+        self.ann_const_color, self.ann_const_name_color = \
+            CONSTELLATION_COLOR_PRESETS[_default_preset]
+        self.ann_const_checkbox = QCheckBox("Constellation lines")
+        self.ann_const_checkbox.setToolTip(
+            "Draws stick-figure lines between bright stars for whichever "
+            "constellations are (at least partly) in the plate-solved "
+            "field. Line topology is a widely used amateur/planetarium "
+            "\"connect the dots\" set (from the open-source d3-celestial "
+            "project), embedded and fully offline — the IAU only defines "
+            "official constellation *boundaries*, not lines, so different "
+            "atlases draw slightly different stick figures for the same "
+            "constellation. Use \"Select constellations...\" below to "
+            "leave some out.")
+        og.addWidget(self.ann_const_checkbox, row, 0, 1, 2)
+        row += 1
+
+        self.ann_const_names_checkbox = QCheckBox("Show constellation names")
+        self.ann_const_names_checkbox.setChecked(True)
+        self.ann_const_names_checkbox.setToolTip(
+            "Labels each drawn constellation with its name, centered over "
+            "whichever part of its stick figure is inside the frame.")
+        og.addWidget(self.ann_const_names_checkbox, row, 0, 1, 2)
+        row += 1
+
+        og.addWidget(QLabel("Line width:"), row, 0)
+        self.ann_const_width_spin = QSpinBox()
+        self.ann_const_width_spin.setRange(1, 8)
+        self.ann_const_width_spin.setValue(1)
+        self.ann_const_width_spin.setToolTip(
+            "Thickness of the constellation lines, in pixels (scaled up "
+            "automatically for high-resolution stacks).")
+        og.addWidget(self.ann_const_width_spin, row, 1)
+        row += 1
+
+        og.addWidget(QLabel("Gap (px):"), row, 0)
+        self.ann_const_gap_spin = QSpinBox()
+        self.ann_const_gap_spin.setRange(0, 60)
+        self.ann_const_gap_spin.setValue(8)
+        self.ann_const_gap_spin.setToolTip(
+            "Shortens each line segment by this many pixels from both "
+            "ends, so lines don't touch the stars directly — 0 draws "
+            "star-to-star with no gap.")
+        og.addWidget(self.ann_const_gap_spin, row, 1)
+        row += 1
+
+        og.addWidget(QLabel("Color preset:"), row, 0)
+        self.ann_const_preset_combo = QComboBox()
+        self.ann_const_preset_combo.addItem("Custom")
+        self.ann_const_preset_combo.addItems(
+            list(CONSTELLATION_COLOR_PRESETS.keys()))
+        self.ann_const_preset_combo.setCurrentText(_default_preset)
+        self.ann_const_preset_combo.setToolTip(
+            "Quick-pick a matched line/name color scheme. Picking either "
+            "color manually below switches this back to \"Custom\".")
+        self.ann_const_preset_combo.currentTextChanged.connect(
+            self._apply_constellation_preset)
+        og.addWidget(self.ann_const_preset_combo, row, 1)
+        row += 1
+
+        self.ann_const_swatch = self._color_swatch(self.ann_const_color)
+        self.ann_const_color_btn = QPushButton("Line color...")
+        self.ann_const_color_btn.setToolTip(
+            "Pick a custom color for the constellation lines themselves.")
+        self.ann_const_color_btn.clicked.connect(
+            lambda: self._pick_constellation_color("line"))
+        og.addWidget(self.ann_const_swatch, row, 0)
+        og.addWidget(self.ann_const_color_btn, row, 1)
+        row += 1
+
+        self.ann_const_name_swatch = self._color_swatch(
+            self.ann_const_name_color)
+        self.ann_const_name_color_btn = QPushButton("Name color...")
+        self.ann_const_name_color_btn.setToolTip(
+            "Pick a custom color for the constellation name labels — "
+            "independent of the line color above.")
+        self.ann_const_name_color_btn.clicked.connect(
+            lambda: self._pick_constellation_color("name"))
+        og.addWidget(self.ann_const_name_swatch, row, 0)
+        og.addWidget(self.ann_const_name_color_btn, row, 1)
+        row += 1
+        obj_v.addLayout(og)
+
+        self.ann_const_select_btn = QPushButton("🌌  Select constellations...")
+        self.ann_const_select_btn.setToolTip(
+            "Choose which of the 88 constellations get stick-figure lines "
+            "drawn, if \"Constellation lines\" above is checked. Applies "
+            "the next time the Annotate stage runs.")
+        self.ann_const_select_btn.clicked.connect(
+            self._show_constellation_selector_dialog)
+        obj_v.addWidget(self.ann_const_select_btn)
+        v.addWidget(obj_box)
+
+        # ============================================ ② Annotation style
+        # How the objects picked in step ① are actually drawn: marker
+        # shape/color/thickness, label size and detail lines. The style
+        # sub-panels (Circle/Open Cross/Label detail) show or hide
+        # instantly as you change the controls above them — no need to
+        # re-run the stage just to see which options apply to your choice.
+        style_box, style_v, _ = self._collapsible_section(
+            "② Annotation style", start_expanded=True)
+
+        sg = QGridLayout()
+        sg.setHorizontalSpacing(10)
+        sg.setVerticalSpacing(8)
+        sg.setColumnStretch(1, 1)
+
+        sg.addWidget(QLabel("Label size:"), 0, 0)
         self.ann_size_spin = QDoubleSpinBox()
         self.ann_size_spin.setRange(0.5, 3.0)
         self.ann_size_spin.setSingleStep(0.1)
         self.ann_size_spin.setValue(1.0)
-        g.addWidget(self.ann_size_spin, row, 1)
-        row += 1
+        sg.addWidget(self.ann_size_spin, 0, 1)
 
-        g.addWidget(QLabel("Marker style:"), row, 0)
+        sg.addWidget(QLabel("Marker style:"), 1, 0)
         self.ann_marker_style_combo = QComboBox()
         self.ann_marker_style_combo.addItems(
             ["Circle", "Open Cross", "Circle + Open Cross"])
@@ -169,9 +298,10 @@ class AnnotateMixin:
             "How each star/DSO marker is drawn. \"Open Cross\" is a "
             "reticle-style cross with a gap in the middle so it doesn't "
             "cover the object itself — its gap and arm length scale with "
-            "the marker's size and are adjustable below.")
-        g.addWidget(self.ann_marker_style_combo, row, 1)
-        row += 1
+            "the marker's size and are adjustable below. This panel "
+            "updates immediately as you change the style.")
+        sg.addWidget(self.ann_marker_style_combo, 1, 1)
+        style_v.addLayout(sg)
 
         # -------------------------------------------------- marker style groups
         self.ann_circle_style_box = QGroupBox("Circle style")
@@ -210,7 +340,7 @@ class AnnotateMixin:
             lambda: self._pick_marker_color("circle"))
         circ_g.addWidget(self.ann_circle_swatch, 3, 0)
         circ_g.addWidget(self.ann_circle_color_btn, 3, 1)
-        v.addWidget(self.ann_circle_style_box)
+        style_v.addWidget(self.ann_circle_style_box)
 
         self.ann_cross_style_box = QGroupBox("Open Cross style")
         cross_g = QGridLayout(self.ann_cross_style_box)
@@ -279,7 +409,21 @@ class AnnotateMixin:
             "you’ve chosen one)."
         )
         cross_g.addWidget(self.ann_cross_label_pos_combo, 6, 1)
-        v.addWidget(self.ann_cross_style_box)
+
+        cross_g.addWidget(QLabel("Label distance (× radius):"), 7, 0)
+        self.ann_cross_label_dist_spin = QDoubleSpinBox()
+        self.ann_cross_label_dist_spin.setRange(0.0, 3.0)
+        self.ann_cross_label_dist_spin.setSingleStep(0.1)
+        self.ann_cross_label_dist_spin.setValue(0.3)
+        self.ann_cross_label_dist_spin.setToolTip(
+            "Extra breathing room between the label text and the marker "
+            "center, as a multiple of the marker's own radius — added on "
+            "top of the arm length above, so you can pull the label "
+            "further out to clear a stretched, multi-line label instead "
+            "of having it crowd the cross's arms. 0 keeps the label as "
+            "close as it was before this option existed.")
+        cross_g.addWidget(self.ann_cross_label_dist_spin, 7, 1)
+        style_v.addWidget(self.ann_cross_style_box)
 
         def sync_marker_style_visibility(_text=None):
             style = self.ann_marker_style_combo.currentText()
@@ -377,104 +521,7 @@ class AnnotateMixin:
         ann_custom_line_add_btn.clicked.connect(add_custom_line)
         self.ann_custom_line_edit.returnPressed.connect(add_custom_line)
         ann_custom_line_remove_btn.clicked.connect(remove_custom_line)
-        v.addWidget(self.ann_label_detail_box)
-
-        # -------------------------------------------------- constellation lines
-        # Selection defaults to every constellation; picked by abbreviation
-        # (CONSTELLATION_NAMES keys) via the "Select constellations..."
-        # dialog below, not a per-item checkbox in this grid (88 of them
-        # wouldn't fit).
-        self.ann_const_selected = set(CONSTELLATION_NAMES.keys())
-        _default_preset = "Pale Lavender (default)"
-        self.ann_const_color, self.ann_const_name_color = \
-            CONSTELLATION_COLOR_PRESETS[_default_preset]
-        self.ann_const_checkbox = QCheckBox("Constellation lines")
-        self.ann_const_checkbox.setToolTip(
-            "Draws stick-figure lines between bright stars for whichever "
-            "constellations are (at least partly) in the plate-solved "
-            "field. Line topology is a widely used amateur/planetarium "
-            "\"connect the dots\" set (from the open-source d3-celestial "
-            "project), embedded and fully offline — the IAU only defines "
-            "official constellation *boundaries*, not lines, so different "
-            "atlases draw slightly different stick figures for the same "
-            "constellation. Use \"Select constellations...\" below to "
-            "leave some out.")
-        g.addWidget(self.ann_const_checkbox, row, 0, 1, 2)
-        row += 1
-
-        self.ann_const_names_checkbox = QCheckBox("Show constellation names")
-        self.ann_const_names_checkbox.setChecked(True)
-        self.ann_const_names_checkbox.setToolTip(
-            "Labels each drawn constellation with its name, centered over "
-            "whichever part of its stick figure is inside the frame.")
-        g.addWidget(self.ann_const_names_checkbox, row, 0, 1, 2)
-        row += 1
-
-        g.addWidget(QLabel("Line width:"), row, 0)
-        self.ann_const_width_spin = QSpinBox()
-        self.ann_const_width_spin.setRange(1, 8)
-        self.ann_const_width_spin.setValue(1)
-        self.ann_const_width_spin.setToolTip(
-            "Thickness of the constellation lines, in pixels (scaled up "
-            "automatically for high-resolution stacks).")
-        g.addWidget(self.ann_const_width_spin, row, 1)
-        row += 1
-
-        g.addWidget(QLabel("Gap (px):"), row, 0)
-        self.ann_const_gap_spin = QSpinBox()
-        self.ann_const_gap_spin.setRange(0, 60)
-        self.ann_const_gap_spin.setValue(8)
-        self.ann_const_gap_spin.setToolTip(
-            "Shortens each line segment by this many pixels from both "
-            "ends, so lines don't touch the stars directly — 0 draws "
-            "star-to-star with no gap.")
-        g.addWidget(self.ann_const_gap_spin, row, 1)
-        row += 1
-
-        g.addWidget(QLabel("Color preset:"), row, 0)
-        self.ann_const_preset_combo = QComboBox()
-        self.ann_const_preset_combo.addItem("Custom")
-        self.ann_const_preset_combo.addItems(
-            list(CONSTELLATION_COLOR_PRESETS.keys()))
-        self.ann_const_preset_combo.setCurrentText(_default_preset)
-        self.ann_const_preset_combo.setToolTip(
-            "Quick-pick a matched line/name color scheme. Picking either "
-            "color manually below switches this back to \"Custom\".")
-        self.ann_const_preset_combo.currentTextChanged.connect(
-            self._apply_constellation_preset)
-        g.addWidget(self.ann_const_preset_combo, row, 1)
-        row += 1
-
-        self.ann_const_swatch = self._color_swatch(self.ann_const_color)
-        self.ann_const_color_btn = QPushButton("Line color...")
-        self.ann_const_color_btn.setToolTip(
-            "Pick a custom color for the constellation lines themselves.")
-        self.ann_const_color_btn.clicked.connect(
-            lambda: self._pick_constellation_color("line"))
-        g.addWidget(self.ann_const_swatch, row, 0)
-        g.addWidget(self.ann_const_color_btn, row, 1)
-        row += 1
-
-        self.ann_const_name_swatch = self._color_swatch(
-            self.ann_const_name_color)
-        self.ann_const_name_color_btn = QPushButton("Name color...")
-        self.ann_const_name_color_btn.setToolTip(
-            "Pick a custom color for the constellation name labels — "
-            "independent of the line color above.")
-        self.ann_const_name_color_btn.clicked.connect(
-            lambda: self._pick_constellation_color("name"))
-        g.addWidget(self.ann_const_name_swatch, row, 0)
-        g.addWidget(self.ann_const_name_color_btn, row, 1)
-        row += 1
-
-        self.ann_online_checkbox = QCheckBox("All stars < mag limit (online BSC)")
-        self.ann_online_checkbox.setToolTip(
-            "Siril's local star catalogue covers the field well already; "
-            "this additionally runs Siril's own online conesearch against "
-            "the VizieR Bright Star Catalogue for every star below the "
-            "star magnitude limit, for denser coverage. Needs internet.")
-        g.addWidget(self.ann_online_checkbox, row, 0, 1, 2)
-        row += 1
+        style_v.addWidget(self.ann_label_detail_box)
 
         self.ann_show_overlay_checkbox = QCheckBox("Show annotation overlay")
         self.ann_show_overlay_checkbox.setChecked(True)
@@ -482,9 +529,10 @@ class AnnotateMixin:
             "Uncheck to hide the markers/labels — running the stage will then "
             "just show the plain image (useful if you want to keep the stage "
             "in the pipeline but not clutter the preview/export with labels).")
-        g.addWidget(self.ann_show_overlay_checkbox, row, 0, 1, 2)
-        v.addLayout(g)
+        style_v.addWidget(self.ann_show_overlay_checkbox)
+        v.addWidget(style_box)
 
+        # ============================================ ③ Run / update / save
         row, self.stage_ann_run = self._run_row(
             lambda: self._launch([self._exec_stage_ann]), undo_stage=IDX_ANN)
         v.addLayout(row)
@@ -508,14 +556,6 @@ class AnnotateMixin:
         v.addLayout(save_row1)
 
         save_row2 = QHBoxLayout()
-        self.ann_const_select_btn = QPushButton("🌌  Select constellations...")
-        self.ann_const_select_btn.setToolTip(
-            "Choose which of the 88 constellations get stick-figure lines "
-            "drawn, if \"Constellation lines\" above is checked. Applies "
-            "the next time the Annotate stage runs.")
-        self.ann_const_select_btn.clicked.connect(
-            self._show_constellation_selector_dialog)
-        save_row2.addWidget(self.ann_const_select_btn)
         self.ann_remove_all_btn = QPushButton("🗑  Remove all")
         self.ann_remove_all_btn.setToolTip(
             "Hide every labeled object at once — one click, no need to "
@@ -1061,6 +1101,7 @@ class AnnotateMixin:
                     else None)
                 cross_gap_mult = self.ann_cross_gap_spin.value()
                 cross_arm_mult = self.ann_cross_arm_spin.value()
+                cross_label_dist_mult = self.ann_cross_label_dist_spin.value()
                 # NE/NW/SE/SW map onto the same (dx,dy) convention already
                 # used by _layout_annotation_labels' candidate ring: dx>0
                 # is toward larger x (right/"E"), dy<0 is toward smaller y
@@ -1163,6 +1204,9 @@ class AnnotateMixin:
                         "cross_gap": r * cross_gap_mult,
                         "cross_arm": r * cross_arm_mult,
                         "label_pref": label_pref,
+                        "label_extra": (r * cross_label_dist_mult
+                                       if marker_style in ("cross", "both")
+                                       else 0),
                     })
                 self._layout_annotation_labels(drawable, W, H)
                 drawn = len(drawable)
@@ -1299,9 +1343,10 @@ class AnnotateMixin:
             pref = d.get("label_pref")
             if pref in dirs:
                 dirs = [pref] + [dd for dd in dirs if dd != pref]
+            label_extra = d.get("label_extra", 0)
             candidates = []
             for ring in (1.0, 2.2):
-                dist = r + pad + ring * 6
+                dist = r + pad + ring * 6 + label_extra
                 for dx, dy in dirs:
                     tx = (cx + dist if dx > 0 else
                           cx - dist - tw if dx < 0 else cx - tw / 2.0)
