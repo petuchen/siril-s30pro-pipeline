@@ -1,5 +1,14 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.54.2
+
+* **README: Troubleshooting and Changelog's "Recent highlights" tables
+  are now collapsed by default** (`<details>`/`<summary>` — GitHub
+  renders these as native click-to-expand disclosure widgets), so the
+  README reads shorter for anyone scrolling through it top to bottom.
+  Both section headings stay visible and expand on click; nothing was
+  removed, just tucked behind a fold.
+
 ## 1.54.1
 
 * **"Expand All"/"Collapse All" now also select/deselect every stage,

@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-1.54.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.54.2-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -289,6 +289,9 @@ target type (galaxy / nebula / Hubble palette) and re-import anytime.
 
 ## Troubleshooting
 
+<details>
+<summary>Common issues and fixes (click to expand)</summary>
+
 | Symptom | Fix |
 |---|---|
 | Script not in the Scripts menu | Siril must be ≥ 1.4; check the folder is listed in Preferences → Scripts; rescan/restart |
@@ -303,6 +306,8 @@ target type (galaxy / nebula / Hubble palette) and re-import anytime.
 | "Plate Solving failed. The image could not be aligned with the reference stars" on a Milky Way Mode stack | Very wide (~60–70°) fields usually need the wide-field index files (`download_wide_field_index.sh`) plus a full blind solve — the pipeline already retries this automatically (1.41.0) as a last resort, but you need those index files installed for it to succeed |
 | `solve-field: command not found` when typed into Siril's own command line | `solve-field` is an external program, not a Siril command — run it from a regular Terminal window instead |
 
+</details>
+
 ---
 
 ## Changelog
@@ -310,10 +315,12 @@ target type (galaxy / nebula / Hubble palette) and re-import anytime.
 The script's own docstring only keeps a short summary of the last few
 releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-Recent highlights:
+<details>
+<summary>Recent highlights (click to expand)</summary>
 
 | Version | Highlights |
 | --- | --- |
+| 1.54.2 | Troubleshooting and Changelog's "Recent highlights" tables are now collapsed by default (`<details>`/`<summary>`), so the README reads shorter top to bottom. |
 | 1.54.1 | "Expand All"/"Collapse All" now also select/deselect every stage (previously visibility-only), fixed an edge case where an already-unchecked-but-expanded stage could be left out of sync, and moved onto one row with "Import settings". New README badges. |
 | 1.54.0 | New "Expand All" / "Collapse All" buttons next to "Import settings" — show or hide every stage's settings at once, without changing which stages are enabled. |
 | 1.53.1 | Unchecking a stage now collapses it too (1.53.0 only auto-expanded on check) — checking/unchecking a stage now keeps its arrow in sync both ways. |
@@ -360,6 +367,8 @@ Recent highlights:
 | 1.21.x | New Watermark stage (info block with position/opacity controls). Crop-box preview scale fix. |
 
 See `CHANGELOG.md` for the complete history back to 1.14.0.
+
+</details>
 
 ---
 

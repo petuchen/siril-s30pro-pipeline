@@ -504,6 +504,13 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>1.54.2</td><td>README: the Troubleshooting table and
+        Changelog's "Recent highlights" table are now collapsed by
+        default behind a click-to-expand
+        <code>&lt;details&gt;</code>/<code>&lt;summary&gt;</code> fold —
+        GitHub renders these as native disclosure widgets — so the page
+        reads shorter scrolling top to bottom. Both section headings
+        stay visible; nothing was removed.</td></tr>
       <tr><td>1.54.1</td><td><b>"Expand All"/"Collapse All" now also
         select/deselect every stage.</b> Follow-up to 1.54.0: those two
         buttons previously only changed visibility, leaving every
@@ -1006,6 +1013,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>1.54.2</td><td>README：「Troubleshooting（疑難排解）」表格與「Changelog（更新日誌）」的「Recent highlights（近期重點）」表格，現在預設收合在可點擊展開的 <code>&lt;details&gt;</code>／<code>&lt;summary&gt;</code> 摺疊區塊中——GitHub 會將其呈現為原生的可展開／收合元件——讓整頁從上到下捲動時更簡潔。兩個章節標題本身仍維持可見，點擊即可展開，內容完全沒有刪減。</td></tr>
       <tr><td>1.54.1</td><td><b>「Expand All（全部展開）」／「Collapse All（全部收合）」現在也會一併勾選／取消勾選所有步驟。</b>承接 1.54.0 版：這兩個按鈕原本只會改變顯示狀態，不會動到每個步驟自己的啟用核取方塊——現在會一併勾選／取消勾選所有步驟，與標題列核取方塊原本的行為一致（勾選某步驟會展開它，取消勾選則會收合它）。同時也修正了因此發現的邊界情況：如果某個步驟原本就已經處於目標的勾選狀態（例如「自動去梯度」預設未勾選但預設展開），就不會觸發原本的「核取方塊→箭頭」同步機制，導致按下「Collapse All」時該步驟仍可能維持展開——現在這兩個按鈕會直接設定每個步驟的核取方塊與箭頭狀態，不再仰賴訊號是否觸發。「Import settings」「Expand All」「Collapse All」三個按鈕也改為同一列、等寬顯示。另外：README 新增徽章（版本、授權、最低 Siril 版本、支援平台、最後提交時間）。</td></tr>
       <tr><td>1.54.0</td><td>左側面板頂端的「⤒ Import settings（匯入設定）」旁，新增「⌄ Expand All（全部展開）」／「⌃ Collapse All（全部收合）」兩個按鈕——可一次展開或收合所有步驟的設定內容，效果等同逐一點擊每個步驟自己的 ▸／▾ 箭頭，不會改變任何步驟是否啟用。</td></tr>
       <tr><td>1.53.1</td><td>取消勾選某個步驟時，現在也會一併收合該步驟——1.53.0 版新增的 ▸／▾ 箭頭，先前只有在勾選核取方塊時會自動展開，之後若取消勾選卻不會自動收合。現在兩個方向都會保持同步：勾選某個步驟會展開它，取消勾選則會將它收合回去、保持面板簡潔。箭頭本身仍可隨時獨立操作，因此還是可以在不啟用某個步驟的情況下，先點開看看它的設定內容。</td></tr>
