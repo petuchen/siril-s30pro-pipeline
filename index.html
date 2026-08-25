@@ -470,6 +470,19 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>1.52.0</td><td><b>Label distance fixed and extended.</b> The
+        "Label distance (× radius)" control (panel-level and per-object)
+        used to silently do nothing unless the marker style was Open
+        Cross — it now applies to every style, and the panel-level
+        control has moved out of the Open Cross-only section so it's
+        always visible. Both sliders now allow negative values (down to
+        -2.0×radius) so labels can sit closer than the old fixed
+        minimum, with a floor clamp so they never collide with the
+        marker. Also: <b>Custom lines / Label lines are now a text
+        box</b> instead of add-one-line-at-a-time — type or paste
+        multiple lines, one per row, in both the Annotation panel's
+        "Custom lines" section and the per-object 🎨 editor's "Label
+        lines" section.</td></tr>
       <tr><td>1.51.0</td><td>New feature: <b>manually pick objects on the
         image</b>. A "🖱 Pick object on image..." button on the Annotate
         panel arms a click-to-add mode on the preview — click any point
@@ -906,6 +919,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>1.52.0</td><td><b>修正「Label distance（標籤距離）」的問題並擴充功能。</b>「Label distance（標籤距離，以半徑倍數表示）」設定（面板層級與個別物件層級皆同）原本只有在標記樣式為開放式十字（Open Cross）時才會生效，選擇圓圈（Circle）樣式時調整這個滑桿完全沒有作用——現在已改為對所有標記樣式一律生效，且面板層級的控制項也從原本只在開放式十字才會顯示的區塊，移到一律可見的位置。兩個滑桿現在都允許輸入負值（最低到 -2.0 倍半徑），讓標籤可以比原本的固定下限更貼近標記，並加入下限保護，確保標籤不會與標記本身重疊。另外：<b>Custom lines（自訂內容）／Label lines（標籤內容）改為文字框輸入</b>，不再需要一行一行新增——無論是標註面板的「Custom lines」區塊，或是個別物件 🎨 編輯視窗的「Label lines」區塊，現在都可以直接輸入或貼上多行文字，每一行文字就是一行標籤內容。</td></tr>
       <tr><td>1.51.0</td><td>新功能：<b>手動在影像上點選物件</b>。標註面板新增「🖱 Pick object on image...（在影像上點選物件）」按鈕，可啟動「點擊新增」模式——直接在預覽影像上點一下，就會在該處新增一個物件，預設名稱取自該點的 RA/Dec（沿用此步驟原本使用的板解算 WCS），並套用「Annotation style」面板目前的樣式設定。此模式會持續啟用，方便連續點選新增多個物件；再次點擊按鈕或按下 Esc 即可停止。新增的物件會和一般星表物件一樣出現在「Select objects to show...」中，可透過其 🎨 編輯視窗重新命名（編輯第一行標籤文字）、調整樣式，或直接移除。另外，個別物件樣式編輯視窗中的「Circle color/thickness」已更名為「Marker color/thickness」，並將 Text color 移到 Marker thickness 正下方，排在所有十字（Cross）專屬設定之前。</td></tr>
       <tr><td>1.50.0</td><td>開放式十字的「Label distance（標籤距離，以半徑倍數表示）」預設值從 0.3 調降為 0.1，讓標籤與中心的預設間距更緊湊。🎨 個別物件樣式編輯視窗新增「Text color（文字顏色）」選色按鈕（獨立於標記顏色之外）、「🔄 Update（更新）」按鈕（可立即將目前設定套用到即時預覽，不需關閉視窗）、以及「↶ Undo（復原）」按鈕（可依序一步步復原視窗內的欄位修改，「還原為面板預設值」也視為一個可復原的步驟）。點擊過 Update 後再取消對話框，現在會正確還原成開啟視窗前的狀態。另外新增面板層級的「🔄 Update preview（更新預覽）」按鈕，可直接依目前「Annotation style」面板設定重新繪製所有已顯示的物件，不需重新查詢星表或重新板解算，比執行（Run）快上許多，但會重置所有個別物件的覆寫設定。</td></tr>
       <tr><td>1.49.0</td><td>新功能：<b>個別物件的標註樣式覆寫</b>。「Select objects to show...（選擇要顯示的物件）」對話框中，每一列現在都新增一個 🎨 按鈕，可開啟一個小編輯視窗，只針對該單一物件調整——標記樣式、圓圈／十字的顏色與粗細、十字的間隙／臂長／標籤位置／標籤距離，以及該標籤自己的文字內容——完全獨立於「Annotation style（標註樣式）」面板，其他物件仍會照常套用該面板的設定。修改會立即套用到即時預覽，編輯視窗內的「Reset to panel default（還原為面板預設值）」按鈕可捨棄覆寫，重新依目前面板設定計算出該物件的樣式。取消「Select objects to show...」對話框現在也會一併還原個別物件的樣式修改，而不只是還原顯示／隱藏的勾選狀態。與「Select objects to show...」的其他功能一樣，這些覆寫僅是執行後、匯出前的預覽調整——重新執行標註步驟時，每個物件都會依照面板預設值重新產生。</td></tr>

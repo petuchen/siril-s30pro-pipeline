@@ -14,7 +14,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox,
     QDoubleSpinBox, QFileDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
-    QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
+    QListWidget, QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton,
     QSpinBox, QVBoxLayout, QWidget,
 )
 from PyQt6.QtGui import QColor
@@ -301,6 +301,25 @@ class AnnotateMixin:
             "the marker's size and are adjustable below. This panel "
             "updates immediately as you change the style.")
         sg.addWidget(self.ann_marker_style_combo, 1, 1)
+
+        sg.addWidget(QLabel("Label distance (× radius):"), 2, 0)
+        self.ann_cross_label_dist_spin = QDoubleSpinBox()
+        self.ann_cross_label_dist_spin.setRange(-2.0, 5.0)
+        self.ann_cross_label_dist_spin.setSingleStep(0.1)
+        self.ann_cross_label_dist_spin.setValue(0.1)
+        self.ann_cross_label_dist_spin.setToolTip(
+            "Extra breathing room between the label text and the marker "
+            "center, as a multiple of the marker's own radius — added on "
+            "top of every label's normal placement distance (which, for "
+            "Open Cross style, already includes the arm length below, "
+            "plus a small fixed margin so text never touches the "
+            "marker). Positive values push the label further out — "
+            "useful to clear a stretched, multi-line label so it "
+            "doesn't crowd Open Cross's arms; negative values pull it "
+            "in closer than the normal default, down to a minimum where "
+            "it would start overlapping the marker. Applies to every "
+            "marker style, not just Open Cross.")
+        sg.addWidget(self.ann_cross_label_dist_spin, 2, 1)
         style_v.addLayout(sg)
 
         # -------------------------------------------------- marker style groups
@@ -409,20 +428,6 @@ class AnnotateMixin:
             "you’ve chosen one)."
         )
         cross_g.addWidget(self.ann_cross_label_pos_combo, 6, 1)
-
-        cross_g.addWidget(QLabel("Label distance (× radius):"), 7, 0)
-        self.ann_cross_label_dist_spin = QDoubleSpinBox()
-        self.ann_cross_label_dist_spin.setRange(0.0, 3.0)
-        self.ann_cross_label_dist_spin.setSingleStep(0.1)
-        self.ann_cross_label_dist_spin.setValue(0.1)
-        self.ann_cross_label_dist_spin.setToolTip(
-            "Extra breathing room between the label text and the marker "
-            "center, as a multiple of the marker's own radius — added on "
-            "top of the arm length above, so you can pull the label "
-            "further out to clear a stretched, multi-line label instead "
-            "of having it crowd the cross's arms. 0 keeps the label as "
-            "close as it was before this option existed.")
-        cross_g.addWidget(self.ann_cross_label_dist_spin, 7, 1)
         style_v.addWidget(self.ann_cross_style_box)
 
         def sync_marker_style_visibility(_text=None):
@@ -483,44 +488,19 @@ class AnnotateMixin:
         ld_v.addLayout(ld_g)
 
         ld_custom_label = QLabel("Custom lines (added to every label, in "
-                                 "this order):")
+                                 "this order — type one label line per "
+                                 "row of text):")
         ld_v.addWidget(ld_custom_label)
-        self.ann_custom_lines_list = QListWidget()
-        self.ann_custom_lines_list.setMaximumHeight(90)
-        self.ann_custom_lines_list.setToolTip(
-            "Freeform text lines appended under every object's name (and "
-            "any built-in fields above) — the same text for every object, "
-            "e.g. a session date or your own note. Double-click a line to "
-            "edit it in place.")
-        self.ann_custom_lines_list.setFlow(QListWidget.Flow.TopToBottom)
-        ld_v.addWidget(self.ann_custom_lines_list)
-        ld_add_row = QHBoxLayout()
-        self.ann_custom_line_edit = QLineEdit()
-        self.ann_custom_line_edit.setPlaceholderText("New line text...")
-        ld_add_row.addWidget(self.ann_custom_line_edit, 1)
-        ann_custom_line_add_btn = QPushButton("+ Add")
-        ld_add_row.addWidget(ann_custom_line_add_btn)
-        ann_custom_line_remove_btn = QPushButton("- Remove")
-        ld_add_row.addWidget(ann_custom_line_remove_btn)
-        ld_v.addLayout(ld_add_row)
-
-        def add_custom_line():
-            text = self.ann_custom_line_edit.text().strip()
-            if not text:
-                return
-            item = QListWidgetItem(text)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
-            self.ann_custom_lines_list.addItem(item)
-            self.ann_custom_line_edit.clear()
-
-        def remove_custom_line():
-            for item in self.ann_custom_lines_list.selectedItems():
-                self.ann_custom_lines_list.takeItem(
-                    self.ann_custom_lines_list.row(item))
-
-        ann_custom_line_add_btn.clicked.connect(add_custom_line)
-        self.ann_custom_line_edit.returnPressed.connect(add_custom_line)
-        ann_custom_line_remove_btn.clicked.connect(remove_custom_line)
+        self.ann_custom_lines_edit = QPlainTextEdit()
+        self.ann_custom_lines_edit.setMaximumHeight(90)
+        self.ann_custom_lines_edit.setPlaceholderText(
+            "One label line per row, e.g.:\nSession 1\nBortle 4")
+        self.ann_custom_lines_edit.setToolTip(
+            "Freeform text appended under every object's name (and any "
+            "built-in fields above) — the same text for every object, "
+            "e.g. a session date or your own note. Each row of text you "
+            "type is its own label line; blank rows are skipped.")
+        ld_v.addWidget(self.ann_custom_lines_edit)
         style_v.addWidget(self.ann_label_detail_box)
 
         self.ann_show_overlay_checkbox = QCheckBox("Show annotation overlay")
@@ -948,8 +928,9 @@ class AnnotateMixin:
         if self.ann_detail_size_checkbox.isChecked() and extra.get("size"):
             lines.append(f"{extra['size']:.1f}'")
         lines.extend(
-            self.ann_custom_lines_list.item(i).text()
-            for i in range(self.ann_custom_lines_list.count()))
+            row.strip() for row in
+            self.ann_custom_lines_edit.toPlainText().splitlines()
+            if row.strip())
         return lines
 
     def _default_style_for_object(self, d):
@@ -994,8 +975,12 @@ class AnnotateMixin:
             "cross_gap": r * self.ann_cross_gap_spin.value(),
             "cross_arm": r * self.ann_cross_arm_spin.value(),
             "label_pref": label_pref,
-            "label_extra": (r * self.ann_cross_label_dist_spin.value()
-                           if marker_style in ("cross", "both") else 0),
+            # Applies to every marker style, not just Open Cross — it's
+            # a general "how far the label sits from the marker" offset
+            # (see _layout_annotation_labels), even though the panel
+            # control lives in the "Marker style" row above the style-
+            # specific boxes since it isn't itself style-specific.
+            "label_extra": r * self.ann_cross_label_dist_spin.value(),
             "label_lines": self._build_default_label_lines(
                 d["label"], d.get("extra", {})),
             # No panel-level text color control exists (labels have always
@@ -1304,9 +1289,9 @@ class AnnotateMixin:
                         "cross_gap": r * cross_gap_mult,
                         "cross_arm": r * cross_arm_mult,
                         "label_pref": label_pref,
-                        "label_extra": (r * cross_label_dist_mult
-                                       if marker_style in ("cross", "both")
-                                       else 0),
+                        # Applies to every marker style — see the
+                        # matching comment in _default_style_for_object.
+                        "label_extra": r * cross_label_dist_mult,
                     })
                 self._layout_annotation_labels(drawable, W, H)
                 drawn = len(drawable)
@@ -1446,7 +1431,12 @@ class AnnotateMixin:
             label_extra = d.get("label_extra", 0)
             candidates = []
             for ring in (1.0, 2.2):
-                dist = r + pad + ring * 6 + label_extra
+                # Floored so a strongly negative "Label distance" (or a
+                # tiny marker radius) can pull the label in close without
+                # ever collapsing onto/through the marker center — 2px is
+                # small enough to feel like "as close as possible" while
+                # still leaving the label fully outside the marker.
+                dist = max(2.0, r + pad + ring * 6 + label_extra)
                 for dx, dy in dirs:
                     tx = (cx + dist if dx > 0 else
                           cx - dist - tw if dx < 0 else cx - tw / 2.0)
@@ -2093,69 +2083,49 @@ class AnnotateMixin:
 
         g.addWidget(QLabel("Label distance (× radius):"), gr, 0)
         dist_spin = QDoubleSpinBox()
-        dist_spin.setRange(0.0, 5.0)
+        dist_spin.setRange(-2.0, 5.0)
         dist_spin.setSingleStep(0.1)
         dist_spin.setValue(round(d.get("label_extra", 0) / r, 2))
+        dist_spin.setToolTip(
+            "How far the label text sits from the marker, as a "
+            "multiple of the marker's own radius, on top of the normal "
+            "placement distance — negative values pull the label in "
+            "closer, positive values push it further out. Applies "
+            "regardless of marker style.")
         g.addWidget(dist_spin, gr, 1)
         gr += 1
         dv.addLayout(g)
 
-        dv.addWidget(QLabel("Label lines (double-click to edit):"))
-        lines_list = QListWidget()
-        lines_list.setMaximumHeight(110)
-        lines_list.setToolTip(
+        dv.addWidget(QLabel("Label lines (one per row of text):"))
+        lines_edit = QPlainTextEdit()
+        lines_edit.setMaximumHeight(110)
+        lines_edit.setToolTip(
             "The object's name plus any detail/custom lines, top to "
-            "bottom. Edit, add, or remove lines freely — this doesn't "
-            "affect any other object.")
-        for line in d.get("label_lines", [d["label"]]):
-            item = QListWidgetItem(line)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
-            lines_list.addItem(item)
-        dv.addWidget(lines_list)
-
-        add_row = QHBoxLayout()
-        line_edit = QLineEdit()
-        line_edit.setPlaceholderText("New line text...")
-        add_row.addWidget(line_edit, 1)
-        add_line_btn = QPushButton("+ Add")
-        add_row.addWidget(add_line_btn)
-        remove_line_btn = QPushButton("- Remove")
-        add_row.addWidget(remove_line_btn)
-        dv.addLayout(add_row)
-
-        def add_line():
-            text = line_edit.text().strip()
-            if not text:
-                return
-            checkpoint()
-            item = QListWidgetItem(text)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
-            lines_list.addItem(item)
-            line_edit.clear()
-
-        def remove_line():
-            if not lines_list.selectedItems():
-                return
-            checkpoint()
-            for item in lines_list.selectedItems():
-                lines_list.takeItem(lines_list.row(item))
-
-        add_line_btn.clicked.connect(add_line)
-        line_edit.returnPressed.connect(add_line)
-        remove_line_btn.clicked.connect(remove_line)
+            "bottom, one label line per row of text — type, delete, or "
+            "reorder rows freely (this box has its own Ctrl+Z undo for "
+            "text edits). This doesn't affect any other object.")
+        lines_edit.setPlainText(
+            "\n".join(d.get("label_lines", [d["label"]])))
+        dv.addWidget(lines_edit)
 
         # ---------------------------------------------------- undo history
         # A lazy "checkpoint on change" stack: `last_state` always holds a
         # snapshot of every field taken right after the most recent change
         # (or the dialog's opening values, if nothing has changed yet).
         # Each checkpoint() call — wired to every field's change signal,
-        # plus the add/remove-line and color-pick actions above, which
-        # don't fire a plain valueChanged/currentTextChanged — pushes that
-        # snapshot onto the undo stack, then re-captures the (now current)
-        # state as the new `last_state`. Undo pops the stack and restores
-        # it; `restoring` suppresses checkpoint() while that restore is
-        # itself in progress, so undoing/resetting never pollutes its own
-        # history.
+        # plus the color-pick actions above, which don't fire a plain
+        # valueChanged/currentTextChanged — pushes that snapshot onto the
+        # undo stack, then re-captures the (now current) state as the new
+        # `last_state`. Undo pops the stack and restores it; `restoring`
+        # suppresses checkpoint() while that restore is itself in
+        # progress, so undoing/resetting never pollutes its own history.
+        # Label-line text edits are deliberately NOT wired to checkpoint()
+        # — checkpointing on every keystroke would make one Undo click
+        # only step back a single character. lines_edit is a QPlainTextEdit
+        # with its own native Ctrl+Z/Ctrl+Shift+Z text-undo instead; this
+        # dialog's Undo still restores line text as part of whichever
+        # other field's checkpoint most recently captured it (or via
+        # Reset to panel default, which does checkpoint).
         undo_stack = []
         restoring = {"flag": False}
 
@@ -2171,8 +2141,7 @@ class AnnotateMixin:
                 "arm": arm_spin.value(),
                 "pos": pos_combo.currentText(),
                 "dist": dist_spin.value(),
-                "lines": [lines_list.item(i).text()
-                         for i in range(lines_list.count())],
+                "lines": lines_edit.toPlainText(),
             }
 
         last_state = {"ref": capture_state()}
@@ -2201,11 +2170,7 @@ class AnnotateMixin:
                 arm_spin.setValue(st["arm"])
                 pos_combo.setCurrentText(st["pos"])
                 dist_spin.setValue(st["dist"])
-                lines_list.clear()
-                for line in st["lines"]:
-                    item = QListWidgetItem(line)
-                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
-                    lines_list.addItem(item)
+                lines_edit.setPlainText(st["lines"])
             finally:
                 restoring["flag"] = False
 
@@ -2224,7 +2189,6 @@ class AnnotateMixin:
         arm_spin.valueChanged.connect(lambda _v: checkpoint())
         pos_combo.currentTextChanged.connect(lambda _t: checkpoint())
         dist_spin.valueChanged.connect(lambda _v: checkpoint())
-        lines_list.itemChanged.connect(lambda _item: checkpoint())
 
         btn_row = QHBoxLayout()
         undo_btn = QPushButton("↶  Undo")
@@ -2257,7 +2221,7 @@ class AnnotateMixin:
                 "pos": pos_map.get(defaults["label_pref"],
                                    "Auto (avoid overlap)"),
                 "dist": defaults["label_extra"] / r,
-                "lines": defaults["label_lines"],
+                "lines": "\n".join(defaults["label_lines"]),
             }
             apply_state(new_state)
             checkpoint()
@@ -2270,9 +2234,8 @@ class AnnotateMixin:
             style = self._TEXT_TO_STYLE_KEY[style_combo.currentText()]
             label_pref = (None if style == "circle" else
                          self._TEXT_TO_POS_KEY.get(pos_combo.currentText()))
-            lines = [lines_list.item(i).text().strip()
-                    for i in range(lines_list.count())
-                    if lines_list.item(i).text().strip()]
+            lines = [row.strip() for row in lines_edit.toPlainText().splitlines()
+                    if row.strip()]
             if not lines:
                 lines = [d["label"]]
             d["style"] = style
@@ -2283,8 +2246,7 @@ class AnnotateMixin:
             d["cross_gap"] = r * gap_spin.value()
             d["cross_arm"] = r * arm_spin.value()
             d["label_pref"] = label_pref
-            d["label_extra"] = (r * dist_spin.value()
-                                if style in ("cross", "both") else 0)
+            d["label_extra"] = r * dist_spin.value()  # applies to every style
             d["label_lines"] = lines
             d["text_color"] = state["text_color"]
             applied_update["flag"] = True

@@ -613,6 +613,30 @@ def test_annotate_catalog_helpers(pipeline, np):
           far_items[0]["tx"] > near_items[0]["tx"],
           f"near tx={near_items[0]['tx']} far tx={far_items[0]['tx']}")
 
+    # _layout_annotation_labels: a strongly negative label_extra (the
+    # "Label distance" spin box now allows negative values, so the label
+    # can be pulled in closer than the r+pad+ring*6 baseline) must be
+    # floor-clamped at 2px from the marker center rather than collapsing
+    # onto/through it — regression test for the "min label distance is
+    # still too large even at 0" bug fix.
+    near2_items = [
+        {"label": "Test Obj", "kind": "ngc", "x": 200, "y": 150, "r": 20,
+         "fs": 0.85, "th": 2, "label_pref": (1, 0), "label_extra": 0},
+    ]
+    negative_items = [
+        {"label": "Test Obj", "kind": "ngc", "x": 200, "y": 150, "r": 20,
+         "fs": 0.85, "th": 2, "label_pref": (1, 0), "label_extra": -40},
+    ]
+    pipeline.UnifiedPipelineWindow._layout_annotation_labels(near2_items, 400, 300)
+    pipeline.UnifiedPipelineWindow._layout_annotation_labels(negative_items, 400, 300)
+    neg_dist = negative_items[0]["tx"] - negative_items[0]["x"]
+    check("_layout_annotation_labels: a strongly negative label_extra "
+          "pulls the label closer than label_extra=0, without collapsing "
+          "onto the marker",
+          0 < neg_dist < (near2_items[0]["tx"] - near2_items[0]["x"]),
+          f"near dist={near2_items[0]['tx'] - near2_items[0]['x']} "
+          f"negative dist={neg_dist}")
+
     # _render_annotations: Open Cross style must leave the object's own
     # center pixel untouched (that's the entire point of an *open* cross —
     # unlike a filled marker, it never covers the object it's pointing
@@ -681,6 +705,18 @@ class _FakeListWidget:
         return self._items[i]
 
 
+class _FakePlainTextEdit:
+    """Duck-typed stand-in for a QPlainTextEdit — just .toPlainText(), used
+    by the custom-lines box now that it's freeform text instead of a
+    line-by-line list widget."""
+
+    def __init__(self, lines=()):
+        self._text = "\n".join(lines)
+
+    def toPlainText(self):
+        return self._text
+
+
 class _FakeAnnPanel:
     """Duck-typed stand-in for the Annotation-style panel's Qt widgets —
     just enough surface (.isChecked()/.value()/.currentText()/.count()/
@@ -700,7 +736,7 @@ class _FakeAnnPanel:
         self.ann_detail_mag_checkbox = _FakeCheckbox(detail_mag)
         self.ann_detail_const_checkbox = _FakeCheckbox(detail_const)
         self.ann_detail_size_checkbox = _FakeCheckbox(detail_size)
-        self.ann_custom_lines_list = _FakeListWidget(custom_lines)
+        self.ann_custom_lines_edit = _FakePlainTextEdit(custom_lines)
         self.ann_marker_style_combo = _FakeCombo(marker_style)
         self.ann_circle_auto_th_checkbox = _FakeCheckbox(circle_auto_th)
         self.ann_circle_th_spin = _FakeSpin(circle_th)
@@ -774,6 +810,17 @@ def test_annotate_per_object_style(pipeline, np):
     check("_default_style_for_object: no custom color override -> falls "
           "back to the object's own catalogue color",
           style["circle_color"] == (1, 2, 3), f"got {style}")
+
+    # _default_style_for_object: the "Label distance" panel control used
+    # to be gated to Open Cross only (label_extra silently forced to 0 for
+    # Circle style), which made the control look inert when Circle was
+    # selected. It's now universal — regression test for that fix.
+    panel = _FakeAnnPanel(marker_style="Circle", cross_label_dist=0.3)
+    d = {"label": "M 31", "r": 20, "color": (1, 2, 3), "th": 2, "extra": {}}
+    style = pipeline.UnifiedPipelineWindow._default_style_for_object(panel, d)
+    check("_default_style_for_object: label_extra applies to Circle style "
+          "too, not just Open Cross",
+          style["label_extra"] == 20 * 0.3, f"got {style}")
 
     # Open Cross panel setting: label_pref honors the dropdown, cross
     # gap/arm/label-distance scale with the object's own radius, and a

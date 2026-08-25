@@ -1,5 +1,32 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.52.0
+
+* **Fixed: "Label distance" control had no effect for Circle-style
+  markers.** The Annotation panel's "Label distance (× radius)" slider,
+  and its equivalent in the per-object 🎨 style editor, silently did
+  nothing unless an object's marker style was Open Cross — now it
+  applies to every marker style, and the panel-level control has moved
+  out of the Open Cross-only section into the general style row (right
+  after "Marker style") so it's always visible, matching its now-
+  universal behavior.
+* **Fixed: label distance couldn't go small enough.** Both label-distance
+  sliders only allowed 0 and up, but 0 still left a fixed ~10px gap
+  between label and marker — there was no way to ask for anything
+  closer. Both sliders now allow negative values (down to -2.0×radius),
+  which pull the label in tighter than the old minimum; a floor clamp
+  keeps the label from ever colliding with or crossing through the
+  marker itself, even at the most negative setting.
+* **Custom lines / Label lines are now a text box, not a list.** The
+  Annotation panel's "Custom lines" section and the per-object 🎨 style
+  editor's "Label lines" section both used to require adding one line
+  at a time via a text field + "+ Add" button. Both are now a single
+  multi-line text box — type or paste as many lines as you want, one
+  per row, and each row becomes its own label line (blank rows are
+  skipped). The per-object editor's text box keeps its own native
+  Ctrl+Z for undoing text edits, on top of the dialog's existing Undo
+  button for every other setting.
+
 ## 1.51.0
 
 * **New feature: manually pick objects on the image.** A new "🖱 Pick
