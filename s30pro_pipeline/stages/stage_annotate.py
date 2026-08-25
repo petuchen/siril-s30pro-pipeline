@@ -14,8 +14,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox,
     QDoubleSpinBox, QFileDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
-    QListWidget, QListWidgetItem, QMessageBox, QPushButton, QSpinBox,
-    QVBoxLayout,
+    QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
+    QSpinBox, QVBoxLayout,
 )
 from PyQt6.QtGui import QColor
 
@@ -27,7 +27,8 @@ from sirilpy import LogColor
 from s30pro_pipeline.constants import IDX_ANN
 from s30pro_pipeline.catalog_data import (
     BRIGHT_STARS, OPENNGC_URL, ANNOTATE_MAX_PER_CATALOG,
-    CATALOG_COLORS, CATALOG_LABELS, _ang_sep, _sexa_to_deg, _http_get,
+    CATALOG_COLORS, CATALOG_LABELS, OPENNGC_TYPE_LABELS,
+    _ang_sep, _sexa_to_deg, _http_get,
     _vizier_cone, _clean_ngc_ic_name,
 )
 from s30pro_pipeline.constellation_data import (
@@ -299,6 +300,85 @@ class AnnotateMixin:
             self.ann_cross_color_btn.setEnabled)
         sync_marker_style_visibility()
 
+        # -------------------------------------------------- label detail
+        self.ann_label_detail_box = QGroupBox("Label detail")
+        ld_v = QVBoxLayout(self.ann_label_detail_box)
+        ld_v.setSpacing(8)
+        ld_info = QLabel(
+            "Adds extra lines under each object's name, drawn stacked in "
+            "the same direction as the name itself, aligned to whichever "
+            "side of the marker the label sits on. The built-in fields "
+            "below only appear for Messier/NGC/IC objects (OpenNGC "
+            "carries this data; stars/Sharpless/LdN don't) and only when "
+            "that particular object actually has the field. Open Cross "
+            "style's arm on the label's side (up or down) stretches "
+            "automatically to reach a taller, multi-line label.")
+        ld_info.setObjectName("SubHeader")
+        ld_info.setWordWrap(True)
+        ld_v.addWidget(ld_info)
+
+        ld_g = QGridLayout()
+        ld_g.setHorizontalSpacing(10)
+        ld_g.setVerticalSpacing(4)
+        self.ann_detail_type_checkbox = QCheckBox("Object type")
+        self.ann_detail_type_checkbox.setToolTip(
+            "e.g. \"Galaxy\", \"Open cluster\", \"Planetary nebula\".")
+        ld_g.addWidget(self.ann_detail_type_checkbox, 0, 0)
+        self.ann_detail_mag_checkbox = QCheckBox("Magnitude")
+        self.ann_detail_mag_checkbox.setToolTip(
+            "OpenNGC's V-Mag, falling back to B-Mag when V-Mag is "
+            "missing.")
+        ld_g.addWidget(self.ann_detail_mag_checkbox, 0, 1)
+        self.ann_detail_const_checkbox = QCheckBox("Constellation")
+        ld_g.addWidget(self.ann_detail_const_checkbox, 1, 0)
+        self.ann_detail_size_checkbox = QCheckBox("Apparent size")
+        self.ann_detail_size_checkbox.setToolTip(
+            "OpenNGC's MajAx (apparent major axis), in arcminutes — the "
+            "same value already used to size the marker itself.")
+        ld_g.addWidget(self.ann_detail_size_checkbox, 1, 1)
+        ld_v.addLayout(ld_g)
+
+        ld_custom_label = QLabel("Custom lines (added to every label, in "
+                                 "this order):")
+        ld_v.addWidget(ld_custom_label)
+        self.ann_custom_lines_list = QListWidget()
+        self.ann_custom_lines_list.setMaximumHeight(90)
+        self.ann_custom_lines_list.setToolTip(
+            "Freeform text lines appended under every object's name (and "
+            "any built-in fields above) — the same text for every object, "
+            "e.g. a session date or your own note. Double-click a line to "
+            "edit it in place.")
+        self.ann_custom_lines_list.setFlow(QListWidget.Flow.TopToBottom)
+        ld_v.addWidget(self.ann_custom_lines_list)
+        ld_add_row = QHBoxLayout()
+        self.ann_custom_line_edit = QLineEdit()
+        self.ann_custom_line_edit.setPlaceholderText("New line text...")
+        ld_add_row.addWidget(self.ann_custom_line_edit, 1)
+        ann_custom_line_add_btn = QPushButton("+ Add")
+        ld_add_row.addWidget(ann_custom_line_add_btn)
+        ann_custom_line_remove_btn = QPushButton("- Remove")
+        ld_add_row.addWidget(ann_custom_line_remove_btn)
+        ld_v.addLayout(ld_add_row)
+
+        def add_custom_line():
+            text = self.ann_custom_line_edit.text().strip()
+            if not text:
+                return
+            item = QListWidgetItem(text)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+            self.ann_custom_lines_list.addItem(item)
+            self.ann_custom_line_edit.clear()
+
+        def remove_custom_line():
+            for item in self.ann_custom_lines_list.selectedItems():
+                self.ann_custom_lines_list.takeItem(
+                    self.ann_custom_lines_list.row(item))
+
+        ann_custom_line_add_btn.clicked.connect(add_custom_line)
+        self.ann_custom_line_edit.returnPressed.connect(add_custom_line)
+        ann_custom_line_remove_btn.clicked.connect(remove_custom_line)
+        v.addWidget(self.ann_label_detail_box)
+
         # -------------------------------------------------- constellation lines
         # Selection defaults to every constellation; picked by abbreviation
         # (CONSTELLATION_NAMES keys) via the "Select constellations..."
@@ -569,11 +649,18 @@ class AnnotateMixin:
         """Pure filtering logic over already-fetched OpenNGC rows — kept
         separate from `_fetch_openngc_rows`'s I/O so it can be unit-tested
         with synthetic rows, no network or disk needed. Returns a list of
-        (label, ra, dec, kind, size_arcmin) with kind in
+        (label, ra, dec, kind, size_arcmin, extra) with kind in
         {"messier","ngc","ic"}; size_arcmin is OpenNGC's MajAx (apparent
         major axis, arcminutes) as a float, or None if the row doesn't
         have one — used to size each object's marker to its real apparent
-        footprint instead of a fixed generic radius."""
+        footprint instead of a fixed generic radius. `extra` is a dict of
+        whatever optional label-detail fields this row actually has
+        (missing/blank fields are simply absent, not None-valued) —
+        possible keys: "type" (friendly OpenNGC object type), "mag"
+        (V-Mag, falling back to B-Mag, as a float), "const" (full
+        constellation name from OpenNGC's 3-letter abbreviation), "size"
+        (same value as size_arcmin, exposed here too so a caller building
+        label lines doesn't need the separate positional field)."""
         out = []
         for row in rows:
             name_raw = (row.get("Name") or "").strip()
@@ -609,7 +696,26 @@ class AnnotateMixin:
                     size_arcmin = None
             except (TypeError, ValueError):
                 size_arcmin = None
-            out.append((label, ora, odec, kind, size_arcmin))
+
+            extra = {}
+            type_raw = (row.get("Type") or "").strip()
+            if type_raw:
+                extra["type"] = OPENNGC_TYPE_LABELS.get(type_raw, type_raw)
+            mag_raw = row.get("V-Mag") or row.get("B-Mag")
+            try:
+                mag = float(mag_raw) if mag_raw not in (None, "") else None
+            except (TypeError, ValueError):
+                mag = None
+            if mag is not None:
+                extra["mag"] = mag
+            const_raw = (row.get("Const") or "").strip()
+            if const_raw:
+                extra["const"] = CONSTELLATION_NAMES.get(
+                    const_raw.title(), const_raw)
+            if size_arcmin is not None:
+                extra["size"] = size_arcmin
+
+            out.append((label, ora, odec, kind, size_arcmin, extra))
         return out
 
     def _objects_openngc(self, ra, dec, radius, want_messier, want_ngc,
@@ -786,23 +892,29 @@ class AnnotateMixin:
 
         if show_overlay:
             mag_limit = self.ann_mag_spin.value()
-            targets = []  # (label, ra, dec, kind, size_arcmin)
+            targets = []  # (label, ra, dec, kind, size_arcmin, extra)
             seen = set()  # (round(ra,3), round(dec,3)) — de-dupe across queries
 
             def add_targets(items, kind):
-                # Each item is (name, ra, dec) for stars/no-size sources, or
+                # Each item is (name, ra, dec) for stars/no-size sources,
                 # (name, ra, dec, size_arcmin) for catalogues that carry an
                 # apparent-size field — size_arcmin drives the marker radius
                 # in the drawing pass below, defaulting to None (fixed
-                # radius) when a source doesn't provide one.
+                # radius) when a source doesn't provide one — or (name, ra,
+                # dec, size_arcmin, extra) for OpenNGC, whose `extra` dict
+                # (type/magnitude/constellation) feeds the optional
+                # label-detail lines below. Sources without a 5th element
+                # simply get {} — no label-detail lines are drawn for
+                # anything Annotate can't source that data for.
                 for item in items:
                     name, ra, dec = item[0], item[1], item[2]
                     size = item[3] if len(item) > 3 else None
+                    extra = item[4] if len(item) > 4 else {}
                     key = (round(ra, 3), round(dec, 3))
                     if key in seen:
                         continue
                     seen.add(key)
-                    targets.append((name, ra, dec, kind, size))
+                    targets.append((name, ra, dec, kind, size, extra))
 
             if self.ann_stars_checkbox.isChecked():
                 progress("Annotate: querying Siril's local star catalogue...",
@@ -854,8 +966,8 @@ class AnnotateMixin:
                     found = self._objects_openngc(
                         cra, cdec, radius, want_messier, want_ngc, want_ic)
                     by_kind = {"messier": [], "ngc": [], "ic": []}
-                    for name, ra_, dec_, kind, size_ in found:
-                        by_kind[kind].append((name, ra_, dec_, size_))
+                    for name, ra_, dec_, kind, size_, extra_ in found:
+                        by_kind[kind].append((name, ra_, dec_, size_, extra_))
                     for kind, items in by_kind.items():
                         if items:
                             add_targets(items[:ANNOTATE_MAX_PER_CATALOG], kind)
@@ -986,13 +1098,40 @@ class AnnotateMixin:
                 else:
                     xs = ys = None
 
+                # Optional label-detail lines (OpenNGC-sourced Type/
+                # Magnitude/Constellation/Size, plus any freeform custom
+                # lines from the panel below) drawn under the object name
+                # — computed once here rather than per-object, since which
+                # fields are enabled and the custom line list are both
+                # global panel settings, not per-object.
+                want_type = self.ann_detail_type_checkbox.isChecked()
+                want_mag = self.ann_detail_mag_checkbox.isChecked()
+                want_const = self.ann_detail_const_checkbox.isChecked()
+                want_size = self.ann_detail_size_checkbox.isChecked()
+                custom_lines = [
+                    self.ann_custom_lines_list.item(i).text()
+                    for i in range(self.ann_custom_lines_list.count())]
+
+                def build_label_lines(name, extra):
+                    lines = [name]
+                    if want_type and extra.get("type"):
+                        lines.append(extra["type"])
+                    if want_mag and extra.get("mag") is not None:
+                        lines.append(f"mag {extra['mag']:.1f}")
+                    if want_const and extra.get("const"):
+                        lines.append(extra["const"])
+                    if want_size and extra.get("size"):
+                        lines.append(f"{extra['size']:.1f}'")
+                    lines.extend(custom_lines)
+                    return lines
+
                 # Build the list of *drawable* objects (label + pixel
                 # position + style) instead of drawing directly — this is
                 # kept around as self._ann_drawn so "Select objects to
                 # show..." can redraw a subset from the un-annotated base
                 # canvas without re-querying any catalogue.
                 drawable = []
-                for i, (label, ra, dec, kind, size_arcmin) in enumerate(targets):
+                for i, (label, ra, dec, kind, size_arcmin, extra) in enumerate(targets):
                     if xs is None:
                         continue
                     x, y = float(xs[i]), float(ys[i])
@@ -1015,6 +1154,7 @@ class AnnotateMixin:
                     drawable.append({
                         "label": label, "kind": kind, "x": xd, "y": yd,
                         "r": r, "color": color, "fs": fs, "th": th,
+                        "label_lines": build_label_lines(label, extra),
                         "style": marker_style,
                         "circle_th": circle_th,
                         "circle_color": circle_color_override or color,
@@ -1105,15 +1245,20 @@ class AnnotateMixin:
         clipped by the image edge near the border).
 
         Mutates each dict in `items` in place, adding/overwriting "tx"/
-        "ty" (the cv2.putText baseline-left anchor point), and returns
-        `items`. Greedy: bigger markers (which are usually the more
-        important/prominent objects) get first pick of their preferred
-        slot; each object tries a ring of candidate positions around its
-        marker and takes the first one that's fully on-canvas and
-        collision-free, falling back to the least-bad (fewest/smallest
-        overlaps, still on-canvas if at all possible) candidate, then a
-        hard clamp to the canvas edge as a last resort so text is never
-        cut off even in a very crowded corner."""
+        "ty" (the cv2.putText baseline-left anchor point of the LAST —
+        bottommost — line; see _render_annotations for why that's the
+        natural anchor for a multi-line block), "label_dx"/"label_dy"
+        (the chosen direction, reused by _render_annotations for
+        per-line alignment and, for Open Cross style, how far to
+        stretch the matching arm), and returns `items`. Greedy: bigger
+        markers (which are usually the more important/prominent
+        objects) get first pick of their preferred slot; each object
+        tries a ring of candidate positions around its marker and takes
+        the first one that's fully on-canvas and collision-free, falling
+        back to the least-bad (fewest/smallest overlaps, still on-canvas
+        if at all possible) candidate, then a hard clamp to the canvas
+        edge as a last resort so text is never cut off even in a very
+        crowded corner."""
 
         def box_for(tx, ty, tw, th_box):
             # cv2.putText's anchor point is the text's bottom-left corner.
@@ -1133,10 +1278,10 @@ class AnnotateMixin:
 
         for idx in order:
             d = items[idx]
-            (tw, th_box), baseline = cv2.getTextSize(
-                d["label"], cv2.FONT_HERSHEY_SIMPLEX, d["fs"], d["th"])
-            tw += 2
-            th_box += baseline
+            lines = d.get("label_lines") or [d["label"]]
+            tw, th_box, _line_heights, _line_gap = (
+                AnnotateMixin._label_block_metrics(
+                    lines, d["fs"], d["th"]))
             r, cx, cy, pad = d["r"], d["x"], d["y"], 4
 
             # Candidate anchor points on rings around the marker: 8
@@ -1163,10 +1308,10 @@ class AnnotateMixin:
                     ty = (cy - dist if dy < 0 else
                           cy + dist + th_box if dy > 0 else
                           cy + th_box / 2.0)
-                    candidates.append((tx, ty))
+                    candidates.append((tx, ty, dx, dy))
 
             best = None
-            for tx, ty in candidates:
+            for tx, ty, dx, dy in candidates:
                 tx_i, ty_i = int(round(tx)), int(round(ty))
                 box = box_for(tx_i, ty_i, tw, th_box)
                 in_bounds = (box[0] >= 0 and box[1] >= 0 and
@@ -1174,11 +1319,11 @@ class AnnotateMixin:
                 overlap = sum(overlap_area(box, pb) for pb in placed_boxes)
                 score = (0 if in_bounds else 1, overlap)
                 if best is None or score < best[0]:
-                    best = (score, tx_i, ty_i, box)
+                    best = (score, tx_i, ty_i, box, dx, dy)
                 if score == (0, 0):
                     break
 
-            _, tx_i, ty_i, box = best
+            _, tx_i, ty_i, box, best_dx, best_dy = best
             # Guarantee no clipping even if every candidate collided or ran
             # off-canvas (very crowded corner) by clamping the chosen box
             # fully inside the frame as a last resort.
@@ -1195,9 +1340,35 @@ class AnnotateMixin:
                        box[2] + shift_x, box[3] + shift_y)
 
             d["tx"], d["ty"] = tx_i, ty_i
+            d["label_dx"], d["label_dy"] = best_dx, best_dy
             placed_boxes.append(box)
 
         return items
+
+    @staticmethod
+    def _label_block_metrics(lines, fs, th):
+        """Pixel metrics for a stack of label text lines at font scale
+        `fs`/stroke thickness `th`: (block_w, block_h, line_heights,
+        line_gap). block_w/block_h are the full multi-line block's
+        bounding box (single-line labels — the common case, an object
+        with no label-detail lines enabled — collapse to exactly the
+        same numbers this used to compute inline, so existing Circle
+        placements are unaffected). Shared by _layout_annotation_labels
+        (to reserve the right amount of space) and _render_annotations
+        (to actually draw each line at the right y) so the two can never
+        disagree about how tall a block is."""
+        line_gap = max(2, int(round(fs * 6)))
+        line_heights = []
+        block_w = 0
+        for line in lines:
+            (w, h), baseline = cv2.getTextSize(
+                line, cv2.FONT_HERSHEY_SIMPLEX, fs, th)
+            w += 2
+            h += baseline
+            block_w = max(block_w, w)
+            line_heights.append(h)
+        block_h = sum(line_heights) + line_gap * (len(lines) - 1)
+        return block_w, block_h, line_heights, line_gap
 
     @staticmethod
     def _render_annotations(base_canvas, drawn):
@@ -1218,6 +1389,11 @@ class AnnotateMixin:
                 cv2.circle(canvas, (x, y), d["r"],
                           d.get("circle_color", d["color"]),
                           d.get("circle_th", d["th"]), cv2.LINE_AA)
+            lines = d.get("label_lines") or [d["label"]]
+            _blk_w, _blk_h, line_heights, line_gap = (
+                AnnotateMixin._label_block_metrics(
+                    lines, d["fs"], d["th"]))
+            label_dy = d.get("label_dy", 0)
             if style in ("cross", "both"):
                 cross_color = d.get("cross_color", d["color"])
                 cross_th = d.get("cross_th", d["th"])
@@ -1229,19 +1405,65 @@ class AnnotateMixin:
                 # unobscured. Both distances were computed from the
                 # marker's own radius (r * multiplier) back in
                 # _exec_stage_ann, so they scale with the object's
-                # apparent size automatically.
+                # apparent size automatically. When the label sits on
+                # this arm's side and has more than one line (an
+                # OpenNGC-detail or custom-line block), the arm's `arm`
+                # length is stretched by the extra lines' stacked height
+                # so it visually "reaches" toward the taller label
+                # instead of stopping short of it.
+                extra_reach = (0 if len(lines) <= 1 else
+                              sum(line_heights[1:]) +
+                              line_gap * (len(lines) - 1))
                 for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0)):
+                    this_arm = arm
+                    if extra_reach and dx == 0 and (
+                            (dy < 0 and label_dy < 0) or
+                            (dy > 0 and label_dy > 0)):
+                        this_arm = arm + extra_reach
                     p1 = (int(round(x + dx * gap)), int(round(y + dy * gap)))
-                    p2 = (int(round(x + dx * (gap + arm))),
-                         int(round(y + dy * (gap + arm))))
+                    p2 = (int(round(x + dx * (gap + this_arm))),
+                         int(round(y + dy * (gap + this_arm))))
                     cv2.line(canvas, p1, p2, cross_color, cross_th,
                             cv2.LINE_AA)
-            cv2.putText(canvas, d["label"], (d["tx"], d["ty"]),
-                       cv2.FONT_HERSHEY_SIMPLEX, d["fs"], (0, 0, 0),
-                       d["th"] + 2, cv2.LINE_AA)
-            cv2.putText(canvas, d["label"], (d["tx"], d["ty"]),
-                       cv2.FONT_HERSHEY_SIMPLEX, d["fs"], d["color"],
-                       d["th"], cv2.LINE_AA)
+            # Multi-line label block: `ty` (from _layout_annotation_labels)
+            # is the cv2.putText baseline of the LAST — bottommost — line,
+            # matching the single-line convention exactly when there's
+            # only one line. Earlier lines (object name first, then any
+            # enabled detail/custom lines) stack upward from there. Each
+            # line is horizontally aligned to match which side of the
+            # marker the whole block was placed on (`label_dx`): right-
+            # align (grow leftward from tx+block width) when the block
+            # sits to the west of the marker, left-align (the original,
+            # simple behavior) everywhere else — so the label always
+            # reads as "attached" to its marker rather than drifting away
+            # from it as line lengths vary.
+            label_dx = d.get("label_dx", 1)
+            tx, ty = d["tx"], d["ty"]
+            n = len(lines)
+            for i, line in enumerate(lines):
+                # Lines after the first stack upward from the anchor;
+                # i counts from the top so the last line (i == n-1) lands
+                # exactly on ty.
+                y_off = sum(line_heights[i + 1:n]) + line_gap * (n - 1 - i)
+                line_ty = ty - y_off
+                if label_dx < 0:
+                    # Block sits west of the marker: `tx` is already the
+                    # block's left edge (block width = widest line, from
+                    # _label_block_metrics), so right-align each shorter
+                    # line against that same right edge rather than
+                    # having every line's right end drift to a different
+                    # distance from the marker.
+                    (lw, _lh), _bl = cv2.getTextSize(
+                        line, cv2.FONT_HERSHEY_SIMPLEX, d["fs"], d["th"])
+                    line_tx = tx + (_blk_w - (lw + 2))
+                else:
+                    line_tx = tx
+                cv2.putText(canvas, line, (line_tx, line_ty),
+                           cv2.FONT_HERSHEY_SIMPLEX, d["fs"], (0, 0, 0),
+                           d["th"] + 2, cv2.LINE_AA)
+                cv2.putText(canvas, line, (line_tx, line_ty),
+                           cv2.FONT_HERSHEY_SIMPLEX, d["fs"], d["color"],
+                           d["th"], cv2.LINE_AA)
         return canvas
 
     def _remove_all_annotations(self):

@@ -1,5 +1,28 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.47.0
+
+* **New feature: OpenNGC label detail + custom label lines for Annotate.**
+  Object labels can now show more than just the name. A new "Label
+  detail" panel offers four OpenNGC-sourced fields — object type (e.g.
+  "Nebula", "Open cluster"), magnitude, constellation, and apparent size
+  — each as its own checkbox; any combination can be on at once. There's
+  also a "Custom lines" list where you can type your own extra lines
+  (double-click to edit, "+ Add"/"- Remove" to manage the list) — handy
+  for notes that don't come from a catalogue at all. Every enabled field
+  and custom line is drawn as its own line below the object name, so a
+  fully-loaded label reads name, then type, then magnitude, then
+  constellation, then size, then any custom lines, top to bottom. Each
+  line is horizontally aligned to match whichever side of the marker the
+  label was placed on (left-aligned when the label sits to the east,
+  right-aligned when it sits to the west), so a multi-line block still
+  reads as clearly "attached" to its marker instead of drifting off to
+  one side. For Open Cross marker style, the N or S arm (whichever side
+  the label landed on) automatically stretches longer as more lines are
+  added, so the cross visually reaches toward the taller label instead
+  of stopping short of it. All of the above round-trips through Export/
+  Import settings.
+
 ## 1.46.0
 
 * **New feature: Open Cross marker style for Annotate, alongside the

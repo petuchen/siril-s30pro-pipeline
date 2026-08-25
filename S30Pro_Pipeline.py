@@ -228,7 +228,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "1.46.0"
+VERSION = "1.47.0"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -1314,6 +1314,13 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
                 "cross_gap_mult": self.ann_cross_gap_spin.value(),
                 "cross_arm_mult": self.ann_cross_arm_spin.value(),
                 "cross_label_pos": self.ann_cross_label_pos_combo.currentText(),
+                "detail_type": self.ann_detail_type_checkbox.isChecked(),
+                "detail_mag": self.ann_detail_mag_checkbox.isChecked(),
+                "detail_const": self.ann_detail_const_checkbox.isChecked(),
+                "detail_size": self.ann_detail_size_checkbox.isChecked(),
+                "custom_lines": [
+                    self.ann_custom_lines_list.item(i).text()
+                    for i in range(self.ann_custom_lines_list.count())],
                 "show_overlay": self.ann_show_overlay_checkbox.isChecked(),
                 "cat_messier": self.ann_cat_messier_checkbox.isChecked(),
                 "cat_ngc": self.ann_cat_ngc_checkbox.isChecked(),
@@ -1507,6 +1514,15 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         if cross_label_pos not in ("Auto (avoid overlap)", "NE", "NW", "SE", "SW"):
             cross_label_pos = "Auto (avoid overlap)"
         self.ann_cross_label_pos_combo.setCurrentText(cross_label_pos)
+        self.ann_detail_type_checkbox.setChecked(an.get("detail_type", False))
+        self.ann_detail_mag_checkbox.setChecked(an.get("detail_mag", False))
+        self.ann_detail_const_checkbox.setChecked(an.get("detail_const", False))
+        self.ann_detail_size_checkbox.setChecked(an.get("detail_size", False))
+        self.ann_custom_lines_list.clear()
+        for line_text in an.get("custom_lines", []):
+            item = QListWidgetItem(str(line_text))
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+            self.ann_custom_lines_list.addItem(item)
         self.ann_show_overlay_checkbox.setChecked(an.get("show_overlay", True))
         self.ann_cat_messier_checkbox.setChecked(an.get("cat_messier", True))
         self.ann_cat_ngc_checkbox.setChecked(an.get("cat_ngc", True))

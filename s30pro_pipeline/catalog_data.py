@@ -11,6 +11,7 @@ import urllib.parse
 __all__ = [
     "BRIGHT_STARS", "OPENNGC_URL", "VIZIER_URL",
     "ANNOTATE_MAX_PER_CATALOG", "CATALOG_COLORS", "CATALOG_LABELS",
+    "OPENNGC_TYPE_LABELS",
     "_ang_sep", "_sexa_to_deg", "_http_get", "_parse_vizier_tsv",
     "_vizier_cone", "_clean_ngc_ic_name",
 ]
@@ -74,6 +75,21 @@ CATALOG_COLORS = {
 CATALOG_LABELS = {
     "star": "Star", "messier": "Messier", "ngc": "NGC", "ic": "IC",
     "sh2": "Sharpless", "ldn": "LDN",
+}
+
+# OpenNGC's "Type" column uses short codes — friendlier text for Annotate's
+# optional "Object type" label-detail line. Anything not in this dict (an
+# OpenNGC type this list doesn't happen to cover) falls back to the raw
+# code as-is, so nothing ever goes missing, just less prettified.
+OPENNGC_TYPE_LABELS = {
+    "*": "Star", "**": "Double star", "*Ass": "Association of stars",
+    "OCl": "Open cluster", "GCl": "Globular cluster",
+    "Cl+N": "Cluster + nebula", "G": "Galaxy", "GPair": "Galaxy pair",
+    "GTrpl": "Galaxy triplet", "GGroup": "Group of galaxies",
+    "Neb": "Nebula", "PN": "Planetary nebula", "SNR": "Supernova remnant",
+    "EmN": "Emission nebula", "RfN": "Reflection nebula",
+    "HII": "HII region", "DrkN": "Dark nebula", "Nova": "Nova star",
+    "NonEx": "Nonexistent", "Other": "Other",
 }
 
 def _ang_sep(ra1, dec1, ra2, dec2):

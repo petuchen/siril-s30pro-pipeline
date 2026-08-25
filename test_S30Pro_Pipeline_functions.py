@@ -413,6 +413,123 @@ def test_annotate_catalog_helpers(pipeline, np):
           "messier" not in kinds and "ngc" in kinds and "ic" in kinds,
           f"got {kinds}")
 
+    # _filter_openngc_rows: the label-detail feature's "extra" dict (6th
+    # tuple element) — friendly type name, magnitude, full constellation
+    # name, apparent size — built from OpenNGC's raw columns.
+    detail_rows = [
+        {"Name": "NGC1976", "Type": "Neb", "RA": "05:35:17.3",
+         "Dec": "-05:23:28", "M": "42", "V-Mag": "4.0", "MajAx": "85",
+         "Const": "Ori"},
+    ]
+    out = pipeline.UnifiedPipelineWindow._filter_openngc_rows(
+        detail_rows, ra=84.0, dec=-3.5, radius=5.0,
+        want_messier=True, want_ngc=True, want_ic=True)
+    check("_filter_openngc_rows: returns a 6-tuple with an 'extra' dict",
+          len(out[0]) == 6 and isinstance(out[0][5], dict), f"got {out[0]}")
+    extra = out[0][5]
+    check("_filter_openngc_rows: extra['type'] is the friendly OpenNGC "
+          "type name, not the raw code",
+          extra.get("type") == "Nebula", f"got {extra}")
+    check("_filter_openngc_rows: extra['mag'] parsed from V-Mag",
+          extra.get("mag") == 4.0, f"got {extra}")
+    check("_filter_openngc_rows: extra['const'] is the full constellation "
+          "name, not the 3-letter abbreviation",
+          extra.get("const") == "Orion", f"got {extra}")
+    check("_filter_openngc_rows: extra['size'] matches the row's MajAx",
+          extra.get("size") == 85.0, f"got {extra}")
+
+    # _label_block_metrics: a single-line block must match plain
+    # cv2.getTextSize exactly (so existing Circle-only labels are drawn
+    # identically to before this feature existed), and a multi-line block
+    # must be taller (by the extra lines' height + inter-line gaps) but no
+    # narrower than the widest single line.
+    (raw_w, raw_h), raw_base = cv2.getTextSize(
+        "M 42", cv2.FONT_HERSHEY_SIMPLEX, 0.85, 2)
+    bw1, bh1, heights1, gap1 = pipeline.UnifiedPipelineWindow._label_block_metrics(
+        ["M 42"], 0.85, 2)
+    check("_label_block_metrics: single line matches plain cv2.getTextSize",
+          bw1 == raw_w + 2 and bh1 == raw_h + raw_base and len(heights1) == 1,
+          f"got w={bw1} h={bh1} heights={heights1}")
+    bw3, bh3, heights3, gap3 = pipeline.UnifiedPipelineWindow._label_block_metrics(
+        ["M 42", "Nebula", "mag 4.0"], 0.85, 2)
+    check("_label_block_metrics: 3-line block is taller than 1-line block",
+          bh3 > bh1, f"1-line h={bh1} 3-line h={bh3}")
+    check("_label_block_metrics: block width is at least the widest line",
+          bw3 >= bw1, f"1-line w={bw1} 3-line w={bw3}")
+    check("_label_block_metrics: block height accounts for all 3 lines' "
+          "heights plus 2 inter-line gaps",
+          bh3 == sum(heights3) + gap3 * 2, f"got {bh3} vs {heights3} {gap3}")
+
+    # _layout_annotation_labels: a multi-line "label_lines" block must
+    # reserve more vertical space than a single-line label at the same
+    # spot would — an isolated marker near the top edge is used so the
+    # only thing that can push the label around is the block's own size,
+    # not collision avoidance with another object.
+    single_items = [
+        {"label": "M 42", "kind": "messier", "x": 200, "y": 60, "r": 20,
+         "fs": 0.85, "th": 2},
+    ]
+    multi_items = [
+        {"label": "M 42", "kind": "messier", "x": 200, "y": 60, "r": 20,
+         "fs": 0.85, "th": 2,
+         "label_lines": ["M 42", "Nebula", "mag 4.0", "Orion"]},
+    ]
+    pipeline.UnifiedPipelineWindow._layout_annotation_labels(single_items, 400, 300)
+    pipeline.UnifiedPipelineWindow._layout_annotation_labels(multi_items, 400, 300)
+    ss = single_items[0]
+    (single_tw, single_th), single_base = cv2.getTextSize(
+        ss["label"], cv2.FONT_HERSHEY_SIMPLEX, ss["fs"], ss["th"])
+    single_bh = single_th + single_base
+    single_box = (ss["tx"] - 2, ss["ty"] - single_bh - 2, ss["tx"], ss["ty"])
+    ms = multi_items[0]
+    _, multi_bh, _, _ = pipeline.UnifiedPipelineWindow._label_block_metrics(
+        ms["label_lines"], ms["fs"], ms["th"])
+    multi_box = (ms["tx"] - 2, ms["ty"] - multi_bh - 2, ms["tx"], ms["ty"])
+    check("_layout_annotation_labels: multi-line block is taller than the "
+          "single-line label it replaces",
+          (multi_box[3] - multi_box[1]) > (single_box[3] - single_box[1]),
+          f"single={single_box} multi={multi_box}")
+    check("_layout_annotation_labels: multi-line block still stays fully "
+          "on-canvas",
+          multi_box[0] >= 0 and multi_box[1] >= 0 and
+          multi_box[2] <= 400 and multi_box[3] <= 300, f"multi={multi_box}")
+    check("_layout_annotation_labels: stores label_dx/label_dy for the "
+          "chosen placement direction",
+          "label_dx" in ms and "label_dy" in ms, f"got {ms}")
+
+    # _render_annotations: Open Cross style's N/S arm must stretch to
+    # reach a taller multi-line label sitting on that side — comparing a
+    # 1-line vs. a 4-line label placed to the north (label_dy=-1) of an
+    # otherwise-identical marker.
+    def make_cross_item(label_lines, label_dy):
+        return {
+            "label": label_lines[0], "kind": "ngc", "x": 50, "y": 60, "r": 15,
+            "color": (200, 200, 200), "fs": 0.85, "th": 2,
+            "tx": 50, "ty": 30,  # north of the marker
+            "style": "cross", "cross_th": 2, "cross_color": (255, 255, 255),
+            "cross_gap": 15 * 0.5, "cross_arm": 15 * 0.7,
+            "label_lines": label_lines, "label_dx": 0, "label_dy": label_dy,
+        }
+
+    canvas2 = np.zeros((100, 100, 3), dtype=np.uint8)
+    one_line_out = pipeline.UnifiedPipelineWindow._render_annotations(
+        canvas2, [make_cross_item(["NGC 1"], -1)])
+    four_line_out = pipeline.UnifiedPipelineWindow._render_annotations(
+        canvas2, [make_cross_item(["NGC 1", "Nebula", "mag 9.0", "Orion"], -1)])
+    # The N arm's *far* end (well above the marker) is unpainted for the
+    # short 1-line label but should be reached/painted once the label
+    # grows to 4 lines and the arm stretches to meet it.
+    far_north_y = 20  # well past the 1-line arm's tip (~y=42), still short
+                      # of the canvas edge and comfortably within the
+                      # 4-line arm's much longer reach (tip goes off-canvas)
+    one_line_reached = bool(np.any(one_line_out[far_north_y, 50] != 0))
+    four_line_reached = bool(np.any(four_line_out[far_north_y, 50] != 0))
+    check("_render_annotations: Open Cross N arm stretches to reach a "
+          "taller multi-line label but not a short 1-line one",
+          (not one_line_reached) and four_line_reached,
+          f"1-line pixel={one_line_out[far_north_y, 50]} "
+          f"4-line pixel={four_line_out[far_north_y, 50]}")
+
     # _layout_annotation_labels: greedy label placement that must (a) never
     # place a label outside the canvas and (b) avoid overlapping labels
     # when there's room to do so.
