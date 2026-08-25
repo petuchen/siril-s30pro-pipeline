@@ -1,5 +1,29 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.46.0
+
+* **New feature: Open Cross marker style for Annotate, alongside the
+  existing circle.** A new "Marker style" dropdown offers Circle (the
+  original, unchanged default), Open Cross, or both together. The Open
+  Cross is a reticle-style marker made of 4 short strokes (N/S/E/W) that
+  stop short of the object's center on both ends, so it never covers
+  the star or DSO it's pointing at — unlike the circle, which sits
+  right on top of it. Both styles get independent thickness (auto, or a
+  fixed pixel value) and color controls, each with its own "Custom
+  color" toggle — off keeps each catalogue's own color, matching the
+  swatches next to the catalogue checkboxes, same as before; on
+  overrides every marker of that style with a single picked color. The
+  cross's gap-from-center and arm length are set as multiples of the
+  marker's own radius (not fixed pixels), so they scale automatically
+  with each object's apparent size the same way the marker radius
+  already does. Since an open cross leaves its 4 diagonal corners clear
+  while a circle surrounds the object on every side, there's also a new
+  "Label position" option (NE/NW/SE/SW, or Auto) for Open Cross style —
+  picking a corner tells the existing overlap-avoiding label placement
+  to prefer that spot first, instead of always working out the least-bad
+  position on its own. All of the above round-trips through Export/
+  Import settings.
+
 ## 1.45.0
 
 * **New feature: Comet Stack mode.** A fourth option in Preprocess's

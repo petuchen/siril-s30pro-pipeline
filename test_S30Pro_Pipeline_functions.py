@@ -460,6 +460,46 @@ def test_annotate_catalog_helpers(pipeline, np):
           overlap_area(m42_box, ngc1977_box) == 0,
           f"m42={m42_box} ngc1977={ngc1977_box}")
 
+    # _layout_annotation_labels: Open Cross style's "label_pref" (NE/NW/
+    # SE/SW) should win an isolated marker's slot when nothing else is
+    # around to force a fallback — this is what lets the panel's "Label
+    # position" dropdown actually steer where the name lands.
+    pref_items = [
+        {"label": "Test Obj", "kind": "ngc", "x": 200, "y": 150, "r": 20,
+         "fs": 0.85, "th": 2, "label_pref": (1, -1)},  # NE
+    ]
+    pipeline.UnifiedPipelineWindow._layout_annotation_labels(
+        pref_items, 400, 300)
+    d0 = pref_items[0]
+    check("_layout_annotation_labels: label_pref='NE' places the label to "
+          "the upper-right of an isolated marker",
+          d0["tx"] > d0["x"] and d0["ty"] < d0["y"],
+          f"marker=({d0['x']},{d0['y']}) label anchor=({d0['tx']},{d0['ty']})")
+
+    # _render_annotations: Open Cross style must leave the object's own
+    # center pixel untouched (that's the entire point of an *open* cross —
+    # unlike a filled marker, it never covers the object it's pointing
+    # at) while still visibly drawing each of the 4 arms further out.
+    canvas = np.zeros((100, 100, 3), dtype=np.uint8)
+    cx, cy, r = 50, 50, 20
+    cross_drawable = [{
+        "label": "", "kind": "ngc", "x": cx, "y": cy, "r": r,
+        "color": (200, 200, 200), "fs": 0.01, "th": 1,
+        "tx": cx, "ty": cy,  # label drawn at a 0-size font, effectively inert
+        "style": "cross", "cross_th": 3, "cross_color": (255, 255, 255),
+        "cross_gap": r * 0.5, "cross_arm": r * 0.7,
+    }]
+    out = pipeline.UnifiedPipelineWindow._render_annotations(
+        canvas, cross_drawable)
+    center_untouched = bool(np.all(out[cy, cx] == 0))
+    check("_render_annotations: Open Cross leaves the exact center pixel "
+          "unpainted (the 'open' in open cross)",
+          center_untouched, f"center pixel = {out[cy, cx]}")
+    arm_y = int(round(cy - (r * 0.5 + r * 0.7 / 2)))  # midpoint of the N arm
+    arm_painted = bool(np.any(out[arm_y, cx] != 0))
+    check("_render_annotations: Open Cross actually paints its arm strokes",
+          arm_painted, f"pixel on N arm ({cx},{arm_y}) = {out[arm_y, cx]}")
+
 
 def test_palette_nebulachrome(pipeline, np):
     print("\n== UnifiedPipelineWindow._palette_nebulachrome() ==")

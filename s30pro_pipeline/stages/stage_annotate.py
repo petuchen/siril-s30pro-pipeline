@@ -13,7 +13,7 @@ import cv2
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox,
-    QDoubleSpinBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
+    QDoubleSpinBox, QFileDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
     QListWidget, QListWidgetItem, QMessageBox, QPushButton, QSpinBox,
     QVBoxLayout,
 )
@@ -159,6 +159,145 @@ class AnnotateMixin:
         self.ann_size_spin.setValue(1.0)
         g.addWidget(self.ann_size_spin, row, 1)
         row += 1
+
+        g.addWidget(QLabel("Marker style:"), row, 0)
+        self.ann_marker_style_combo = QComboBox()
+        self.ann_marker_style_combo.addItems(
+            ["Circle", "Open Cross", "Circle + Open Cross"])
+        self.ann_marker_style_combo.setToolTip(
+            "How each star/DSO marker is drawn. \"Open Cross\" is a "
+            "reticle-style cross with a gap in the middle so it doesn't "
+            "cover the object itself — its gap and arm length scale with "
+            "the marker's size and are adjustable below.")
+        g.addWidget(self.ann_marker_style_combo, row, 1)
+        row += 1
+
+        # -------------------------------------------------- marker style groups
+        self.ann_circle_style_box = QGroupBox("Circle style")
+        circ_g = QGridLayout(self.ann_circle_style_box)
+        circ_g.setHorizontalSpacing(10)
+        circ_g.setVerticalSpacing(8)
+        circ_g.setColumnStretch(1, 1)
+
+        self.ann_circle_auto_th_checkbox = QCheckBox("Auto thickness")
+        self.ann_circle_auto_th_checkbox.setChecked(True)
+        self.ann_circle_auto_th_checkbox.setToolTip(
+            "Scales the circle's stroke width with the image resolution "
+            "and label size, same as before this option existed. Uncheck "
+            "to set a fixed pixel thickness instead.")
+        circ_g.addWidget(self.ann_circle_auto_th_checkbox, 0, 0, 1, 2)
+        circ_g.addWidget(QLabel("Thickness (px):"), 1, 0)
+        self.ann_circle_th_spin = QSpinBox()
+        self.ann_circle_th_spin.setRange(1, 12)
+        self.ann_circle_th_spin.setValue(2)
+        self.ann_circle_th_spin.setEnabled(False)
+        circ_g.addWidget(self.ann_circle_th_spin, 1, 1)
+
+        self.ann_circle_custom_color_checkbox = QCheckBox(
+            "Custom color (override per-catalogue colors)")
+        self.ann_circle_custom_color_checkbox.setToolTip(
+            "Off (default): each catalogue keeps its own color, matching "
+            "the swatches above. On: every circle uses the single color "
+            "picked below instead — labels keep their per-catalogue color "
+            "either way.")
+        circ_g.addWidget(self.ann_circle_custom_color_checkbox, 2, 0, 1, 2)
+        self.ann_circle_color = (255, 255, 255)
+        self.ann_circle_swatch = self._color_swatch(self.ann_circle_color)
+        self.ann_circle_color_btn = QPushButton("Circle color...")
+        self.ann_circle_color_btn.setEnabled(False)
+        self.ann_circle_color_btn.clicked.connect(
+            lambda: self._pick_marker_color("circle"))
+        circ_g.addWidget(self.ann_circle_swatch, 3, 0)
+        circ_g.addWidget(self.ann_circle_color_btn, 3, 1)
+        v.addWidget(self.ann_circle_style_box)
+
+        self.ann_cross_style_box = QGroupBox("Open Cross style")
+        cross_g = QGridLayout(self.ann_cross_style_box)
+        cross_g.setHorizontalSpacing(10)
+        cross_g.setVerticalSpacing(8)
+        cross_g.setColumnStretch(1, 1)
+
+        self.ann_cross_auto_th_checkbox = QCheckBox("Auto thickness")
+        self.ann_cross_auto_th_checkbox.setChecked(True)
+        self.ann_cross_auto_th_checkbox.setToolTip(
+            self.ann_circle_auto_th_checkbox.toolTip().replace(
+                "circle's", "cross's"))
+        cross_g.addWidget(self.ann_cross_auto_th_checkbox, 0, 0, 1, 2)
+        cross_g.addWidget(QLabel("Thickness (px):"), 1, 0)
+        self.ann_cross_th_spin = QSpinBox()
+        self.ann_cross_th_spin.setRange(1, 12)
+        self.ann_cross_th_spin.setValue(2)
+        self.ann_cross_th_spin.setEnabled(False)
+        cross_g.addWidget(self.ann_cross_th_spin, 1, 1)
+
+        self.ann_cross_custom_color_checkbox = QCheckBox(
+            "Custom color (override per-catalogue colors)")
+        self.ann_cross_custom_color_checkbox.setToolTip(
+            "Same idea as the circle's custom color above, independent of "
+            "it — you can have a custom cross color with per-catalogue "
+            "circle colors, or vice versa, or both/neither.")
+        cross_g.addWidget(self.ann_cross_custom_color_checkbox, 2, 0, 1, 2)
+        self.ann_cross_color = (255, 255, 255)
+        self.ann_cross_swatch = self._color_swatch(self.ann_cross_color)
+        self.ann_cross_color_btn = QPushButton("Cross color...")
+        self.ann_cross_color_btn.setEnabled(False)
+        self.ann_cross_color_btn.clicked.connect(
+            lambda: self._pick_marker_color("cross"))
+        cross_g.addWidget(self.ann_cross_swatch, 3, 0)
+        cross_g.addWidget(self.ann_cross_color_btn, 3, 1)
+
+        cross_g.addWidget(QLabel("Gap (× radius):"), 4, 0)
+        self.ann_cross_gap_spin = QDoubleSpinBox()
+        self.ann_cross_gap_spin.setRange(0.0, 3.0)
+        self.ann_cross_gap_spin.setSingleStep(0.1)
+        self.ann_cross_gap_spin.setValue(0.5)
+        self.ann_cross_gap_spin.setToolTip(
+            "How far each arm starts from the object's center, as a "
+            "multiple of the marker's own radius — so it scales with the "
+            "object's apparent size instead of being a fixed pixel gap.")
+        cross_g.addWidget(self.ann_cross_gap_spin, 4, 1)
+        cross_g.addWidget(QLabel("Arm length (× radius):"), 5, 0)
+        self.ann_cross_arm_spin = QDoubleSpinBox()
+        self.ann_cross_arm_spin.setRange(0.1, 3.0)
+        self.ann_cross_arm_spin.setSingleStep(0.1)
+        self.ann_cross_arm_spin.setValue(0.7)
+        self.ann_cross_arm_spin.setToolTip(
+            "Length of each of the 4 arm strokes, as a multiple of the "
+            "marker's radius — also scales with object size.")
+        cross_g.addWidget(self.ann_cross_arm_spin, 5, 1)
+
+        cross_g.addWidget(QLabel("Label position:"), 6, 0)
+        self.ann_cross_label_pos_combo = QComboBox()
+        self.ann_cross_label_pos_combo.addItems(
+            ["Auto (avoid overlap)", "NE", "NW", "SE", "SW"])
+        self.ann_cross_label_pos_combo.setToolTip(
+            "The open cross leaves its 4 diagonal corners clear of arms — "
+            "pick one to always place the name there, or leave on Auto to "
+            "let the same overlap-avoiding placement used for Circle "
+            "style pick the best free spot (preferring this corner when "
+            "you’ve chosen one)."
+        )
+        cross_g.addWidget(self.ann_cross_label_pos_combo, 6, 1)
+        v.addWidget(self.ann_cross_style_box)
+
+        def sync_marker_style_visibility(_text=None):
+            style = self.ann_marker_style_combo.currentText()
+            self.ann_circle_style_box.setVisible(
+                style in ("Circle", "Circle + Open Cross"))
+            self.ann_cross_style_box.setVisible(
+                style in ("Open Cross", "Circle + Open Cross"))
+
+        self.ann_marker_style_combo.currentTextChanged.connect(
+            sync_marker_style_visibility)
+        self.ann_circle_auto_th_checkbox.toggled.connect(
+            lambda checked: self.ann_circle_th_spin.setEnabled(not checked))
+        self.ann_cross_auto_th_checkbox.toggled.connect(
+            lambda checked: self.ann_cross_th_spin.setEnabled(not checked))
+        self.ann_circle_custom_color_checkbox.toggled.connect(
+            self.ann_circle_color_btn.setEnabled)
+        self.ann_cross_custom_color_checkbox.toggled.connect(
+            self.ann_cross_color_btn.setEnabled)
+        sync_marker_style_visibility()
 
         # -------------------------------------------------- constellation lines
         # Selection defaults to every constellation; picked by abbreviation
@@ -783,6 +922,45 @@ class AnnotateMixin:
                 # (e.g. Barnard's Loop) never swallows the whole frame.
                 r_dso_max = int(min(W, H) * 0.22)
 
+                # Marker style — independent of the text-label styling
+                # above (fs/th/color there keep driving the name text
+                # regardless of marker style, so labels stay readable and
+                # match their catalogue color either way). "circle" is the
+                # only style that existed before this option was added, so
+                # it reproduces the exact old appearance (auto thickness,
+                # per-catalogue color, no label_pref) when left on its
+                # default.
+                marker_style_text = self.ann_marker_style_combo.currentText()
+                marker_style = {
+                    "Circle": "circle", "Open Cross": "cross",
+                    "Circle + Open Cross": "both",
+                }[marker_style_text]
+                circle_th = (th if self.ann_circle_auto_th_checkbox.isChecked()
+                             else self.ann_circle_th_spin.value())
+                circle_color_override = (
+                    self.ann_circle_color
+                    if self.ann_circle_custom_color_checkbox.isChecked()
+                    else None)
+                cross_th = (th if self.ann_cross_auto_th_checkbox.isChecked()
+                           else self.ann_cross_th_spin.value())
+                cross_color_override = (
+                    self.ann_cross_color
+                    if self.ann_cross_custom_color_checkbox.isChecked()
+                    else None)
+                cross_gap_mult = self.ann_cross_gap_spin.value()
+                cross_arm_mult = self.ann_cross_arm_spin.value()
+                # NE/NW/SE/SW map onto the same (dx,dy) convention already
+                # used by _layout_annotation_labels' candidate ring: dx>0
+                # is toward larger x (right/"E"), dy<0 is toward smaller y
+                # (up/"N") in the already display-oriented canvas.
+                label_pos_text = self.ann_cross_label_pos_combo.currentText()
+                label_pref = {
+                    "NE": (1, -1), "NW": (-1, -1),
+                    "SE": (1, 1), "SW": (-1, 1),
+                }.get(label_pos_text)
+                if marker_style == "circle":
+                    label_pref = None  # unchanged from pre-existing behavior
+
                 # Degrees-per-pixel, for converting an object's apparent
                 # angular size (arcmin, from OpenNGC/VizieR) into an
                 # on-image marker radius that matches its real footprint.
@@ -837,6 +1015,14 @@ class AnnotateMixin:
                     drawable.append({
                         "label": label, "kind": kind, "x": xd, "y": yd,
                         "r": r, "color": color, "fs": fs, "th": th,
+                        "style": marker_style,
+                        "circle_th": circle_th,
+                        "circle_color": circle_color_override or color,
+                        "cross_th": cross_th,
+                        "cross_color": cross_color_override or color,
+                        "cross_gap": r * cross_gap_mult,
+                        "cross_arm": r * cross_arm_mult,
+                        "label_pref": label_pref,
                     })
                 self._layout_annotation_labels(drawable, W, H)
                 drawn = len(drawable)
@@ -959,6 +1145,15 @@ class AnnotateMixin:
             # since that's the conventional, least-surprising placement.
             dirs = [(1, 0), (1, -1), (1, 1), (0, -1), (0, 1),
                     (-1, 0), (-1, -1), (-1, 1)]
+            # Open Cross style lets the caller prefer one of the 4 corners
+            # (the diagonals its arms leave clear) — try that one first on
+            # both rings, still falling back through the rest of the ring
+            # for overlap/on-canvas avoidance if the preferred corner
+            # doesn't work out. None (Circle style, or "Auto" chosen for
+            # Open Cross) leaves the original order untouched.
+            pref = d.get("label_pref")
+            if pref in dirs:
+                dirs = [pref] + [dd for dd in dirs if dd != pref]
             candidates = []
             for ring in (1.0, 2.2):
                 dist = r + pad + ring * 6
@@ -1013,8 +1208,34 @@ class AnnotateMixin:
         pixel-identical results for the objects they keep."""
         canvas = base_canvas.copy()
         for d in drawn:
-            cv2.circle(canvas, (d["x"], d["y"]), d["r"], d["color"], d["th"],
-                      cv2.LINE_AA)
+            # "style" defaults to "circle" so annotation dicts cached by an
+            # older version of this stage (before marker styles existed —
+            # e.g. from a settings JSON's cached preview state) still draw
+            # exactly as they always did.
+            style = d.get("style", "circle")
+            x, y = d["x"], d["y"]
+            if style in ("circle", "both"):
+                cv2.circle(canvas, (x, y), d["r"],
+                          d.get("circle_color", d["color"]),
+                          d.get("circle_th", d["th"]), cv2.LINE_AA)
+            if style in ("cross", "both"):
+                cross_color = d.get("cross_color", d["color"])
+                cross_th = d.get("cross_th", d["th"])
+                gap = d.get("cross_gap", d["r"] * 0.5)
+                arm = d.get("cross_arm", d["r"] * 0.7)
+                # Open cross: 4 short strokes (N/S/E/W) that start `gap`
+                # pixels from center and extend `arm` pixels further out —
+                # never meeting in the middle, so the object itself stays
+                # unobscured. Both distances were computed from the
+                # marker's own radius (r * multiplier) back in
+                # _exec_stage_ann, so they scale with the object's
+                # apparent size automatically.
+                for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0)):
+                    p1 = (int(round(x + dx * gap)), int(round(y + dy * gap)))
+                    p2 = (int(round(x + dx * (gap + arm))),
+                         int(round(y + dy * (gap + arm))))
+                    cv2.line(canvas, p1, p2, cross_color, cross_th,
+                            cv2.LINE_AA)
             cv2.putText(canvas, d["label"], (d["tx"], d["ty"]),
                        cv2.FONT_HERSHEY_SIMPLEX, d["fs"], (0, 0, 0),
                        d["th"] + 2, cv2.LINE_AA)
@@ -1058,6 +1279,26 @@ class AnnotateMixin:
             "Annotate: all annotations removed from the preview/export "
             "(FITS image untouched). Re-run the stage to bring them "
             "back.", LogColor.GREEN)
+
+    def _pick_marker_color(self, which):
+        """'Circle color...' / 'Cross color...' — opens a standard color
+        picker for the custom marker-override color (`which` is "circle"
+        or "cross"), independent of the other marker/of the per-catalogue
+        colors used when the matching "Custom color" checkbox is off.
+        Mirrors _pick_constellation_color's swatch-update pattern."""
+        attr = f"ann_{which}_color"
+        swatch = getattr(self, f"ann_{which}_swatch")
+        title = f"{which.capitalize()} marker color"
+        b, g_, r = getattr(self, attr)
+        initial = QColor(r, g_, b)
+        color = QColorDialog.getColor(initial, self, title)
+        if not color.isValid():
+            return
+        setattr(self, attr, (color.blue(), color.green(), color.red()))
+        swatch.setStyleSheet(
+            f"background-color: rgb({color.red()},{color.green()},"
+            f"{color.blue()}); border-radius: 3px; "
+            "border: 1px solid rgba(255,255,255,60);")
 
     def _pick_constellation_color(self, target):
         """'Line color...' / 'Name color...' — opens a standard color

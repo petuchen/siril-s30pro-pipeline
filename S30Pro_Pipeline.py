@@ -228,7 +228,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "1.45.0"
+VERSION = "1.46.0"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -1300,6 +1300,20 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
                 "online": self.ann_online_checkbox.isChecked(),
                 "mag_limit": self.ann_mag_spin.value(),
                 "label_size": self.ann_size_spin.value(),
+                "marker_style": self.ann_marker_style_combo.currentText(),
+                "circle_auto_th": self.ann_circle_auto_th_checkbox.isChecked(),
+                "circle_th": self.ann_circle_th_spin.value(),
+                "circle_custom_color":
+                    self.ann_circle_custom_color_checkbox.isChecked(),
+                "circle_color": list(self.ann_circle_color),
+                "cross_auto_th": self.ann_cross_auto_th_checkbox.isChecked(),
+                "cross_th": self.ann_cross_th_spin.value(),
+                "cross_custom_color":
+                    self.ann_cross_custom_color_checkbox.isChecked(),
+                "cross_color": list(self.ann_cross_color),
+                "cross_gap_mult": self.ann_cross_gap_spin.value(),
+                "cross_arm_mult": self.ann_cross_arm_spin.value(),
+                "cross_label_pos": self.ann_cross_label_pos_combo.currentText(),
                 "show_overlay": self.ann_show_overlay_checkbox.isChecked(),
                 "cat_messier": self.ann_cat_messier_checkbox.isChecked(),
                 "cat_ngc": self.ann_cat_ngc_checkbox.isChecked(),
@@ -1459,6 +1473,40 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         self.ann_online_checkbox.setChecked(an.get("online", False))
         self.ann_mag_spin.setValue(float(an.get("mag_limit", 6.0)))
         self.ann_size_spin.setValue(float(an.get("label_size", 1.0)))
+        marker_style = an.get("marker_style", "Circle")
+        if marker_style not in ("Circle", "Open Cross", "Circle + Open Cross"):
+            marker_style = "Circle"
+        self.ann_marker_style_combo.setCurrentText(marker_style)
+        self.ann_circle_auto_th_checkbox.setChecked(
+            an.get("circle_auto_th", True))
+        self.ann_circle_th_spin.setValue(int(an.get("circle_th", 2)))
+        self.ann_circle_custom_color_checkbox.setChecked(
+            an.get("circle_custom_color", False))
+        circle_color = an.get("circle_color")
+        self.ann_circle_color = (
+            tuple(int(c) for c in circle_color)
+            if circle_color and len(circle_color) == 3 else (255, 255, 255))
+        self.ann_cross_auto_th_checkbox.setChecked(
+            an.get("cross_auto_th", True))
+        self.ann_cross_th_spin.setValue(int(an.get("cross_th", 2)))
+        self.ann_cross_custom_color_checkbox.setChecked(
+            an.get("cross_custom_color", False))
+        cross_color = an.get("cross_color")
+        self.ann_cross_color = (
+            tuple(int(c) for c in cross_color)
+            if cross_color and len(cross_color) == 3 else (255, 255, 255))
+        for color, swatch in ((self.ann_circle_color, self.ann_circle_swatch),
+                              (self.ann_cross_color, self.ann_cross_swatch)):
+            b, g_, r = color
+            swatch.setStyleSheet(
+                f"background-color: rgb({r},{g_},{b}); border-radius: 3px; "
+                "border: 1px solid rgba(255,255,255,60);")
+        self.ann_cross_gap_spin.setValue(float(an.get("cross_gap_mult", 0.5)))
+        self.ann_cross_arm_spin.setValue(float(an.get("cross_arm_mult", 0.7)))
+        cross_label_pos = an.get("cross_label_pos", "Auto (avoid overlap)")
+        if cross_label_pos not in ("Auto (avoid overlap)", "NE", "NW", "SE", "SW"):
+            cross_label_pos = "Auto (avoid overlap)"
+        self.ann_cross_label_pos_combo.setCurrentText(cross_label_pos)
         self.ann_show_overlay_checkbox.setChecked(an.get("show_overlay", True))
         self.ann_cat_messier_checkbox.setChecked(an.get("cat_messier", True))
         self.ann_cat_ngc_checkbox.setChecked(an.get("cat_ngc", True))
