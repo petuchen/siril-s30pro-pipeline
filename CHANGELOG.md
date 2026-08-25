@@ -1,5 +1,28 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.51.0
+
+* **New feature: manually pick objects on the image.** A new "🖱 Pick
+  object on image..." button on the Annotate panel arms a click-to-add
+  mode on the preview — click any point on the image and a new object
+  is added right there, using its RA/Dec (from the same plate-solve WCS
+  the stage already uses) as its default name (e.g. "RA 83.822° Dec
+  -5.391°"), styled with the Annotation style panel's current settings.
+  Stays armed for adding several points in a row; click the button
+  again or press Esc to stop. The new object shows up in "Select
+  objects to show..." like any catalogue object, where its 🎨 editor
+  can rename it (the RA/Dec default is just a starting point — edit the
+  first label line to call it whatever you like), restyle it, or remove
+  it. (`CompareView` gained a reusable single-click "point pick" mode
+  alongside its existing crop rubber-band selection mode, for this.)
+* **Per-object style editor cleanup.** "Circle color..." / "Circle
+  thickness" are renamed "Marker color..." / "Marker thickness". Text
+  color moved up to sit directly under Marker thickness, ahead of every
+  Cross-specific control (color, thickness, gap, arm, label position/
+  distance) — so the two most commonly used color pickers (Marker,
+  Text) are right at the top, before any of the Open Cross-only
+  settings below them.
+
 ## 1.50.0
 
 * **Open Cross "Label distance (× radius)" default lowered from 0.3 to

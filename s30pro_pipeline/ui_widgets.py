@@ -27,6 +27,7 @@ class CompareView(QWidget):
     fractions (x, y, w, h in 0..1) of the displayed image."""
 
     selectionMade = pyqtSignal(float, float, float, float)
+    pointPicked = pyqtSignal(float, float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -45,6 +46,8 @@ class CompareView(QWidget):
         self._pending_sel = None  # (fx, fy, fw, fh) fractions — persists in
                                    # the preview after mouse release, until
                                    # explicitly cleared (Run stage or Esc)
+        self.point_pick_mode = False  # single-click "add an object here"
+                                       # mode (Annotate's manual-pick tool)
         self._last_ref_size = None  # (iw, ih) of the last shown before/after
         self.setMinimumSize(420, 380)
         self.setMouseTracking(True)
@@ -58,6 +61,17 @@ class CompareView(QWidget):
             self._pending_sel = None
         self.setCursor(Qt.CursorShape.CrossCursor if on
                        else Qt.CursorShape.OpenHandCursor)
+
+    def set_point_pick_mode(self, on):
+        """Toggle the single-click "add an object here" mode (used by
+        Annotate's "🖱 Pick object on image..." button). Unlike
+        select_mode's click-and-drag rubber band, a single click in this
+        mode immediately emits `pointPicked(fx, fy)` — fractions (0..1)
+        of the displayed image — from mousePressEvent, no drag needed."""
+        self.point_pick_mode = bool(on)
+        self.setCursor(Qt.CursorShape.CrossCursor if on
+                       else Qt.CursorShape.OpenHandCursor)
+        self.update()
         self.update()
 
     def clear_pending_selection(self):
@@ -259,6 +273,12 @@ class CompareView(QWidget):
             p.fillRect(6, self.height() - 30, 430, 22, QColor(0, 0, 0, 160))
             p.drawText(12, self.height() - 14,
                        "Crop box marked — Run this stage to crop, or Esc to cancel")
+        elif self.point_pick_mode:
+            f = p.font(); f.setPointSize(10); f.setBold(True); p.setFont(f)
+            p.setPen(QColor(255, 255, 255, 235))
+            p.fillRect(6, self.height() - 30, 430, 22, QColor(0, 0, 0, 160))
+            p.drawText(12, self.height() - 14,
+                       "PICK MODE — click a point to add an object, or Esc to stop")
 
     def _divider_x(self):
         ref = self.after or self.before
@@ -269,6 +289,16 @@ class CompareView(QWidget):
 
     def mousePressEvent(self, e):
         pos = e.position()
+        if self.point_pick_mode:
+            ref = self.after or self.before
+            if ref is not None:
+                rect = self._image_rect(ref)
+                if (rect.width() > 0 and rect.height() > 0
+                        and rect.contains(pos)):
+                    fx = (pos.x() - rect.left()) / rect.width()
+                    fy = (pos.y() - rect.top()) / rect.height()
+                    self.pointPicked.emit(fx, fy)
+            return
         if self.select_mode:
             self._sel_start = pos
             self._sel_end = pos

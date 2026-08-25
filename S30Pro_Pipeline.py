@@ -228,7 +228,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "1.50.0"
+VERSION = "1.51.0"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -668,6 +668,7 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
 
         self.compare = CompareView()
         self.compare.selectionMade.connect(self._on_crop_selection)
+        self.compare.pointPicked.connect(self._on_ann_point_picked)
         frame = QFrame()
         frame.setStyleSheet(f"QFrame {{ background-color: #101216; border-radius: 10px; }}")
         fl = QVBoxLayout(frame)
@@ -1876,6 +1877,9 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape and self._cancel_pending_crop():
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_Escape and self._cancel_ann_pick_mode():
             event.accept()
             return
         super().keyPressEvent(event)

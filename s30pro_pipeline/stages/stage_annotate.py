@@ -584,6 +584,24 @@ class AnnotateMixin:
         self.ann_remove_all_btn.clicked.connect(self._remove_all_annotations)
         save_row2.addWidget(self.ann_remove_all_btn)
         v.addLayout(save_row2)
+
+        self.ann_pick_btn = QPushButton("🖱  Pick object on image...")
+        self.ann_pick_btn.setCheckable(True)
+        self.ann_pick_btn.setToolTip(
+            "Click this, then click anywhere on the preview image to add "
+            "a custom object right there — its RA/Dec (from the same "
+            "plate-solve WCS the stage already used) becomes its default "
+            "name, styled with the Annotation style panel's current "
+            "settings. Stays armed for multiple picks in a row; click "
+            "this button again or press Esc to stop. Rename it, change "
+            "its style, or remove it afterward via \"Select objects...\" "
+            "🎨 editor, same as any catalogue object.")
+        self.ann_pick_btn.toggled.connect(self._toggle_ann_pick_mode)
+        v.addWidget(self.ann_pick_btn)
+        self.ann_pick_hint = QLabel("")
+        self.ann_pick_hint.setObjectName("SubHeader")
+        self.ann_pick_hint.setWordWrap(True)
+        v.addWidget(self.ann_pick_hint)
         return box
 
     # ------------------------------------------- Siril catalogue (conesearch)
@@ -1018,6 +1036,14 @@ class AnnotateMixin:
         canvas = np.flipud(hwc)
         canvas = (np.clip(canvas, 0, 1) * 255).astype(np.uint8)
         canvas = cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR)
+
+        # Cached for "🖱 Pick object on image..." (_on_ann_point_picked),
+        # which needs to convert a later click's pixel position back to
+        # RA/Dec without re-reading the FITS header or re-running the
+        # whole stage — this WCS/W/H trio is otherwise purely local to
+        # this method.
+        self._ann_wcs = wcs
+        self._ann_img_w, self._ann_img_h = W, H
 
         show_overlay = self.ann_show_overlay_checkbox.isChecked()
         drawn = 0
@@ -1668,6 +1694,112 @@ class AnnotateMixin:
             "current settings (any per-object overrides were reset).",
             LogColor.GREEN)
 
+    def _toggle_ann_pick_mode(self, checked):
+        """'🖱 Pick object on image...' toggled — arms/disarms the preview
+        panel's (self.compare) click-to-add-object mode. Requires the
+        stage to have run at least once, since placing and naming a
+        manually-picked object needs both the un-annotated base canvas
+        (to redraw onto) and the plate-solve WCS (to turn the click into
+        RA/Dec) that only exist after a run."""
+        if checked:
+            if (getattr(self, "_ann_base_canvas", None) is None
+                    or getattr(self, "_ann_wcs", None) is None):
+                QMessageBox.information(
+                    self, "No annotated image",
+                    "Run the Annotate stage at least once first.")
+                self.ann_pick_btn.blockSignals(True)
+                self.ann_pick_btn.setChecked(False)
+                self.ann_pick_btn.blockSignals(False)
+                return
+            self.compare.set_point_pick_mode(True)
+            self.ann_pick_hint.setText(
+                "Pick mode armed — click a point on the preview image to "
+                "add an object there. Click the button again or press "
+                "Esc to stop.")
+        else:
+            self.compare.set_point_pick_mode(False)
+            self.ann_pick_hint.setText("")
+
+    def _cancel_ann_pick_mode(self):
+        """Esc pressed anywhere in the window — exit "🖱 Pick object on
+        image..." mode if it's currently armed. Returns True if there
+        was anything to cancel, mirroring stage_crop.py's
+        _cancel_pending_crop so S30Pro_Pipeline.py's keyPressEvent can
+        try both the same way."""
+        btn = getattr(self, "ann_pick_btn", None)
+        if btn is None or not btn.isChecked():
+            return False
+        btn.setChecked(False)  # triggers _toggle_ann_pick_mode(False)
+        self.status_label.setText("Pick object: stopped.")
+        return True
+
+    def _on_ann_point_picked(self, fx, fy):
+        """CompareView.pointPicked — only ever fires while "🖱 Pick object
+        on image..." is armed (CompareView only emits this signal in its
+        own point_pick_mode). `fx`/`fy` are fractions (0..1) of the
+        displayed image; converts that to a pixel position, then to RA/
+        Dec via the WCS _exec_stage_ann cached on self, and appends a
+        new manually-placed object styled with the Annotation style
+        panel's current settings via _default_style_for_object — the
+        exact same dict shape _exec_stage_ann itself produces, so the
+        new object is fully editable (renamed, restyled, or removed)
+        through the existing "Select objects..." 🎨 editor afterward."""
+        base = getattr(self, "_ann_base_canvas", None)
+        wcs = getattr(self, "_ann_wcs", None)
+        if base is None or wcs is None:
+            return
+        H, W = base.shape[0], base.shape[1]
+        xd = int(round(np.clip(fx, 0.0, 1.0) * W))
+        yd = int(round(np.clip(fy, 0.0, 1.0) * H))
+        xd = max(0, min(W - 1, xd))
+        yd = max(0, min(H - 1, yd))
+        # Undo the display-orientation flip _exec_stage_ann applies when
+        # building `canvas` (row 0 = top there, matching Siril's on-
+        # screen display) before asking the WCS — which still follows
+        # the original FITS pixel grid (row 0 = bottom) — for this
+        # pixel's sky position.
+        y_wcs = H - 1 - yd
+        try:
+            world = wcs.wcs_pix2world(
+                np.array([[xd, y_wcs]], dtype=np.float64), 0)
+            ra, dec = float(world[0][0]), float(world[0][1])
+        except Exception as e:
+            QMessageBox.warning(
+                self, "Pick object failed",
+                f"Couldn't convert that point to RA/Dec: {e}")
+            return
+
+        label = f"RA {ra:.3f}° Dec {dec:+.3f}°"
+        res_scale = float(np.clip(max(W, H) / 1600.0, 1.0, 6.0))
+        size_mult = self.ann_size_spin.value() * res_scale
+        fs = 0.85 * size_mult
+        th = max(2, int(round(fs * 2.3)))
+        r = max(9, int(round(32 * size_mult)))
+        color = CATALOG_COLORS.get("custom", (200, 200, 200))
+
+        d = {"label": label, "kind": "custom", "x": xd, "y": yd, "r": r,
+            "color": color, "fs": fs, "th": th, "extra": {}}
+        d.update(self._default_style_for_object(d))
+
+        drawn = getattr(self, "_ann_drawn", None) or []
+        drawn.append(d)
+        self._ann_drawn = drawn
+        self._layout_annotation_labels(drawn, W, H)
+        new_canvas = self._render_annotations(base, drawn)
+        self._last_annotated_canvas = new_canvas
+        annotated_rgb = cv2.cvtColor(new_canvas, cv2.COLOR_BGR2RGB).astype(
+            np.float32) / 255.0
+        snap = self.snapshots.get(IDX_ANN, {})
+        snap["after"] = make_qimage(annotated_rgb, fits_orientation=False)
+        self.snapshots[IDX_ANN] = snap
+        self.snapshot_ready.emit(IDX_ANN)
+        self.status_label.setText(
+            f"Pick object: added \"{label}\" — rename or restyle it via "
+            "\"Select objects...\" 🎨.")
+        self.siril.log(
+            f"Annotate: manually added object \"{label}\" at pixel "
+            f"({xd}, {yd}).", LogColor.GREEN)
+
     def _pick_marker_color(self, which):
         """'Circle color...' / 'Cross color...' — opens a standard color
         picker for the custom marker-override color (`which` is "circle"
@@ -1892,18 +2024,32 @@ class AnnotateMixin:
             return swatch, pick
 
         circle_swatch, pick_circle_color = make_color_picker(
-            "circle_color", "Circle color")
-        circle_color_btn = QPushButton("Circle color...")
+            "circle_color", "Marker color")
+        circle_color_btn = QPushButton("Marker color...")
+        circle_color_btn.setToolTip(
+            "Color of the Circle marker (used when the marker style "
+            "above is Circle or Circle + Open Cross).")
         circle_color_btn.clicked.connect(pick_circle_color)
         g.addWidget(circle_swatch, gr, 0)
         g.addWidget(circle_color_btn, gr, 1)
         gr += 1
 
-        g.addWidget(QLabel("Circle thickness (px):"), gr, 0)
+        g.addWidget(QLabel("Marker thickness (px):"), gr, 0)
         circle_th_spin = QSpinBox()
         circle_th_spin.setRange(1, 12)
         circle_th_spin.setValue(int(round(d.get("circle_th", d.get("th", 2)))))
         g.addWidget(circle_th_spin, gr, 1)
+        gr += 1
+
+        text_swatch, pick_text_color = make_color_picker(
+            "text_color", "Text color")
+        text_color_btn = QPushButton("Text color...")
+        text_color_btn.setToolTip(
+            "Color of the label text itself, independent of the marker "
+            "color(s).")
+        text_color_btn.clicked.connect(pick_text_color)
+        g.addWidget(text_swatch, gr, 0)
+        g.addWidget(text_color_btn, gr, 1)
         gr += 1
 
         cross_swatch, pick_cross_color = make_color_picker(
@@ -1951,17 +2097,6 @@ class AnnotateMixin:
         dist_spin.setSingleStep(0.1)
         dist_spin.setValue(round(d.get("label_extra", 0) / r, 2))
         g.addWidget(dist_spin, gr, 1)
-        gr += 1
-
-        text_swatch, pick_text_color = make_color_picker(
-            "text_color", "Text color")
-        text_color_btn = QPushButton("Text color...")
-        text_color_btn.setToolTip(
-            "Color of the label text itself, independent of the marker "
-            "color(s) above.")
-        text_color_btn.clicked.connect(pick_text_color)
-        g.addWidget(text_swatch, gr, 0)
-        g.addWidget(text_color_btn, gr, 1)
         gr += 1
         dv.addLayout(g)
 
