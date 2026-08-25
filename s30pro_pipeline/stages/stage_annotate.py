@@ -2004,13 +2004,19 @@ class AnnotateMixin:
                 b_, g_, r_ = state[key]
                 color = QColorDialog.getColor(QColor(r_, g_, b_), dlg, title)
                 if color.isValid():
-                    checkpoint()
+                    # checkpoint() AFTER the mutation, matching every other
+                    # field here (spin/combo change signals fire once their
+                    # widget already holds the new value) — checkpointing
+                    # before the color change would capture the stale color
+                    # as the new "current" snapshot, silently dropping it
+                    # from undo history on the next change.
                     state[key] = (color.blue(), color.green(), color.red())
                     swatch.setStyleSheet(
                         f"background-color: rgb({color.red()},"
                         f"{color.green()},{color.blue()}); "
                         "border-radius: 3px; "
                         "border: 1px solid rgba(255,255,255,60);")
+                    checkpoint()
             return swatch, pick
 
         circle_swatch, pick_circle_color = make_color_picker(

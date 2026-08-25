@@ -301,6 +301,7 @@ Recent highlights:
 
 | Version | Highlights |
 | --- | --- |
+| 1.52.1 | Bugfix found in a code review pass: the per-object style editor's Undo could skip a step after picking colors (checkpoint happened before the color was applied instead of after). |
 | 1.52.0 | "Label distance" now applies to every marker style (was silently a no-op for Circle style) and allows negative values so labels can sit tighter than before, floor-clamped to avoid overlapping the marker. Custom lines / Label lines are now a single multi-line text box instead of add-one-line-at-a-time. |
 | 1.51.0 | New "🖱 Pick object on image..." button lets you click anywhere on the Annotate preview to manually add an object there, named from its RA/Dec by default (rename/restyle via the 🎨 editor afterward). Per-object style editor: "Circle color/thickness" renamed "Marker color/thickness", and Text color moved up to sit right under Marker thickness, ahead of the Cross-specific controls. |
 | 1.50.0 | Open Cross "Label distance" default lowered to 0.1x radius. The 🎨 per-object style editor gets a Text color picker, an "Update" button for immediate live preview without closing the dialog, and an "Undo" button that steps back through edits one at a time. New panel-level "Update preview" button re-renders all shown objects from the current Annotation style panel settings without re-querying catalogues (per-object overrides get reset). |

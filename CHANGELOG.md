@@ -1,5 +1,19 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.52.1
+
+* **Fixed: per-object style editor's Undo could skip a step after
+  picking colors.** Found during a review pass over the Annotate
+  panel's script. The dialog's checkpoint-based undo stack checkpointed
+  *before* applying a picked Marker/Cross/Text color instead of after
+  (every other field checkpoints after its value changes) — so the
+  snapshot taken right after a color pick still held the stale color,
+  and a second color pick in the same session would silently drop the
+  in-between state from the undo history. No user-visible symptom
+  besides "Undo" occasionally reverting two changes at once after
+  multiple color picks; fixed by moving the checkpoint to after the
+  color is applied, matching every other field in the dialog.
+
 ## 1.52.0
 
 * **Fixed: "Label distance" control had no effect for Circle-style
