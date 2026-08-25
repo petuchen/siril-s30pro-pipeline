@@ -349,6 +349,23 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
   title:{en:"The 13 Stages Explained", zh:"十三大步驟解說"},
   html:{
     en:`
+    <h3>Beginner quick path (7 stages)</h3>
+    <p>New to this pipeline? You don't need all 13 stages for a good result. These 7 — already checked <i>and</i> expanded by default in the app — take a raw stack all the way to a presentable, cleaned-up, stretched image. The other 6 are optional add-ons (an alternate palette, extra fine-tuning, annotation, a watermark) that start unchecked and collapsed; open one later with its ▸ arrow once you know what it does.</p>
+    <div class="tbl-scroll"><table class="tbl">
+      <tr><th>#</th><th>Stage</th><th>What to do as a beginner</th></tr>
+      <tr><td>1</td><td>Preprocess</td><td>Leave the defaults — just confirm the telescope preset it picked looks right.</td></tr>
+      <tr><td>2</td><td>Crop</td><td>Leave the defaults (5% margin trimmed on every edge).</td></tr>
+      <tr><td>3</td><td>Remove Green (SCNR)</td><td>Nothing to set — leave it checked.</td></tr>
+      <tr><td>4</td><td>Auto Gradient Removal</td><td>Turn it on only if the background still looks uneven or color-cast; otherwise leave it unchecked.</td></tr>
+      <tr><td>5</td><td>Remove Background</td><td>Leave the defaults (GraXpert AI).</td></tr>
+      <tr><td>7</td><td>Denoise</td><td>Leave the defaults; nudge Strength up if the image still looks grainy.</td></tr>
+      <tr><td>9</td><td>Stretch (VeraLux)</td><td>Click its auto-solve button for "Log D", then run.</td></tr>
+    </table></div>
+    <ol>
+      <li>Run them in order — 1, 2, 3, (4 if needed), 5, 7, 9 — checking each stage's before/after preview as you go, or just leave the default checkboxes as they are and press <b>▶ Run Full Pipeline</b> once (it silently skips every unchecked stage).</li>
+      <li>Once stage 9's preview looks good, you already have a finished, shareable image — stages 6, 8, 10–13 are all optional from here.</li>
+    </ol>
+    <div class="why"><b>Why these 7:</b> stack → crop → de-green → (de-gradient) → remove background → denoise → stretch is the shortest path from raw subs to a clean, presentable image — every other stage is a specialized refinement (star removal for palette work, an alternate color recipe, extra per-channel polish, labeling, a watermark) that most first results don't need. Read the full 1–13 breakdown below whenever you're ready to explore those.</div>
     <h3>What each stage does — and why it exists</h3>
     <p><b>1 · Preprocess (stacking).</b> Aligns and averages hundreds of subs into one deep image, then calibrates colors against real star measurements (SPCC). A collapsible "Combine with an existing master" section can also merge this run's fresh stack with an already-stacked FITS from an earlier session that has no raw subs — registered against it and combined with Siril's <code>-weight=nbstack</code>, weighted by each session's <code>STACKCNT</code> header (with a manual override for masters that don't have one) instead of averaging two very different amounts of integration time 50/50. The combined result's total integration time (and the auto-saved "..._combined" filename) reflects the true sum of both sessions' subs, not just what Siril's own 2-frame stack would otherwise report.
     <div class="why"><b>Why:</b> one 10-second exposure is faint and grainy. Averaging 300 of them behaves like a 50-minute exposure: the signal adds up while random noise cancels out. Options: calibration frames, drizzle (finer sampling), feathering for mosaics, quality-weighted stacking, FITS compression.</div></p>
@@ -378,6 +395,23 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <div class="why"><b>Why:</b> keeps your attribution and shot details attached to a photo once it leaves the folder it was processed in — the FITS data itself is left untouched.</div></p>
     <p style="margin-top:1em"><i>Every stage also has a small "Use Siril's image" button in its header that refreshes that stage's preview from whatever is currently loaded in Siril — for continuing work that happened outside the pipeline (e.g. manual Siril commands, another script).</i></p>`,
     zh:`
+    <h3>新手快速上手路徑（7 個步驟）</h3>
+    <p>剛接觸這個管線嗎？其實不需要用到全部 13 個步驟才能得到不錯的成果。以下這 7 個步驟——在程式中預設就已勾選<i>且</i>展開——就能把一組原始疊圖，一路處理到乾淨、拉伸完成、可直接分享的影像。其餘 6 個步驟則是選用的附加功能（另一種色盤、進一步微調、標註、浮水印），預設未勾選也是收合的，等你了解它們的用途後，再點 ▸ 箭頭展開即可。</p>
+    <div class="tbl-scroll"><table class="tbl">
+      <tr><th>#</th><th>步驟</th><th>新手該怎麼做</th></tr>
+      <tr><td>1</td><td>前置處理</td><td>使用預設值即可——只需確認自動偵測到的望遠鏡型號是否正確。</td></tr>
+      <tr><td>2</td><td>裁切</td><td>使用預設值即可（四邊各裁掉 5%）。</td></tr>
+      <tr><td>3</td><td>去除綠色（SCNR）</td><td>不需要調整任何設定，保持勾選即可。</td></tr>
+      <tr><td>4</td><td>自動去梯度</td><td>只有在背景看起來不均勻或有色偏時才勾選開啟；背景已經乾淨的話就保持關閉。</td></tr>
+      <tr><td>5</td><td>移除背景</td><td>使用預設值即可（GraXpert AI）。</td></tr>
+      <tr><td>7</td><td>降噪</td><td>使用預設值即可；若影像仍偏顆粒感，可調高 Strength（強度）。</td></tr>
+      <tr><td>9</td><td>拉伸（VeraLux）</td><td>點擊「Log D」旁的自動求解按鈕，然後執行。</td></tr>
+    </table></div>
+    <ol>
+      <li>依序執行：1、2、3、（需要時再加 4）、5、7、9——每一步都可以看一下前後對比預覽；或者直接保留預設的勾選狀態，一次按下<b>▶ Run Full Pipeline（執行完整管線）</b>即可，未勾選的步驟會自動略過。</li>
+      <li>只要第 9 步的預覽看起來滿意，就已經是一張完成、可以分享的成品——第 6、8、10–13 步全部都是選用項目。</li>
+    </ol>
+    <div class="why"><b>為什麼是這 7 步：</b>疊圖 → 裁切 → 去綠 →（去梯度）→ 移除背景 → 降噪 → 拉伸，是從原始子畫幅到乾淨、可分享成品最短的路徑；其餘每個步驟都是特殊用途的進階調整（移星是為了色盤重新上色、另一種配色配方、逐通道的額外潤飾、標示天體、加上浮水印），大多數第一次的成品並不需要它們。準備好深入了解時，可以往下閱讀完整的 1–13 步詳細說明。</div>
     <h3>每個步驟做什麼——以及為什麼需要它</h3>
     <p><b>1 · 前置處理（疊圖）。</b>將數百張子畫幅對齊並平均成一張深度影像，再以真實恆星測量值校正色彩（SPCC）。另有可收合的「與現有主影像合併」區塊，可將本次疊圖結果與先前工作階段中已疊好、但未保留原始子畫幅的 FITS 檔案合併——會先與該檔案對齊，再以 Siril 的 <code>-weight=nbstack</code> 依各工作階段的 <code>STACKCNT</code> 標頭加權合併（若該檔案沒有此標頭，可手動輸入子畫幅張數覆寫），而不是把兩個累積曝光時間差異懸殊的資料簡單地各半平均。合併結果的總曝光時間（以及自動儲存時使用的「..._combined」檔名）會反映兩個工作階段子畫幅的真實總和，而非 Siril 兩張影像疊圖時本身會回報的數字。
     <div class="why"><b>原因：</b>單張 10 秒曝光既暗又粗糙。把 300 張平均起來，效果如同曝光 50 分鐘：訊號累加、隨機雜訊互相抵消。選項包括：校正幀、drizzle（更細取樣）、馬賽克羽化、品質加權疊圖、FITS 壓縮。</div></p>
@@ -470,6 +504,19 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>1.53.0</td><td><b>Collapsible stage cards, defaulting to a
+        clean beginner layout.</b> Each of the 13 stage cards now has
+        its own ▸/▾ arrow next to the title, independent of the header
+        checkbox that controls whether the stage runs — clicking it
+        shows or hides that stage's settings without changing whether
+        it's enabled. Stages 1 (Preprocess), 2 (Crop), 3 (Remove
+        Green/SCNR), 4 (Auto Gradient Removal), 5 (Remove Background), 7
+        (Denoise), and 9 (Stretch) — the minimum path to a finished
+        image — start expanded; the other 6 start collapsed until
+        opened. Checking a stage's checkbox always expands it too.
+        Also: a new "Beginner quick path" section was added to the
+        "13 Stages Explained" guide page, covering just those same 7
+        stages with one line of guidance each.</td></tr>
       <tr><td>1.52.1</td><td>Bugfix found during a code review pass over
         the Annotate panel's script: the per-object style editor's Undo
         could skip a step after picking colors — the dialog's
@@ -931,6 +978,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>1.53.0</td><td><b>步驟卡片改為可收合，並預設為適合新手的簡潔版面。</b>13 個步驟卡片現在各自在標題旁多了一個 ▸／▾ 箭頭，與標題列的核取方塊（控制該步驟是否會實際執行）彼此獨立——點擊箭頭只會顯示或隱藏該步驟的設定內容，不會改變是否啟用。第 1 步（前置處理）、第 2 步（裁切）、第 3 步（去除綠色／SCNR）、第 4 步（自動去梯度）、第 5 步（移除背景）、第 7 步（降噪）、第 9 步（拉伸）——也就是完成一張成品所需的最短路徑——預設為展開狀態；其餘 6 個步驟則預設收合，直到你自己點開為止。勾選某個步驟的核取方塊時，也會一併自動展開該步驟。另外：「十三大步驟解說」文件頁新增「新手快速上手路徑」小節，只涵蓋以上同樣 7 個步驟，每個步驟僅用一句話說明該怎麼做。</td></tr>
       <tr><td>1.52.1</td><td>在檢視標註面板程式碼時發現並修正的錯誤：個別物件樣式編輯視窗的「↶ Undo（復原）」按鈕，在選取顏色後可能會跳過一個步驟——原本這個以「快照」為基礎的復原堆疊，是在套用剛選好的標記／十字／文字顏色「之前」就記錄快照，而不是「之後」（視窗裡其他所有欄位都是在數值真正改變之後才記錄快照），因此同一次開啟視窗內若連續選取兩次顏色，中間那個狀態就會被悄悄從復原紀錄中遺漏。使用上唯一可能注意到的現象，是連續選色後點擊 Undo 有時會一次跳過兩個變更；此問題已修正為與其他欄位一致，改成在顏色套用「之後」才記錄快照。</td></tr>
       <tr><td>1.52.0</td><td><b>修正「Label distance（標籤距離）」的問題並擴充功能。</b>「Label distance（標籤距離，以半徑倍數表示）」設定（面板層級與個別物件層級皆同）原本只有在標記樣式為開放式十字（Open Cross）時才會生效，選擇圓圈（Circle）樣式時調整這個滑桿完全沒有作用——現在已改為對所有標記樣式一律生效，且面板層級的控制項也從原本只在開放式十字才會顯示的區塊，移到一律可見的位置。兩個滑桿現在都允許輸入負值（最低到 -2.0 倍半徑），讓標籤可以比原本的固定下限更貼近標記，並加入下限保護，確保標籤不會與標記本身重疊。另外：<b>Custom lines（自訂內容）／Label lines（標籤內容）改為文字框輸入</b>，不再需要一行一行新增——無論是標註面板的「Custom lines」區塊，或是個別物件 🎨 編輯視窗的「Label lines」區塊，現在都可以直接輸入或貼上多行文字，每一行文字就是一行標籤內容。</td></tr>
       <tr><td>1.51.0</td><td>新功能：<b>手動在影像上點選物件</b>。標註面板新增「🖱 Pick object on image...（在影像上點選物件）」按鈕，可啟動「點擊新增」模式——直接在預覽影像上點一下，就會在該處新增一個物件，預設名稱取自該點的 RA/Dec（沿用此步驟原本使用的板解算 WCS），並套用「Annotation style」面板目前的樣式設定。此模式會持續啟用，方便連續點選新增多個物件；再次點擊按鈕或按下 Esc 即可停止。新增的物件會和一般星表物件一樣出現在「Select objects to show...」中，可透過其 🎨 編輯視窗重新命名（編輯第一行標籤文字）、調整樣式，或直接移除。另外，個別物件樣式編輯視窗中的「Circle color/thickness」已更名為「Marker color/thickness」，並將 Text color 移到 Marker thickness 正下方，排在所有十字（Cross）專屬設定之前。</td></tr>

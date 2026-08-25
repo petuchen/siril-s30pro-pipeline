@@ -73,6 +73,9 @@ QPushButton#CollapseHeader {{ background-color: transparent; color: {ACCENT};
     font-weight: bold; font-size: 10pt; text-align: left; padding: 4px 2px; }}
 QPushButton#CollapseHeader:hover {{ color: #93b4ff; }}
 QPushButton#CollapseHeader:checked {{ color: #93b4ff; }}
+QPushButton#StageExpandBtn {{ background-color: transparent; color: {ACCENT};
+    font-weight: bold; font-size: 11pt; padding: 2px 4px; border-radius: 6px; }}
+QPushButton#StageExpandBtn:hover {{ background-color: {ACCENT_DARK}; color: #ffffff; }}
 
 QProgressBar {{ border: none; border-radius: 5px; background: #262b33;
     text-align: center; color: #ffffff; height: 12px; }}

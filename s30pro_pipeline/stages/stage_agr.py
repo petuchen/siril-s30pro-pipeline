@@ -10,7 +10,12 @@ from s30pro_pipeline.agr_math import agr_correct_image
 
 class AgrMixin:
     def _build_stage_agr(self):
-        box, v = self._stage_box(4, "Auto Gradient Removal", enabled_check=False)
+        # Off by default (most images don't need it), but still one of the
+        # small set of stages a beginner is expected to look at and decide
+        # on — so it starts expanded even though unchecked, unlike the
+        # other off-by-default stages (see _stage_box's start_expanded).
+        box, v = self._stage_box(4, "Auto Gradient Removal",
+                                 enabled_check=False, start_expanded=True)
         self.stage_agr_box = box
 
         info = QLabel("Ported from Siril's own AutoGradientRemoval script "

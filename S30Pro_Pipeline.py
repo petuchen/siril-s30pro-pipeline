@@ -228,7 +228,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "1.52.1"
+VERSION = "1.53.0"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -693,7 +693,27 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         splitter.setStretchFactor(1, 2)
         splitter.setSizes([470, 940])
 
-    def _stage_box(self, number, title, enabled_check=True):
+    def _stage_box(self, number, title, enabled_check=True,
+                   start_expanded=None):
+        """Build one of the 13 numbered stage cards. `enabled_check`
+        controls whether the stage's own header checkbox starts checked
+        (i.e. whether it runs as part of "Run all") — unrelated to
+        whether its settings are visible. `start_expanded` controls
+        that visibility independently: whether the "Use Siril's image"
+        row + all of this stage's own settings start shown or collapsed
+        behind the ▸/▾ arrow button in the header. Defaults to matching
+        `enabled_check` (so a stage that's off by default also starts
+        collapsed, keeping the panel short for a first-time user), but
+        callers can override it — e.g. Auto Gradient Removal starts
+        unchecked (most images don't need it) yet still starts expanded,
+        since it's one of the small set of stages a beginner is expected
+        to look at and decide on. Checking the header checkbox always
+        auto-expands the stage (so "enabling something" never leaves it
+        hidden), but unchecking never auto-collapses it — a stage you've
+        deliberately opened to look at stays open until you collapse it
+        yourself, whether or not you end up leaving it checked."""
+        if start_expanded is None:
+            start_expanded = enabled_check
         box = QGroupBox()
         box.setCheckable(True)
         outer = QVBoxLayout(box)
@@ -716,7 +736,29 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         head.addWidget(badge)
         head.addSpacing(6)
         head.addWidget(t, 1)
+        expand_btn = QPushButton("▾" if start_expanded else "▸")
+        expand_btn.setObjectName("StageExpandBtn")
+        expand_btn.setCheckable(True)
+        expand_btn.setChecked(start_expanded)
+        expand_btn.setFixedWidth(26)
+        expand_btn.setToolTip(
+            "Show/hide this stage's settings — independent of the "
+            "checkbox above, which is whether the stage actually runs. "
+            "Checking that checkbox always expands the stage too.")
+        head.addWidget(expand_btn)
         outer.addLayout(head)
+
+        # Everything below the header — the "Use Siril's image" button and
+        # every one of this stage's own settings — lives in one `body`
+        # container so a single setVisible() call expands/collapses both
+        # in one step, independent of `content`'s own enabled/disabled
+        # (greyed-out) state below.
+        body = QWidget()
+        body.setObjectName("StageBody")
+        body.setStyleSheet("QWidget#StageBody { background: transparent; }")
+        bv = QVBoxLayout(body)
+        bv.setContentsMargins(0, 0, 0, 0)
+        bv.setSpacing(6)
 
         load_row = QHBoxLayout()
         load_row.addStretch()
@@ -733,7 +775,7 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         load_btn.clicked.connect(
             lambda: self._load_siril_current_into_stage(number - 1, title))
         load_row.addWidget(load_btn)
-        outer.addLayout(load_row)
+        bv.addLayout(load_row)
 
         # Stage content lives in its own container so unchecking the header
         # checkbox greys out/disables everything below it in one step, via
@@ -749,9 +791,21 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         v = QVBoxLayout(content)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(8)
-        outer.addWidget(content)
+        bv.addWidget(content)
 
-        box.toggled.connect(content.setEnabled)
+        outer.addWidget(body)
+        body.setVisible(start_expanded)
+
+        def _on_expand_toggle(checked):
+            body.setVisible(checked)
+            expand_btn.setText("▾" if checked else "▸")
+        expand_btn.toggled.connect(_on_expand_toggle)
+
+        def _on_enabled_toggle(checked):
+            content.setEnabled(checked)
+            if checked and not expand_btn.isChecked():
+                expand_btn.setChecked(True)  # -> _on_expand_toggle expands it
+        box.toggled.connect(_on_enabled_toggle)
         box.setChecked(enabled_check)
         content.setEnabled(enabled_check)
         return box, v

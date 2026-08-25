@@ -1,5 +1,29 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.53.0
+
+* **Stage cards are now collapsible, defaulting to a clean beginner
+  layout.** Each of the 13 stage cards now has its own ▸/▾ arrow next
+  to the title, independent of the header checkbox that controls
+  whether the stage actually runs — clicking it shows or hides that
+  stage's "Use Siril's image" button and all of its own settings,
+  without changing whether it's enabled. Stages 1 (Preprocess), 2
+  (Crop), 3 (Remove Green/SCNR), 4 (Auto Gradient Removal), 5 (Remove
+  Background), 7 (Denoise), and 9 (Stretch) — the minimum path from raw
+  subs to a finished image — start expanded; the other 6 (Remove Stars,
+  Hubble Palette, Histogram Fine-Tune, Final Touch, Annotate,
+  Watermark) start collapsed, out of the way until you want them.
+  Checking a stage's header checkbox always expands it too, so enabling
+  something never leaves it hidden; unchecking never auto-collapses,
+  so a stage you've opened to look at stays open either way.
+* **New: "Beginner quick path" section in the HTML guide's "The 13
+  Stages Explained" page.** A short table + checklist covering just
+  stages 1, 2, 3, 4, 5, 7, and 9 — one line of guidance each — for a
+  first-time user who wants a complete, presentable result without
+  reading the full 13-stage breakdown first. The full stage-by-stage
+  explanations remain right below it for anyone who wants to go
+  further.
+
 ## 1.52.1
 
 * **Fixed: per-object style editor's Undo could skip a step after

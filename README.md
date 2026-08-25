@@ -301,6 +301,7 @@ Recent highlights:
 
 | Version | Highlights |
 | --- | --- |
+| 1.53.0 | Stage cards are now collapsible via a ▸/▾ arrow, independent of the enable checkbox. Stages 1, 2, 3, 4, 5, 7, 9 (the minimum path to a finished image) start expanded; the other 6 start collapsed. Checking a stage always expands it too. New "Beginner quick path" section added to the HTML guide's "13 Stages Explained" page. |
 | 1.52.1 | Bugfix found in a code review pass: the per-object style editor's Undo could skip a step after picking colors (checkpoint happened before the color was applied instead of after). |
 | 1.52.0 | "Label distance" now applies to every marker style (was silently a no-op for Circle style) and allows negative values so labels can sit tighter than before, floor-clamped to avoid overlapping the marker. Custom lines / Label lines are now a single multi-line text box instead of add-one-line-at-a-time. |
 | 1.51.0 | New "🖱 Pick object on image..." button lets you click anywhere on the Annotate preview to manually add an object there, named from its RA/Dec by default (rename/restyle via the 🎨 editor afterward). Per-object style editor: "Circle color/thickness" renamed "Marker color/thickness", and Text color moved up to sit right under Marker thickness, ahead of the Cross-specific controls. |
