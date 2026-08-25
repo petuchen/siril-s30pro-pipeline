@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox,
     QDoubleSpinBox, QFileDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-    QSpinBox, QVBoxLayout,
+    QSpinBox, QVBoxLayout, QWidget,
 )
 from PyQt6.QtGui import QColor
 
@@ -893,6 +893,79 @@ class AnnotateMixin:
                                    th, cv2.LINE_AA)
         return drawn_count
 
+    def _build_default_label_lines(self, label, extra):
+        """Object name + whichever OpenNGC-sourced detail lines the Label
+        detail panel currently has enabled + the panel's custom lines, in
+        that order — the exact label content a fresh Annotate run would
+        produce for this object. Shared by _exec_stage_ann's per-object
+        loop and _default_style_for_object's "reset to panel default"
+        (used by the per-object style editor), so both can never
+        disagree about what "default" means. `extra` is the OpenNGC
+        type/magnitude/constellation/size dict from _filter_openngc_rows
+        (empty {} for stars/Sharpless/LdN, which OpenNGC doesn't cover)."""
+        lines = [label]
+        if self.ann_detail_type_checkbox.isChecked() and extra.get("type"):
+            lines.append(extra["type"])
+        if (self.ann_detail_mag_checkbox.isChecked()
+                and extra.get("mag") is not None):
+            lines.append(f"mag {extra['mag']:.1f}")
+        if self.ann_detail_const_checkbox.isChecked() and extra.get("const"):
+            lines.append(extra["const"])
+        if self.ann_detail_size_checkbox.isChecked() and extra.get("size"):
+            lines.append(f"{extra['size']:.1f}'")
+        lines.extend(
+            self.ann_custom_lines_list.item(i).text()
+            for i in range(self.ann_custom_lines_list.count()))
+        return lines
+
+    def _default_style_for_object(self, d):
+        """Recompute one object's marker/label style exactly as
+        _exec_stage_ann would today, from the Annotation style panel's
+        *current* settings — used by the per-object style editor's
+        "Reset to panel default" button so a per-object override can be
+        discarded without re-running the whole stage. Needs `d["r"]`
+        (marker radius) and `d["color"]` (catalogue color) already set;
+        `d.get("extra", {})` drives the label-detail lines the same way
+        _exec_stage_ann's own loop does."""
+        marker_style_text = self.ann_marker_style_combo.currentText()
+        marker_style = {
+            "Circle": "circle", "Open Cross": "cross",
+            "Circle + Open Cross": "both",
+        }[marker_style_text]
+        th = d.get("th", 2)
+        circle_th = (th if self.ann_circle_auto_th_checkbox.isChecked()
+                     else self.ann_circle_th_spin.value())
+        circle_color_override = (
+            self.ann_circle_color
+            if self.ann_circle_custom_color_checkbox.isChecked() else None)
+        cross_th = (th if self.ann_cross_auto_th_checkbox.isChecked()
+                   else self.ann_cross_th_spin.value())
+        cross_color_override = (
+            self.ann_cross_color
+            if self.ann_cross_custom_color_checkbox.isChecked() else None)
+        label_pos_text = self.ann_cross_label_pos_combo.currentText()
+        label_pref = {
+            "NE": (1, -1), "NW": (-1, -1),
+            "SE": (1, 1), "SW": (-1, 1),
+        }.get(label_pos_text)
+        if marker_style == "circle":
+            label_pref = None
+        r = d.get("r", 1) or 1
+        return {
+            "style": marker_style,
+            "circle_th": circle_th,
+            "circle_color": circle_color_override or d["color"],
+            "cross_th": cross_th,
+            "cross_color": cross_color_override or d["color"],
+            "cross_gap": r * self.ann_cross_gap_spin.value(),
+            "cross_arm": r * self.ann_cross_arm_spin.value(),
+            "label_pref": label_pref,
+            "label_extra": (r * self.ann_cross_label_dist_spin.value()
+                           if marker_style in ("cross", "both") else 0),
+            "label_lines": self._build_default_label_lines(
+                d["label"], d.get("extra", {})),
+        }
+
     def _exec_stage_ann(self, progress):
         from astropy.wcs import WCS
         import warnings
@@ -1145,27 +1218,6 @@ class AnnotateMixin:
                 # — computed once here rather than per-object, since which
                 # fields are enabled and the custom line list are both
                 # global panel settings, not per-object.
-                want_type = self.ann_detail_type_checkbox.isChecked()
-                want_mag = self.ann_detail_mag_checkbox.isChecked()
-                want_const = self.ann_detail_const_checkbox.isChecked()
-                want_size = self.ann_detail_size_checkbox.isChecked()
-                custom_lines = [
-                    self.ann_custom_lines_list.item(i).text()
-                    for i in range(self.ann_custom_lines_list.count())]
-
-                def build_label_lines(name, extra):
-                    lines = [name]
-                    if want_type and extra.get("type"):
-                        lines.append(extra["type"])
-                    if want_mag and extra.get("mag") is not None:
-                        lines.append(f"mag {extra['mag']:.1f}")
-                    if want_const and extra.get("const"):
-                        lines.append(extra["const"])
-                    if want_size and extra.get("size"):
-                        lines.append(f"{extra['size']:.1f}'")
-                    lines.extend(custom_lines)
-                    return lines
-
                 # Build the list of *drawable* objects (label + pixel
                 # position + style) instead of drawing directly — this is
                 # kept around as self._ann_drawn so "Select objects to
@@ -1195,7 +1247,9 @@ class AnnotateMixin:
                     drawable.append({
                         "label": label, "kind": kind, "x": xd, "y": yd,
                         "r": r, "color": color, "fs": fs, "th": th,
-                        "label_lines": build_label_lines(label, extra),
+                        "extra": extra,
+                        "label_lines": self._build_default_label_lines(
+                            label, extra),
                         "style": marker_style,
                         "circle_th": circle_th,
                         "circle_color": circle_color_override or color,
@@ -1676,11 +1730,248 @@ class AnnotateMixin:
         self.status_label.setText(msg)
         self.siril.log(f"Select constellations: {msg}", LogColor.GREEN)
 
+    def _show_object_style_dialog(self, d):
+        """'🎨' per-row button inside "Select objects to show..." —
+        customize a single object's marker style, colors/thickness, cross
+        geometry, and label lines, independent of the Annotation style
+        panel's defaults (which keep applying to every other object).
+        Mutates `d` (one entry of self._ann_drawn) in place on OK, using
+        the exact same dict keys _render_annotations already reads — no
+        separate per-object override plumbing needed anywhere else.
+        Returns True if anything changed (caller should re-layout and
+        redraw), False on Cancel (nothing touched)."""
+        r = d.get("r", 1) or 1
+        style_map = {"circle": "Circle", "cross": "Open Cross",
+                    "both": "Circle + Open Cross"}
+        pos_map = {(1, -1): "NE", (-1, -1): "NW",
+                  (1, 1): "SE", (-1, 1): "SW"}
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Object Style — {d['label']}")
+        dlg.resize(360, 560)
+        dv = QVBoxLayout(dlg)
+
+        info = QLabel("Overrides just this object — the Annotation style "
+                      "panel's settings are untouched and still apply to "
+                      "every other object.")
+        info.setObjectName("SubHeader")
+        info.setWordWrap(True)
+        dv.addWidget(info)
+
+        g = QGridLayout()
+        g.setHorizontalSpacing(10)
+        g.setVerticalSpacing(6)
+        g.setColumnStretch(1, 1)
+        gr = 0
+
+        g.addWidget(QLabel("Marker style:"), gr, 0)
+        style_combo = QComboBox()
+        style_combo.addItems(["Circle", "Open Cross", "Circle + Open Cross"])
+        style_combo.setCurrentText(
+            style_map.get(d.get("style", "circle"), "Circle"))
+        g.addWidget(style_combo, gr, 1)
+        gr += 1
+
+        state = {"circle_color": d.get("circle_color", d["color"]),
+                 "cross_color": d.get("cross_color", d["color"])}
+
+        def make_color_picker(key, title):
+            swatch = self._color_swatch(state[key])
+
+            def pick():
+                b_, g_, r_ = state[key]
+                color = QColorDialog.getColor(QColor(r_, g_, b_), dlg, title)
+                if color.isValid():
+                    state[key] = (color.blue(), color.green(), color.red())
+                    swatch.setStyleSheet(
+                        f"background-color: rgb({color.red()},"
+                        f"{color.green()},{color.blue()}); "
+                        "border-radius: 3px; "
+                        "border: 1px solid rgba(255,255,255,60);")
+            return swatch, pick
+
+        circle_swatch, pick_circle_color = make_color_picker(
+            "circle_color", "Circle color")
+        circle_color_btn = QPushButton("Circle color...")
+        circle_color_btn.clicked.connect(pick_circle_color)
+        g.addWidget(circle_swatch, gr, 0)
+        g.addWidget(circle_color_btn, gr, 1)
+        gr += 1
+
+        g.addWidget(QLabel("Circle thickness (px):"), gr, 0)
+        circle_th_spin = QSpinBox()
+        circle_th_spin.setRange(1, 12)
+        circle_th_spin.setValue(int(round(d.get("circle_th", d.get("th", 2)))))
+        g.addWidget(circle_th_spin, gr, 1)
+        gr += 1
+
+        cross_swatch, pick_cross_color = make_color_picker(
+            "cross_color", "Cross color")
+        cross_color_btn = QPushButton("Cross color...")
+        cross_color_btn.clicked.connect(pick_cross_color)
+        g.addWidget(cross_swatch, gr, 0)
+        g.addWidget(cross_color_btn, gr, 1)
+        gr += 1
+
+        g.addWidget(QLabel("Cross thickness (px):"), gr, 0)
+        cross_th_spin = QSpinBox()
+        cross_th_spin.setRange(1, 12)
+        cross_th_spin.setValue(int(round(d.get("cross_th", d.get("th", 2)))))
+        g.addWidget(cross_th_spin, gr, 1)
+        gr += 1
+
+        g.addWidget(QLabel("Cross gap (× radius):"), gr, 0)
+        gap_spin = QDoubleSpinBox()
+        gap_spin.setRange(0.0, 3.0)
+        gap_spin.setSingleStep(0.1)
+        gap_spin.setValue(round(d.get("cross_gap", r * 0.5) / r, 2))
+        g.addWidget(gap_spin, gr, 1)
+        gr += 1
+
+        g.addWidget(QLabel("Cross arm (× radius):"), gr, 0)
+        arm_spin = QDoubleSpinBox()
+        arm_spin.setRange(0.1, 3.0)
+        arm_spin.setSingleStep(0.1)
+        arm_spin.setValue(round(d.get("cross_arm", r * 0.7) / r, 2))
+        g.addWidget(arm_spin, gr, 1)
+        gr += 1
+
+        g.addWidget(QLabel("Label position:"), gr, 0)
+        pos_combo = QComboBox()
+        pos_combo.addItems(["Auto (avoid overlap)", "NE", "NW", "SE", "SW"])
+        pos_combo.setCurrentText(
+            pos_map.get(d.get("label_pref"), "Auto (avoid overlap)"))
+        g.addWidget(pos_combo, gr, 1)
+        gr += 1
+
+        g.addWidget(QLabel("Label distance (× radius):"), gr, 0)
+        dist_spin = QDoubleSpinBox()
+        dist_spin.setRange(0.0, 5.0)
+        dist_spin.setSingleStep(0.1)
+        dist_spin.setValue(round(d.get("label_extra", 0) / r, 2))
+        g.addWidget(dist_spin, gr, 1)
+        gr += 1
+        dv.addLayout(g)
+
+        dv.addWidget(QLabel("Label lines (double-click to edit):"))
+        lines_list = QListWidget()
+        lines_list.setMaximumHeight(110)
+        lines_list.setToolTip(
+            "The object's name plus any detail/custom lines, top to "
+            "bottom. Edit, add, or remove lines freely — this doesn't "
+            "affect any other object.")
+        for line in d.get("label_lines", [d["label"]]):
+            item = QListWidgetItem(line)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+            lines_list.addItem(item)
+        dv.addWidget(lines_list)
+
+        add_row = QHBoxLayout()
+        line_edit = QLineEdit()
+        line_edit.setPlaceholderText("New line text...")
+        add_row.addWidget(line_edit, 1)
+        add_line_btn = QPushButton("+ Add")
+        add_row.addWidget(add_line_btn)
+        remove_line_btn = QPushButton("- Remove")
+        add_row.addWidget(remove_line_btn)
+        dv.addLayout(add_row)
+
+        def add_line():
+            text = line_edit.text().strip()
+            if not text:
+                return
+            item = QListWidgetItem(text)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+            lines_list.addItem(item)
+            line_edit.clear()
+
+        def remove_line():
+            for item in lines_list.selectedItems():
+                lines_list.takeItem(lines_list.row(item))
+
+        add_line_btn.clicked.connect(add_line)
+        line_edit.returnPressed.connect(add_line)
+        remove_line_btn.clicked.connect(remove_line)
+
+        reset_btn = QPushButton("↺  Reset to panel default")
+        reset_btn.setToolTip(
+            "Discards every override above and recomputes this object's "
+            "style and label lines exactly as the Annotation style panel "
+            "would produce them right now.")
+
+        def do_reset():
+            defaults = self._default_style_for_object(d)
+            style_combo.setCurrentText(style_map[defaults["style"]])
+            for key, swatch in (("circle_color", circle_swatch),
+                                ("cross_color", cross_swatch)):
+                state[key] = defaults[key]
+                rr, gg, bb = defaults[key][2], defaults[key][1], defaults[key][0]
+                swatch.setStyleSheet(
+                    f"background-color: rgb({rr},{gg},{bb}); "
+                    "border-radius: 3px; "
+                    "border: 1px solid rgba(255,255,255,60);")
+            circle_th_spin.setValue(int(round(defaults["circle_th"])))
+            cross_th_spin.setValue(int(round(defaults["cross_th"])))
+            gap_spin.setValue(round(defaults["cross_gap"] / r, 2))
+            arm_spin.setValue(round(defaults["cross_arm"] / r, 2))
+            pos_combo.setCurrentText(
+                pos_map.get(defaults["label_pref"], "Auto (avoid overlap)"))
+            dist_spin.setValue(round(defaults["label_extra"] / r, 2))
+            lines_list.clear()
+            for line in defaults["label_lines"]:
+                item = QListWidgetItem(line)
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+                lines_list.addItem(item)
+
+        reset_btn.clicked.connect(do_reset)
+        dv.addWidget(reset_btn)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok |
+            QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        dv.addWidget(buttons)
+
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return False
+
+        style_rev = {"Circle": "circle", "Open Cross": "cross",
+                    "Circle + Open Cross": "both"}
+        style = style_rev[style_combo.currentText()]
+        pos_rev = {"NE": (1, -1), "NW": (-1, -1),
+                  "SE": (1, 1), "SW": (-1, 1)}
+        label_pref = pos_rev.get(pos_combo.currentText())
+        if style == "circle":
+            label_pref = None
+        lines = [lines_list.item(i).text().strip()
+                for i in range(lines_list.count())
+                if lines_list.item(i).text().strip()]
+        if not lines:
+            lines = [d["label"]]
+
+        d["style"] = style
+        d["circle_color"] = state["circle_color"]
+        d["circle_th"] = circle_th_spin.value()
+        d["cross_color"] = state["cross_color"]
+        d["cross_th"] = cross_th_spin.value()
+        d["cross_gap"] = r * gap_spin.value()
+        d["cross_arm"] = r * arm_spin.value()
+        d["label_pref"] = label_pref
+        d["label_extra"] = (r * dist_spin.value()
+                            if style in ("cross", "both") else 0)
+        d["label_lines"] = lines
+        return True
+
     def _show_object_selector_dialog(self):
         """'☑ Select objects to show...' — pick which labeled objects stay
         visible, redrawing instantly from the cached un-annotated base
-        canvas (no re-querying any catalogue). Main-thread only (QDialog) —
-        this is a button slot, never called from the worker thread."""
+        canvas (no re-querying any catalogue). Each row also has a '🎨'
+        button opening _show_object_style_dialog for that one object, so
+        an individual star/DSO can use a different marker style, color,
+        or label content than everything else drawn by the current
+        Annotate run. Main-thread only (QDialog) — this is a button slot,
+        never called from the worker thread."""
         base = getattr(self, "_ann_base_canvas", None)
         drawn = getattr(self, "_ann_drawn", None)
         if base is None:
@@ -1694,16 +1985,24 @@ class AnnotateMixin:
                 "The last Annotate run didn't label any objects.")
             return
 
+        H, W = base.shape[0], base.shape[1]
         # Snapshot what's on screen now so Cancel can restore it exactly —
-        # the checklist below applies live as you toggle it, not just on OK.
+        # both the visibility checklist AND any per-object style edits
+        # made while this dialog was up apply live, not just on OK. A
+        # shallow per-dict copy is enough: _show_object_style_dialog only
+        # ever *rebinds* keys like "label_lines" to a brand-new list, it
+        # never mutates an existing list/dict in place, so the copies
+        # below keep referencing the untouched original values.
         original_drawn = list(drawn)
+        original_snapshot = [dict(d) for d in drawn]
         original_canvas = self._last_annotated_canvas
 
         def apply_preview(kept_list):
             """Redraw from the un-annotated base with only `kept_list` and
             push the result straight into the preview + export canvas —
-            called on every checkbox toggle, not just when OK is pressed,
-            so the preview reflects the checklist in real time."""
+            called on every checkbox toggle and after every per-object
+            style edit, not just when OK is pressed, so the preview
+            reflects the current state in real time."""
             new_canvas = self._render_annotations(base, kept_list)
             self._ann_drawn = kept_list
             self._last_annotated_canvas = new_canvas
@@ -1719,40 +2018,65 @@ class AnnotateMixin:
 
         dlg = QDialog(self)
         dlg.setWindowTitle("Select Objects to Show")
-        dlg.resize(380, 440)
+        dlg.resize(420, 460)
         dv = QVBoxLayout(dlg)
         dlg_info = QLabel("Uncheck objects to hide them from the "
-                          "annotated image (updates live):")
+                          "annotated image (updates live). Click 🎨 to "
+                          "give one object its own marker style, color, "
+                          "or label content.")
         dlg_info.setObjectName("SubHeader")
         dlg_info.setWordWrap(True)
         dv.addWidget(dlg_info)
+
         lw = QListWidget()
+        row_checks = []  # [(d, QCheckBox), ...] — parallel to `drawn`
+
+        def rebuild_kept():
+            return [d for d, cb in row_checks if cb.isChecked()]
+
+        def on_visibility_changed(_checked=None):
+            apply_preview(rebuild_kept())
+
+        def open_style_editor(target_d):
+            changed = self._show_object_style_dialog(target_d)
+            if changed:
+                self._layout_annotation_labels(drawn, W, H)
+                apply_preview(rebuild_kept())
+
         for d in drawn:
             cat_label = CATALOG_LABELS.get(d["kind"], d["kind"].title())
-            item = QListWidgetItem(f"{cat_label} — {d['label']}")
+            row_widget = QWidget()
+            row_h = QHBoxLayout(row_widget)
+            row_h.setContentsMargins(4, 2, 4, 2)
+            cb = QCheckBox(f"{cat_label} — {d['label']}")
             r, gc, b = d["color"][2], d["color"][1], d["color"][0]
-            item.setForeground(QColor(r, gc, b))
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(Qt.CheckState.Checked)
+            cb.setStyleSheet(f"color: rgb({r},{gc},{b});")
+            cb.setChecked(True)
+            cb.toggled.connect(on_visibility_changed)
+            row_h.addWidget(cb, 1)
+            style_btn = QPushButton("🎨")
+            style_btn.setFixedWidth(30)
+            style_btn.setToolTip(
+                "Customize this object's marker style, colors, and label "
+                "lines — independent of the Annotation style panel's "
+                "defaults.")
+            style_btn.clicked.connect(
+                lambda _checked=False, dd=d: open_style_editor(dd))
+            row_h.addWidget(style_btn)
+            item = QListWidgetItem()
+            item.setSizeHint(row_widget.sizeHint())
             lw.addItem(item)
+            lw.setItemWidget(item, row_widget)
+            row_checks.append((d, cb))
         dv.addWidget(lw, 1)
-
-        def on_item_changed(_item):
-            kept_now = [d for i, d in enumerate(drawn)
-                       if lw.item(i).checkState() == Qt.CheckState.Checked]
-            apply_preview(kept_now)
-
-        lw.itemChanged.connect(on_item_changed)
 
         btn_row = QHBoxLayout()
         select_all_btn = QPushButton("Select All")
         deselect_all_btn = QPushButton("Deselect All (hide all)")
         select_all_btn.clicked.connect(
-            lambda: [lw.item(i).setCheckState(Qt.CheckState.Checked)
-                    for i in range(lw.count())])
+            lambda: [cb.setChecked(True) for _, cb in row_checks])
         deselect_all_btn.clicked.connect(
-            lambda: [lw.item(i).setCheckState(Qt.CheckState.Unchecked)
-                    for i in range(lw.count())])
+            lambda: [cb.setChecked(False) for _, cb in row_checks])
         btn_row.addWidget(select_all_btn)
         btn_row.addWidget(deselect_all_btn)
         btn_row.addStretch()
@@ -1767,14 +2091,20 @@ class AnnotateMixin:
 
         if dlg.exec() != QDialog.DialogCode.Accepted:
             # Cancel — put back exactly what was showing before this dialog
-            # opened, undoing any live preview changes made while it was up.
+            # opened, undoing both the visibility checklist AND any
+            # per-object style edits made while it was up. Restoring each
+            # dict's contents in place (rather than just re-pointing
+            # `drawn`) matters because other code (e.g. export) may hold
+            # its own reference to these same dict objects.
+            for d, snap in zip(drawn, original_snapshot):
+                d.clear()
+                d.update(snap)
             apply_preview(original_drawn)
             self._last_annotated_canvas = original_canvas
             self.status_label.setText("Select objects: canceled, no change.")
             return
 
-        kept = [d for i, d in enumerate(drawn)
-               if lw.item(i).checkState() == Qt.CheckState.Checked]
+        kept = rebuild_kept()
         hidden_count = len(original_drawn) - len(kept)
         msg = (f"Hid {hidden_count} object"
               f"{'s' if hidden_count != 1 else ''} "

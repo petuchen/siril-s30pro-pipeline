@@ -638,6 +638,164 @@ def test_annotate_catalog_helpers(pipeline, np):
           arm_painted, f"pixel on N arm ({cx},{arm_y}) = {out[arm_y, cx]}")
 
 
+class _FakeCheckbox:
+    def __init__(self, checked=False):
+        self._checked = checked
+
+    def isChecked(self):
+        return self._checked
+
+
+class _FakeSpin:
+    def __init__(self, value=0):
+        self._value = value
+
+    def value(self):
+        return self._value
+
+
+class _FakeCombo:
+    def __init__(self, text=""):
+        self._text = text
+
+    def currentText(self):
+        return self._text
+
+
+class _FakeListItem:
+    def __init__(self, text):
+        self._text = text
+
+    def text(self):
+        return self._text
+
+
+class _FakeListWidget:
+    def __init__(self, lines=()):
+        self._items = [_FakeListItem(t) for t in lines]
+
+    def count(self):
+        return len(self._items)
+
+    def item(self, i):
+        return self._items[i]
+
+
+class _FakeAnnPanel:
+    """Duck-typed stand-in for the Annotation-style panel's Qt widgets —
+    just enough surface (.isChecked()/.value()/.currentText()/.count()/
+    .item()) for _build_default_label_lines and _default_style_for_object
+    (both plain instance methods that only read those widgets) to run
+    without a real QApplication/UnifiedPipelineWindow, matching this test
+    suite's existing no-GUI-instantiation approach."""
+
+    def __init__(self, *, detail_type=False, detail_mag=False,
+                detail_const=False, detail_size=False, custom_lines=(),
+                marker_style="Circle", circle_auto_th=True, circle_th=2,
+                circle_custom_color=False, circle_color=(10, 20, 30),
+                cross_auto_th=True, cross_th=2, cross_custom_color=False,
+                cross_color=(40, 50, 60), cross_gap=0.5, cross_arm=0.7,
+                cross_label_pos="Auto (avoid overlap)", cross_label_dist=0.3):
+        self.ann_detail_type_checkbox = _FakeCheckbox(detail_type)
+        self.ann_detail_mag_checkbox = _FakeCheckbox(detail_mag)
+        self.ann_detail_const_checkbox = _FakeCheckbox(detail_const)
+        self.ann_detail_size_checkbox = _FakeCheckbox(detail_size)
+        self.ann_custom_lines_list = _FakeListWidget(custom_lines)
+        self.ann_marker_style_combo = _FakeCombo(marker_style)
+        self.ann_circle_auto_th_checkbox = _FakeCheckbox(circle_auto_th)
+        self.ann_circle_th_spin = _FakeSpin(circle_th)
+        self.ann_circle_custom_color_checkbox = _FakeCheckbox(circle_custom_color)
+        self.ann_circle_color = circle_color
+        self.ann_cross_auto_th_checkbox = _FakeCheckbox(cross_auto_th)
+        self.ann_cross_th_spin = _FakeSpin(cross_th)
+        self.ann_cross_custom_color_checkbox = _FakeCheckbox(cross_custom_color)
+        self.ann_cross_color = cross_color
+        self.ann_cross_gap_spin = _FakeSpin(cross_gap)
+        self.ann_cross_arm_spin = _FakeSpin(cross_arm)
+        self.ann_cross_label_pos_combo = _FakeCombo(cross_label_pos)
+        self.ann_cross_label_dist_spin = _FakeSpin(cross_label_dist)
+
+
+def test_annotate_per_object_style(pipeline, np):
+    print("\n== Annotate stage: per-object style helper functions ==")
+
+    # _build_default_label_lines: name only when every detail field is off
+    # and there are no custom lines.
+    panel = _FakeAnnPanel()
+    lines = pipeline.UnifiedPipelineWindow._build_default_label_lines(
+        panel, "M 42", {"type": "Nebula", "mag": 4.0, "const": "Orion",
+                        "size": 85.0})
+    check("_build_default_label_lines: name only when all detail fields "
+          "are off", lines == ["M 42"], f"got {lines}")
+
+    # All 4 built-in fields + 2 custom lines, in the documented order.
+    panel = _FakeAnnPanel(detail_type=True, detail_mag=True,
+                          detail_const=True, detail_size=True,
+                          custom_lines=["Session 1", "Bortle 4"])
+    lines = pipeline.UnifiedPipelineWindow._build_default_label_lines(
+        panel, "M 42", {"type": "Nebula", "mag": 4.0, "const": "Orion",
+                        "size": 85.0})
+    check("_build_default_label_lines: name, then type/mag/const/size, "
+          "then custom lines, in that order",
+          lines == ["M 42", "Nebula", "mag 4.0", "Orion", "85.0'",
+                    "Session 1", "Bortle 4"],
+          f"got {lines}")
+
+    # A field enabled in the panel but missing from this particular
+    # object's `extra` (e.g. a star, which OpenNGC doesn't cover) is
+    # silently skipped rather than showing "None" or crashing.
+    panel = _FakeAnnPanel(detail_type=True, detail_const=True)
+    lines = pipeline.UnifiedPipelineWindow._build_default_label_lines(
+        panel, "Sirius", {})
+    check("_build_default_label_lines: missing extra fields are skipped, "
+          "not shown as blank/None", lines == ["Sirius"], f"got {lines}")
+
+    # _default_style_for_object calls self._build_default_label_lines
+    # internally — attach the real (unbound) method onto the fake panel
+    # class so that inner call resolves too, instead of re-stubbing it.
+    _FakeAnnPanel._build_default_label_lines = \
+        pipeline.UnifiedPipelineWindow._build_default_label_lines
+
+    # _default_style_for_object: Circle-only panel setting produces
+    # style="circle" and label_pref=None (matching _exec_stage_ann's
+    # own "circle never gets a label_pref" rule) even if a Label
+    # position was picked (it only applies once Open Cross is active).
+    panel = _FakeAnnPanel(marker_style="Circle", circle_auto_th=False,
+                          circle_th=5, cross_label_pos="NE")
+    d = {"label": "M 42", "r": 20, "color": (1, 2, 3), "th": 2, "extra": {}}
+    style = pipeline.UnifiedPipelineWindow._default_style_for_object(panel, d)
+    check("_default_style_for_object: Circle style carries the fixed "
+          "thickness through, not the auto (th) value",
+          style["style"] == "circle" and style["circle_th"] == 5,
+          f"got {style}")
+    check("_default_style_for_object: Circle style always has "
+          "label_pref=None regardless of the Label position dropdown",
+          style["label_pref"] is None, f"got {style}")
+    check("_default_style_for_object: no custom color override -> falls "
+          "back to the object's own catalogue color",
+          style["circle_color"] == (1, 2, 3), f"got {style}")
+
+    # Open Cross panel setting: label_pref honors the dropdown, cross
+    # gap/arm/label-distance scale with the object's own radius, and a
+    # custom cross color overrides the catalogue color.
+    panel = _FakeAnnPanel(marker_style="Open Cross", cross_label_pos="SW",
+                          cross_custom_color=True, cross_color=(9, 9, 9),
+                          cross_gap=0.4, cross_arm=0.6, cross_label_dist=0.2)
+    d = {"label": "NGC 1977", "r": 10, "color": (1, 2, 3), "th": 2,
+        "extra": {}}
+    style = pipeline.UnifiedPipelineWindow._default_style_for_object(panel, d)
+    check("_default_style_for_object: Open Cross honors the Label "
+          "position dropdown (SW)",
+          style["label_pref"] == (-1, 1), f"got {style}")
+    check("_default_style_for_object: cross gap/arm/label distance scale "
+          "with this object's own radius (r=10)",
+          style["cross_gap"] == 4.0 and style["cross_arm"] == 6.0 and
+          style["label_extra"] == 2.0, f"got {style}")
+    check("_default_style_for_object: custom cross color overrides the "
+          "catalogue color",
+          style["cross_color"] == (9, 9, 9), f"got {style}")
+
+
 def test_palette_nebulachrome(pipeline, np):
     print("\n== UnifiedPipelineWindow._palette_nebulachrome() ==")
     # Synthetic image: a dim, red-dominant "background" everywhere, with a
@@ -1297,6 +1455,7 @@ def main():
     test_auto_gradient_removal(pipeline, np)
     test_subsky_box_editor_helpers(pipeline, np)
     test_annotate_catalog_helpers(pipeline, np)
+    test_annotate_per_object_style(pipeline, np)
     test_constellation_lines(pipeline, np)
 
     print(f"\n{_PASS} passed, {_FAIL} failed.")

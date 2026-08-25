@@ -1,5 +1,25 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.49.0
+
+* **New feature: per-object annotation style overrides.** Every row in
+  "☑ Select objects to show..." now has a 🎨 button that opens a small
+  editor for that one object — marker style (Circle/Open Cross/both),
+  circle and cross colors and thickness, cross gap/arm/label position/
+  label distance, and the label's text lines (add/edit/remove freely,
+  same as the panel's own custom-lines list) — completely independent
+  of the Annotation style panel, which keeps applying to every other
+  object. Edits apply immediately to the live preview, same as toggling
+  visibility, and a "↺ Reset to panel default" button in the editor
+  discards the override and recomputes that object's style/label lines
+  exactly as a fresh Annotate run would. Cancelling "Select objects to
+  show..." now also undoes any per-object style edits made while it was
+  open, not just visibility changes. Like the rest of "Select objects
+  to show...", overrides are a post-run preview/export adjustment —
+  re-running the Annotate stage regenerates every object from the panel
+  defaults, so overrides don't persist across a re-run (nor through
+  Export/Import settings, which only ever captured panel-level state).
+
 ## 1.48.0
 
 * **Annotate panel reorganized into a clear 3-step flow.** The stage card
