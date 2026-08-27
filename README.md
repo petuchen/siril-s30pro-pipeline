@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-1.55.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.56.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -63,7 +63,7 @@ progressively cleaning the result. Here is the whole journey, in order:
 | 9 | **Stretch** | Brightens the image from "almost black" to visible, without destroying colors (VeraLux) | Cameras record linearly, but deep-sky objects are ~1000× fainter than what a screen shows. Stretching lifts the faint signal into the visible range |
 | 10 | **Histogram fine-tune** | Interactive per-color-channel adjustment with a draggable histogram | After the big stretch, small color balance corrections make the difference between "okay" and "wow" |
 | 11 | **Final touch** | Brightness / contrast / saturation / sharpening — like editing a phone photo | The familiar last-mile polish, with live preview |
-| 12 | **Annotate** | Labels stars and deep-sky objects (Messier/NGC/IC/Sharpless/LdN) in the field, with per-catalog colors and a select/deselect list, plus a one-click "Remove all annotations". Marker style can be a Circle, an Open Cross (a reticle that stops short of the object so it stays unobscured), or both, each with independent thickness/color controls. Every run also writes an `annotated_*.json` file next to the JPG, listing every labeled object's name, RA/Dec, catalog type, apparent size, and full on-image style (position, marker/label colors, thickness, geometry) | Turns a plate-solved image into a labeled reference view; pick exactly which objects to show, then save the annotated frame. The JSON companion file lets you script against "what got labeled and where" without parsing pixels back out of the picture |
+| 12 | **Annotate** | Labels stars and deep-sky objects (Messier/NGC/IC/Sharpless/LdN) in the field, with per-catalog colors and a select/deselect list, plus a one-click "Remove all annotations". Marker style can be a Circle, an Open Cross (a reticle that stops short of the object so it stays unobscured), or both, each with independent thickness/color controls. Every run also writes an `annotated_*.json` file next to the JPG, listing every labeled object's name, RA/Dec, catalog type, apparent size, and full on-image style (position, marker/label colors, thickness, geometry) — a "📥 Import annotation details..." button reloads one of these files and redraws exactly those objects onto the current base image, no catalogue queries or plate solving needed | Turns a plate-solved image into a labeled reference view; pick exactly which objects to show, then save the annotated frame. The JSON companion file lets you script against "what got labeled and where" without parsing pixels back out of the picture, or re-apply a saved annotation set later without re-running the whole stage |
 | 13 | **Watermark** | Draws a semi-transparent info block (object, date, telescope, your own "Author" credit line, etc.) onto the image | Great for sharing — keeps your attribution and shot details attached to the picture |
 
 **Comet Stack mode** (Preprocess's "Stacking method" dropdown): for comets
@@ -320,6 +320,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 1.56.0 | New "📥 Import annotation details..." button reloads a saved `annotated_*.json` and redraws exactly those objects onto the current base image, no catalogue queries needed. JSON export gained font size/thickness fields for a full round-trip. |
 | 1.55.0 | Annotate now auto-saves a companion `annotated_*.json` file with every run — every labeled object's name, RA/Dec, catalog type, apparent size, and full on-image style, alongside the usual JPG. |
 | 1.54.2 | Troubleshooting and Changelog's "Recent highlights" tables are now collapsed by default (`<details>`/`<summary>`), so the README reads shorter top to bottom. |
 | 1.54.1 | "Expand All"/"Collapse All" now also select/deselect every stage (previously visibility-only), fixed an edge case where an already-unchecked-but-expanded stage could be left out of sync, and moved onto one row with "Import settings". New README badges. |

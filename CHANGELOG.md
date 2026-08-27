@@ -1,5 +1,27 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.56.0
+
+* **New: "📥 Import annotation details..." button.** The companion
+  `annotated_*.json` file 1.55.0 started auto-saving with every
+  Annotate run can now be loaded back in — this button reads a
+  previously saved JSON and redraws exactly those objects onto the
+  current un-annotated base canvas, with no catalogue queries or plate
+  solving involved. Meant for re-applying a saved annotation set back
+  onto the same image it came from (reopening this session later, or
+  after a later stage that doesn't move pixels), not a general "restore
+  any annotation onto any image" tool — a warning appears (import still
+  proceeds) if the file's saved image size doesn't match the current
+  one, since every object's position would then be off. Like "Select
+  objects to show...", importing fully replaces what's currently shown
+  rather than adding to it.
+* The JSON export gained two fields (`label_font_scale`,
+  `label_thickness_px`) needed for a full round-trip reconstruction —
+  previously the font size/stroke thickness used to draw each label
+  weren't recorded at all, which the new Import feature surfaced as a
+  gap. Older `annotated_*.json` files (from 1.55.0) missing these
+  still import fine, falling back to generic defaults.
+
 ## 1.55.0
 
 * **New: Annotate now auto-saves a companion JSON file with every run.**

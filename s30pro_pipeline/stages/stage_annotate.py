@@ -566,6 +566,18 @@ class AnnotateMixin:
         save_row2.addWidget(self.ann_remove_all_btn)
         v.addLayout(save_row2)
 
+        self.ann_import_btn = QPushButton("📥  Import annotation details...")
+        self.ann_import_btn.setToolTip(
+            "Load a previously saved annotated_*.json (auto-saved next "
+            "to the JPG on every run) and redraw exactly those objects "
+            "onto the current un-annotated base canvas — no catalogue "
+            "queries or plate solving needed. Meant for re-applying a "
+            "saved annotation set to the same image it came from; a "
+            "warning appears if the file's image size doesn't match "
+            "the current one, since every position would then be off.")
+        self.ann_import_btn.clicked.connect(self._import_annotation_details_json)
+        v.addWidget(self.ann_import_btn)
+
         self.ann_pick_btn = QPushButton("🖱  Pick object on image...")
         self.ann_pick_btn.setCheckable(True)
         self.ann_pick_btn.setToolTip(
@@ -1009,7 +1021,11 @@ class AnnotateMixin:
         Marker/text colors are exported as `[R, G, B]` (0-255) even
         though this stage stores them internally as OpenCV's native BGR
         tuples — flipped here so a reader unfamiliar with OpenCV doesn't
-        have to know that convention just to use this file."""
+        have to know that convention just to use this file. Every field
+        written here is also everything _drawable_from_annotation_json_obj
+        needs to fully reconstruct the object for "📥 Import annotation
+        details..." — the two are a matched pair; if one gains a field
+        the other cares about, update both."""
         def rgb(bgr):
             if bgr is None:
                 return None
@@ -1029,6 +1045,8 @@ class AnnotateMixin:
                 "pixel_x": d["x"], "pixel_y": d["y"],
                 "marker_style": d.get("style", "circle"),
                 "marker_radius_px": d["r"],
+                "label_font_scale": d["fs"],
+                "label_thickness_px": d["th"],
                 "circle_color_rgb": rgb(d.get("circle_color", d["color"])),
                 "circle_thickness_px": d.get("circle_th", d["th"]),
                 "cross_color_rgb": rgb(d.get("cross_color", d["color"])),
@@ -1050,6 +1068,127 @@ class AnnotateMixin:
         }
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
+
+    @staticmethod
+    def _drawable_from_annotation_json_obj(obj):
+        """The inverse of _write_annotation_details_json's per-object
+        block — turns one entry from an imported annotated_*.json's
+        "objects" array back into the internal drawable-dict shape
+        _render_annotations/_layout_annotation_labels expect, for
+        "📥 Import annotation details...". Tolerant of a sparser/older
+        object (missing label_font_scale/label_thickness_px, added
+        after 1.55.0's first release) by falling back to generic
+        defaults rather than raising, since the point of Import is to
+        work with whatever JSON the user hands it."""
+        def bgr(rgb_list):
+            if not rgb_list:
+                return None
+            r, g, b = rgb_list
+            return (b, g, r)
+
+        circle_color = bgr(obj.get("circle_color_rgb")) or (200, 200, 200)
+        cross_color = bgr(obj.get("cross_color_rgb")) or circle_color
+        text_color = bgr(obj.get("text_color_rgb")) or circle_color
+        label_pref = obj.get("label_pref")
+        label_pref = tuple(label_pref) if label_pref is not None else None
+        label = obj.get("label", "")
+
+        return {
+            "label": label,
+            "kind": obj.get("kind", "custom"),
+            "x": int(round(obj["pixel_x"])), "y": int(round(obj["pixel_y"])),
+            "r": int(round(obj.get("marker_radius_px", 10))),
+            # No separate "color" field is exported — every color this
+            # stage actually draws with (circle/cross/text) is already
+            # exported explicitly above, so "color" only needs to be
+            # *some* valid fallback for code paths that read it (e.g. a
+            # future "Reset to panel default" on an imported object).
+            "color": circle_color,
+            "fs": float(obj.get("label_font_scale", 1.0)),
+            "th": int(obj.get("label_thickness_px", 2)),
+            "extra": obj.get("detail") or {},
+            "ra": obj.get("ra_deg"), "dec": obj.get("dec_deg"),
+            "size_arcmin": obj.get("size_arcmin"),
+            "label_lines": obj.get("label_lines") or [label],
+            "style": obj.get("marker_style", "circle"),
+            "circle_th": int(obj.get("circle_thickness_px", 2)),
+            "circle_color": circle_color,
+            "cross_th": int(obj.get("cross_thickness_px", 2)),
+            "cross_color": cross_color,
+            "cross_gap": float(obj.get("cross_gap_px") or 0.0),
+            "cross_arm": float(obj.get("cross_arm_px") or 0.0),
+            "label_pref": label_pref,
+            "label_extra": float(obj.get("label_extra_px") or 0.0),
+            "text_color": text_color,
+        }
+
+    def _import_annotation_details_json(self):
+        """'📥 Import annotation details...' — loads a previously saved
+        annotated_*.json (auto-written next to the JPG by every Annotate
+        run, see _write_annotation_details_json) and redraws exactly
+        those objects onto the current un-annotated base canvas, with
+        no catalogue queries or plate solving involved. Meant for
+        re-applying a saved annotation set back onto the same image it
+        was generated from — e.g. reopening this session later, or
+        after a later stage that doesn't move pixels — rather than a
+        general-purpose "restore any annotation onto any image" tool:
+        every object's pixel position is whatever was saved, so a
+        mismatched image size makes every position wrong (a warning is
+        shown, but the import still proceeds, in case the offset is
+        close enough to be useful or you just want to inspect the
+        data). Like "Select objects to show...", this fully replaces
+        self._ann_drawn — it's a preview/export-time state, not
+        additive to whatever's currently shown."""
+        base = getattr(self, "_ann_base_canvas", None)
+        if base is None:
+            QMessageBox.information(
+                self, "No annotated image",
+                "Run the Annotate stage at least once first, so there's "
+                "an un-annotated base canvas to redraw the imported "
+                "objects onto.")
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import annotation details", self.cwd,
+            "JSON Files (*.json)")
+        if not path:
+            return
+
+        try:
+            with open(path, encoding="utf-8") as f:
+                payload = json.load(f)
+            objects = payload.get("objects", [])
+            drawable = [self._drawable_from_annotation_json_obj(o)
+                       for o in objects]
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Import failed",
+                f"Couldn't read \"{os.path.basename(path)}\": {e}")
+            return
+
+        H, W = base.shape[0], base.shape[1]
+        json_w, json_h = payload.get("image_width"), payload.get("image_height")
+        if json_w and json_h and (json_w != W or json_h != H):
+            QMessageBox.warning(
+                self, "Image size mismatch",
+                f"This file was saved for a {json_w}×{json_h} image, "
+                f"but the current one is {W}×{H} — imported object "
+                "positions will likely be wrong. Importing anyway.")
+
+        self._ann_drawn = drawable
+        new_canvas = self._render_annotations(base, drawable)
+        self._last_annotated_canvas = new_canvas
+        annotated_rgb = cv2.cvtColor(new_canvas, cv2.COLOR_BGR2RGB).astype(
+            np.float32) / 255.0
+        snap = self.snapshots.get(IDX_ANN, {})
+        snap["after"] = make_qimage(annotated_rgb, fits_orientation=False)
+        self.snapshots[IDX_ANN] = snap
+        self.snapshot_ready.emit(IDX_ANN)
+        self.status_label.setText(
+            f"Imported {len(drawable)} object(s) from "
+            f"{os.path.basename(path)}.")
+        self.siril.log(
+            f"Annotate: imported {len(drawable)} object(s) from {path}.",
+            LogColor.GREEN)
 
     def _exec_stage_ann(self, progress):
         from astropy.wcs import WCS

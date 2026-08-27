@@ -941,6 +941,54 @@ def test_annotate_details_json(pipeline, np):
           and star["size_arcmin"] is None and star["detail"] == {}
           and star["marker_style"] == "circle", f"got {star}")
 
+    # Round-trip: _drawable_from_annotation_json_obj (used by "📥 Import
+    # annotation details...") must reconstruct a drawable dict that
+    # _render_annotations/_layout_annotation_labels can use exactly like
+    # the original — same position, style, colors (converted back from
+    # RGB to the internal BGR tuples), geometry, and label content.
+    m42_back = pipeline.UnifiedPipelineWindow._drawable_from_annotation_json_obj(m42)
+    check("_drawable_from_annotation_json_obj: reconstructs position, "
+          "radius, style and geometry unchanged",
+          m42_back["x"] == 120 and m42_back["y"] == 80
+          and m42_back["r"] == 30 and m42_back["style"] == "cross"
+          and m42_back["cross_gap"] == 12.0 and m42_back["cross_arm"] == 21.0
+          and m42_back["label_extra"] == 3.0, f"got {m42_back}")
+    check("_drawable_from_annotation_json_obj: colors round-trip back to "
+          "the original (B,G,R) tuples",
+          m42_back["circle_color"] == (10, 20, 30)
+          and m42_back["cross_color"] == (40, 50, 60)
+          and m42_back["text_color"] == (70, 80, 90), f"got {m42_back}")
+    check("_drawable_from_annotation_json_obj: label_pref comes back as "
+          "a tuple (JSON has no tuple type, only lists), matching what "
+          "_POS_KEY_TO_TEXT/_TEXT_TO_POS_KEY key on",
+          m42_back["label_pref"] == (1, -1)
+          and isinstance(m42_back["label_pref"], tuple), f"got {m42_back}")
+    check("_drawable_from_annotation_json_obj: ra/dec/size_arcmin/extra/"
+          "label_lines round-trip",
+          m42_back["ra"] == 83.822 and m42_back["dec"] == -5.391
+          and m42_back["size_arcmin"] == 65.0
+          and m42_back["extra"] == {"type": "Diffuse Nebula", "mag": 4.0,
+                                    "const": "Orion", "size": 65.0}
+          and m42_back["label_lines"] ==
+              ["M 42", "Diffuse Nebula", "mag 4.0"], f"got {m42_back}")
+
+    # A minimal/sparse JSON object (e.g. hand-written, or missing fields
+    # added after 1.55.0's first release) must reconstruct with sane
+    # defaults rather than raising — the whole point of Import is to be
+    # forgiving about what it's handed.
+    sparse_back = pipeline.UnifiedPipelineWindow._drawable_from_annotation_json_obj(
+        {"label": "Bare Object", "pixel_x": 10, "pixel_y": 20})
+    check("_drawable_from_annotation_json_obj: a minimal object (just "
+          "label + pixel position) reconstructs without raising, with "
+          "sane fallback defaults",
+          sparse_back["label"] == "Bare Object"
+          and sparse_back["x"] == 10 and sparse_back["y"] == 20
+          and sparse_back["kind"] == "custom"
+          and sparse_back["label_lines"] == ["Bare Object"]
+          and sparse_back["label_pref"] is None
+          and sparse_back["circle_color"] == (200, 200, 200),
+          f"got {sparse_back}")
+
 
 def test_palette_nebulachrome(pipeline, np):
     print("\n== UnifiedPipelineWindow._palette_nebulachrome() ==")
