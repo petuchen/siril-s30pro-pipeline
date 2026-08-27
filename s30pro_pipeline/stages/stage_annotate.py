@@ -3,6 +3,7 @@ UnifiedPipelineWindow."""
 
 import os
 import csv
+import json
 import math
 import tempfile
 from datetime import datetime
@@ -989,6 +990,67 @@ class AnnotateMixin:
             "text_color": d["color"],
         }
 
+    @staticmethod
+    def _write_annotation_details_json(json_path, drawable, W, H,
+                                       image_path):
+        """Writes every labeled object's full sky-position + on-image
+        style data to a standalone JSON file next to the annotated JPG
+        (same basename, `.json` instead of `.jpg`) — a machine-readable
+        companion to the picture itself, for anyone who wants to script
+        against "what got labeled and where" instead of parsing pixels
+        back out of the image. Written automatically at the end of every
+        Annotate run (see _exec_stage_ann), covering exactly the objects
+        that ended up in that run's output image — not a live/interactive
+        snapshot, so later "Select objects to show..."/"Remove all
+        annotations"/pick-object edits (which only touch the on-screen
+        preview, never re-save the JPG) don't rewrite it either; the next
+        actual Run does.
+
+        Marker/text colors are exported as `[R, G, B]` (0-255) even
+        though this stage stores them internally as OpenCV's native BGR
+        tuples — flipped here so a reader unfamiliar with OpenCV doesn't
+        have to know that convention just to use this file."""
+        def rgb(bgr):
+            if bgr is None:
+                return None
+            b, g, r = bgr
+            return [r, g, b]
+
+        objects = []
+        for d in drawable:
+            objects.append({
+                "label": d["label"],
+                "kind": d["kind"],
+                "ra_deg": d.get("ra"),
+                "dec_deg": d.get("dec"),
+                "size_arcmin": d.get("size_arcmin"),
+                "detail": d.get("extra", {}),
+                "label_lines": d.get("label_lines", [d["label"]]),
+                "pixel_x": d["x"], "pixel_y": d["y"],
+                "marker_style": d.get("style", "circle"),
+                "marker_radius_px": d["r"],
+                "circle_color_rgb": rgb(d.get("circle_color", d["color"])),
+                "circle_thickness_px": d.get("circle_th", d["th"]),
+                "cross_color_rgb": rgb(d.get("cross_color", d["color"])),
+                "cross_thickness_px": d.get("cross_th", d["th"]),
+                "cross_gap_px": d.get("cross_gap"),
+                "cross_arm_px": d.get("cross_arm"),
+                "label_pref": d.get("label_pref"),
+                "label_extra_px": d.get("label_extra", 0),
+                "text_color_rgb": rgb(d.get("text_color", d["color"])),
+            })
+
+        payload = {
+            "generated": datetime.now().isoformat(timespec="seconds"),
+            "image_file": os.path.basename(image_path),
+            "image_width": W,
+            "image_height": H,
+            "object_count": len(objects),
+            "objects": objects,
+        }
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+
     def _exec_stage_ann(self, progress):
         from astropy.wcs import WCS
         import warnings
@@ -1279,6 +1341,14 @@ class AnnotateMixin:
                         "label": label, "kind": kind, "x": xd, "y": yd,
                         "r": r, "color": color, "fs": fs, "th": th,
                         "extra": extra,
+                        # ra/dec/size_arcmin aren't used by rendering (only
+                        # the pixel position x/y is) — kept on the dict
+                        # purely so _write_annotation_details_json can
+                        # export each object's real sky position/size
+                        # alongside its on-image style, without having to
+                        # re-derive them from `targets` (which isn't kept
+                        # around after this loop).
+                        "ra": ra, "dec": dec, "size_arcmin": size_arcmin,
                         "label_lines": self._build_default_label_lines(
                             label, extra),
                         "style": marker_style,
@@ -1321,6 +1391,17 @@ class AnnotateMixin:
             now = datetime.now().strftime("%Y-%m-%d_%H%M")
             out_path = os.path.join(self.cwd, f"annotated_{now}.jpg")
             cv2.imwrite(out_path, canvas, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            json_path = os.path.splitext(out_path)[0] + ".json"
+            try:
+                self._write_annotation_details_json(
+                    json_path, drawable, W, H, out_path)
+            except Exception as e:
+                # Never let a JSON-export hiccup fail the whole Annotate
+                # run — the annotated JPG above is already safely on
+                # disk regardless of what happens here.
+                self.siril.log(
+                    f"Annotate: couldn't write annotation-details JSON: "
+                    f"{e}", LogColor.SALMON)
         else:
             self._ann_base_canvas = canvas.copy()
             self._ann_drawn = []
@@ -1357,7 +1438,8 @@ class AnnotateMixin:
             progress(f"Annotate: done — {drawn} objects labeled"
                      f"{const_suffix}.", 1.0)
             self.siril.log(f"Annotated image saved: {out_path} "
-                           f"({drawn} objects{const_suffix})", LogColor.GREEN)
+                           f"({drawn} objects{const_suffix}) — details: "
+                           f"{json_path}", LogColor.GREEN)
         else:
             progress("Annotate: overlay hidden — showing plain image.", 1.0)
             self.siril.log("Annotate: overlay hidden, no labels drawn.",

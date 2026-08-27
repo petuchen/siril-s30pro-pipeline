@@ -870,6 +870,78 @@ def test_annotate_per_object_style(pipeline, np):
           f"override max G={override_out[:, :, 1].max()}")
 
 
+def test_annotate_details_json(pipeline, np):
+    print("\n== Annotate stage: _write_annotation_details_json() ==")
+    import json
+
+    drawable = [
+        {
+            "label": "M 42", "kind": "messier", "x": 120, "y": 80, "r": 30,
+            "color": (10, 20, 30), "fs": 1.0, "th": 2,
+            "extra": {"type": "Diffuse Nebula", "mag": 4.0,
+                     "const": "Orion", "size": 65.0},
+            "ra": 83.822, "dec": -5.391, "size_arcmin": 65.0,
+            "label_lines": ["M 42", "Diffuse Nebula", "mag 4.0"],
+            "style": "cross", "circle_th": 2, "circle_color": (10, 20, 30),
+            "cross_th": 3, "cross_color": (40, 50, 60),
+            "cross_gap": 12.0, "cross_arm": 21.0,
+            "label_pref": (1, -1), "label_extra": 3.0,
+            "text_color": (70, 80, 90),
+        },
+        {
+            # A star: no ra/dec/size_arcmin/extra recorded (as if built
+            # from an older code path) — the writer must not choke on
+            # a sparser dict, since d.get(...) is used throughout for
+            # every optional field.
+            "label": "HIP 1234", "kind": "star", "x": 5, "y": 5, "r": 8,
+            "color": (200, 200, 200), "fs": 0.8, "th": 2,
+        },
+    ]
+
+    fd, json_path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    try:
+        pipeline.UnifiedPipelineWindow._write_annotation_details_json(
+            json_path, drawable, 4000, 3000, "/tmp/annotated_test.jpg")
+        with open(json_path, encoding="utf-8") as f:
+            payload = json.load(f)
+    finally:
+        os.remove(json_path)
+
+    check("_write_annotation_details_json: top-level metadata is correct",
+          payload["image_width"] == 4000 and payload["image_height"] == 3000
+          and payload["object_count"] == 2
+          and payload["image_file"] == "annotated_test.jpg",
+          f"got {payload}")
+    m42 = payload["objects"][0]
+    check("_write_annotation_details_json: RA/Dec/size pass through "
+          "unchanged for a catalogue object",
+          m42["ra_deg"] == 83.822 and m42["dec_deg"] == -5.391
+          and m42["size_arcmin"] == 65.0, f"got {m42}")
+    check("_write_annotation_details_json: detail fields (type/mag/const) "
+          "pass through as 'detail'",
+          m42["detail"] == {"type": "Diffuse Nebula", "mag": 4.0,
+                            "const": "Orion", "size": 65.0}, f"got {m42}")
+    check("_write_annotation_details_json: colors are exported as [R,G,B], "
+          "flipped from the internal (B,G,R) tuple",
+          m42["circle_color_rgb"] == [30, 20, 10]
+          and m42["cross_color_rgb"] == [60, 50, 40]
+          and m42["text_color_rgb"] == [90, 80, 70], f"got {m42}")
+    check("_write_annotation_details_json: marker style/geometry fields "
+          "pass through",
+          m42["marker_style"] == "cross" and m42["marker_radius_px"] == 30
+          and m42["cross_gap_px"] == 12.0 and m42["cross_arm_px"] == 21.0
+          and m42["label_pref"] == [1, -1], f"got {m42}")
+
+    star = payload["objects"][1]
+    check("_write_annotation_details_json: missing optional fields "
+          "(ra/dec/size/extra) on a sparser dict become null/empty, "
+          "not a crash",
+          star["ra_deg"] is None and star["dec_deg"] is None
+          and star["size_arcmin"] is None and star["detail"] == {}
+          and star["marker_style"] == "circle", f"got {star}")
+
+
 def test_palette_nebulachrome(pipeline, np):
     print("\n== UnifiedPipelineWindow._palette_nebulachrome() ==")
     # Synthetic image: a dim, red-dominant "background" everywhere, with a
@@ -1530,6 +1602,7 @@ def main():
     test_subsky_box_editor_helpers(pipeline, np)
     test_annotate_catalog_helpers(pipeline, np)
     test_annotate_per_object_style(pipeline, np)
+    test_annotate_details_json(pipeline, np)
     test_constellation_lines(pipeline, np)
 
     print(f"\n{_PASS} passed, {_FAIL} failed.")

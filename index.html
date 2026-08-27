@@ -389,8 +389,8 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <div class="why"><b>Why:</b> after the big stretch, small per-color corrections fix residual casts and set the final black point — the difference between "okay" and "wow".</div></p>
     <p><b>11 · Final touch.</b> Phone-style brightness, contrast, saturation and sharpening sliders with live preview.
     <div class="why"><b>Why:</b> the familiar last-mile polish, applied at full resolution only when you commit.</div></p>
-    <p><b>12 · Annotate.</b> Labels stars and deep-sky objects on the plate-solved field. Stars come from Siril's own <code>conesearch</code> (local Bright Star Catalogue, or the online BSC). Messier/NGC/IC come from the OpenNGC database (downloaded once, cached locally). Sharpless and Lynds Dark Nebulae come from live VizieR cone searches. Each catalog has its own checkbox and annotation color; a "Select objects to show..." dialog lets you tick/untick individual objects with the preview updating instantly, and Undo / "Save annotated image..." / a one-click "Remove all annotations" button (mirroring Watermark's clear-all) are all available. Object markers are sized to the object's real apparent diameter (from each catalog's size field, converted through the plate solve's pixel scale) rather than a fixed circle, and label text is placed by a layout pass that avoids overlapping other labels and never lets a label get cut off at the image edge.
-    <div class="why"><b>Why:</b> turns a plate-solved frame into a labeled reference view. This replaces the 1.18–1.24 approach of scraping Siril's <code>catsearch</code> console log, which had no documented, stable output format and never resolved reliably; 1.25 removed the stage entirely, and this rebuild sources catalog data independently instead. Real-size markers make a wide diffuse target like North America Nebula visually distinct from a small planetary nebula at a glance, and the label layout keeps crowded fields (a rich Messier region, a dense star field) readable instead of a pile of overlapping text.</div></p>
+    <p><b>12 · Annotate.</b> Labels stars and deep-sky objects on the plate-solved field. Stars come from Siril's own <code>conesearch</code> (local Bright Star Catalogue, or the online BSC). Messier/NGC/IC come from the OpenNGC database (downloaded once, cached locally). Sharpless and Lynds Dark Nebulae come from live VizieR cone searches. Each catalog has its own checkbox and annotation color; a "Select objects to show..." dialog lets you tick/untick individual objects with the preview updating instantly, and Undo / "Save annotated image..." / a one-click "Remove all annotations" button (mirroring Watermark's clear-all) are all available. Object markers are sized to the object's real apparent diameter (from each catalog's size field, converted through the plate solve's pixel scale) rather than a fixed circle, and label text is placed by a layout pass that avoids overlapping other labels and never lets a label get cut off at the image edge. Every run also writes an <code>annotated_*.json</code> file next to the JPG — name, RA/Dec, catalog type, apparent size, and the full on-image style (position, colors, thickness, geometry) for every labeled object.
+    <div class="why"><b>Why:</b> turns a plate-solved frame into a labeled reference view. The JSON companion file lets you script against "what got labeled and where" — build your own object list, a catalog, or a lookup table — without parsing pixels back out of the picture. This replaces the 1.18–1.24 approach of scraping Siril's <code>catsearch</code> console log, which had no documented, stable output format and never resolved reliably; 1.25 removed the stage entirely, and this rebuild sources catalog data independently instead. Real-size markers make a wide diffuse target like North America Nebula visually distinct from a small planetary nebula at a glance, and the label layout keeps crowded fields (a rich Messier region, a dense star field) readable instead of a pile of overlapping text.</div></p>
     <p><b>13 · Watermark.</b> Draws a semi-transparent info block onto the image — object name, date, telescope, integration time, FOV, image size, Bortle estimate, plus an optional free-text "Author" credit line you type yourself — with position, opacity, and one/two-column layout controls.
     <div class="why"><b>Why:</b> keeps your attribution and shot details attached to a photo once it leaves the folder it was processed in — the FITS data itself is left untouched.</div></p>
     <p style="margin-top:1em"><i>Every stage also has a small "Use Siril's image" button in its header that refreshes that stage's preview from whatever is currently loaded in Siril — for continuing work that happened outside the pipeline (e.g. manual Siril commands, another script).</i></p>`,
@@ -435,8 +435,8 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <div class="why"><b>原因：</b>大拉伸之後，細微的各色修正能消除殘餘色偏並定好最終黑點——這是「還可以」與「驚豔」的差別。</div></p>
     <p><b>11 · 最後修飾。</b>手機修圖式的亮度、對比、飽和度與銳化滑桿，即時預覽。
     <div class="why"><b>原因：</b>熟悉的最後一哩潤飾，確認後才以全解析度套用。</div></p>
-    <p><b>12 · 標註。</b>在已完成天體測量解析的影像上標示恆星與深空天體。恆星資料來自 Siril 自身的 <code>conesearch</code>（本地明亮星表，或線上 BSC）。Messier／NGC／IC 來自 OpenNGC 資料庫（僅下載一次並快取於本機）。Sharpless 與 Lynds 暗星雲則來自即時的 VizieR 錐形搜尋。每個星表都有各自的核取方塊與標註顏色；「選擇要顯示的天體...」對話框可逐一勾選／取消天體，預覽即時更新，並提供還原、「儲存已標註影像...」，以及與浮水印步驟相同、可一鍵清除全部標註的「移除全部標註」按鈕。標記圓圈現在會依天體的實際視直徑（透過解析後的像素比例換算各星表的尺寸欄位）繪製，不再是固定大小；文字標籤則經過版面配置演算法安排，會避免互相重疊，也保證絕不會被影像邊緣裁切。
-    <div class="why"><b>原因：</b>把完成天體測量解析的影像變成可標示的參考圖。此功能取代了 1.18–1.24 版本中解析 Siril <code>catsearch</code> 主控台紀錄的做法——該做法沒有固定文件化的輸出格式，始終無法穩定運作；1.25 版曾完全移除此步驟，本版改為獨立取得星表資料重新建構。依實際大小繪製標記，能讓北美星雲這類大範圍瀰漫天體與行星狀星雲等小天體一眼區分；而智慧文字版面配置能讓密集星場或天體聚集的區域維持可讀，不再是一堆疊在一起的文字。</div></p>
+    <p><b>12 · 標註。</b>在已完成天體測量解析的影像上標示恆星與深空天體。恆星資料來自 Siril 自身的 <code>conesearch</code>（本地明亮星表，或線上 BSC）。Messier／NGC／IC 來自 OpenNGC 資料庫（僅下載一次並快取於本機）。Sharpless 與 Lynds 暗星雲則來自即時的 VizieR 錐形搜尋。每個星表都有各自的核取方塊與標註顏色；「選擇要顯示的天體...」對話框可逐一勾選／取消天體，預覽即時更新，並提供還原、「儲存已標註影像...」，以及與浮水印步驟相同、可一鍵清除全部標註的「移除全部標註」按鈕。標記圓圈現在會依天體的實際視直徑（透過解析後的像素比例換算各星表的尺寸欄位）繪製，不再是固定大小；文字標籤則經過版面配置演算法安排，會避免互相重疊，也保證絕不會被影像邊緣裁切。每次執行也都會在 JPG 旁自動寫出一份 <code>annotated_*.json</code> 檔案——記錄每個標示天體的名稱、赤經赤緯（RA/Dec）、星表類型、視大小，以及完整的畫面樣式（位置、顏色、線寬、幾何參數）。
+    <div class="why"><b>原因：</b>把完成天體測量解析的影像變成可標示的參考圖。這份 JSON 附屬檔案，讓你不必從影像像素反推，就能直接用程式讀取「標示了什麼、標示在哪裡」——可以自行建立物件清單、目錄，或查找表。此功能取代了 1.18–1.24 版本中解析 Siril <code>catsearch</code> 主控台紀錄的做法——該做法沒有固定文件化的輸出格式，始終無法穩定運作；1.25 版曾完全移除此步驟，本版改為獨立取得星表資料重新建構。依實際大小繪製標記，能讓北美星雲這類大範圍瀰漫天體與行星狀星雲等小天體一眼區分；而智慧文字版面配置能讓密集星場或天體聚集的區域維持可讀，不再是一堆疊在一起的文字。</div></p>
     <p><b>13 · 浮水印。</b>在影像上疊加半透明資訊區塊——目標名稱、日期、望遠鏡、累積曝光時間、視場、影像尺寸、Bortle 估計值，並可自行輸入「Author」署名欄位——並可調整位置、透明度與單／雙欄版面。
     <div class="why"><b>原因：</b>讓照片離開處理資料夾後，仍保留署名與拍攝資訊——原始 FITS 資料完全不會被修改。</div></p>
     <p style="margin-top:1em"><i>每個步驟的標題列也都有一個小小的「使用 Siril 目前影像」按鈕，可將該步驟的預覽重新整理為 Siril 目前載入的影像——方便接續在管線之外進行的操作（例如手動下達 Siril 指令，或執行其他腳本）。</i></p>`
@@ -504,6 +504,21 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>1.55.0</td><td><b>Annotate now auto-saves a companion JSON
+        file with every run.</b> Alongside the usual
+        <code>annotated_YYYY-MM-DD_HHMM.jpg</code>, the stage now also
+        writes <code>annotated_YYYY-MM-DD_HHMM.json</code> — a
+        machine-readable record of every labeled object in that run:
+        name, catalogue kind, RA/Dec (degrees), apparent size
+        (arcmin), OpenNGC detail fields (type/magnitude/constellation)
+        when available, and the full on-image style that produced the
+        picture (pixel position, marker style, marker/cross/text
+        colors as <code>[R, G, B]</code>, thickness, cross geometry,
+        label lines). Written at the end of every actual Run, same as
+        the JPG — later interactive edits ("Select objects to
+        show...", "Remove all annotations", pick-object) update the
+        live preview but don't rewrite this file; the next Run
+        does.</td></tr>
       <tr><td>1.54.2</td><td>README: the Troubleshooting table and
         Changelog's "Recent highlights" table are now collapsed by
         default behind a click-to-expand
@@ -1013,6 +1028,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>1.55.0</td><td><b>標註步驟現在每次執行都會自動儲存一份對應的 JSON 檔案。</b>除了原本的 <code>annotated_YYYY-MM-DD_HHMM.jpg</code> 之外，現在也會一併寫出 <code>annotated_YYYY-MM-DD_HHMM.json</code>——記錄該次執行中每個標示天體的完整資訊：名稱、星表類型、赤經赤緯（RA/Dec，度）、視大小（角分）、OpenNGC 詳細欄位（若有：類型／星等／所屬星座），以及產生該畫面所用的完整樣式（像素座標、標記樣式、標記／十字／文字顏色，以 <code>[R, G, B]</code> 表示、線寬、十字幾何參數、標籤內容）。此檔案會在每次「實際執行」結束時自動寫出，與 JPG 檔案的儲存時機相同——之後在「選擇要顯示的天體...」「移除全部標註」「在影像上點選物件」等互動操作，只會更新即時預覽，不會重新寫入這份檔案；下一次執行才會更新。</td></tr>
       <tr><td>1.54.2</td><td>README：「Troubleshooting（疑難排解）」表格與「Changelog（更新日誌）」的「Recent highlights（近期重點）」表格，現在預設收合在可點擊展開的 <code>&lt;details&gt;</code>／<code>&lt;summary&gt;</code> 摺疊區塊中——GitHub 會將其呈現為原生的可展開／收合元件——讓整頁從上到下捲動時更簡潔。兩個章節標題本身仍維持可見，點擊即可展開，內容完全沒有刪減。</td></tr>
       <tr><td>1.54.1</td><td><b>「Expand All（全部展開）」／「Collapse All（全部收合）」現在也會一併勾選／取消勾選所有步驟。</b>承接 1.54.0 版：這兩個按鈕原本只會改變顯示狀態，不會動到每個步驟自己的啟用核取方塊——現在會一併勾選／取消勾選所有步驟，與標題列核取方塊原本的行為一致（勾選某步驟會展開它，取消勾選則會收合它）。同時也修正了因此發現的邊界情況：如果某個步驟原本就已經處於目標的勾選狀態（例如「自動去梯度」預設未勾選但預設展開），就不會觸發原本的「核取方塊→箭頭」同步機制，導致按下「Collapse All」時該步驟仍可能維持展開——現在這兩個按鈕會直接設定每個步驟的核取方塊與箭頭狀態，不再仰賴訊號是否觸發。「Import settings」「Expand All」「Collapse All」三個按鈕也改為同一列、等寬顯示。另外：README 新增徽章（版本、授權、最低 Siril 版本、支援平台、最後提交時間）。</td></tr>
       <tr><td>1.54.0</td><td>左側面板頂端的「⤒ Import settings（匯入設定）」旁，新增「⌄ Expand All（全部展開）」／「⌃ Collapse All（全部收合）」兩個按鈕——可一次展開或收合所有步驟的設定內容，效果等同逐一點擊每個步驟自己的 ▸／▾ 箭頭，不會改變任何步驟是否啟用。</td></tr>

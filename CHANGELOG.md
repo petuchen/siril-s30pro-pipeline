@@ -1,5 +1,23 @@
 # S30 Pro Pipeline — Changelog
 
+## 1.55.0
+
+* **New: Annotate now auto-saves a companion JSON file with every run.**
+  Alongside the usual `annotated_YYYY-MM-DD_HHMM.jpg`, the stage now
+  also writes `annotated_YYYY-MM-DD_HHMM.json` — a machine-readable
+  record of every labeled object in that run: name, catalogue kind,
+  RA/Dec (degrees), apparent size (arcmin), OpenNGC detail fields
+  (type/magnitude/constellation) when available, and the full on-image
+  style that produced the picture (pixel position, marker style,
+  marker/cross/text colors as `[R, G, B]`, thickness, cross geometry,
+  label lines). Written automatically at the end of every actual Run —
+  same persistence point as the JPG itself, so later interactive edits
+  ("Select objects to show...", "Remove all annotations", "🖱 Pick
+  object on image...") update the live preview but don't rewrite this
+  file; the next Run does. A JSON-write failure is logged but never
+  fails the Annotate run — the JPG is already safely saved by then
+  either way.
+
 ## 1.54.2
 
 * **README: Troubleshooting and Changelog's "Recent highlights" tables
