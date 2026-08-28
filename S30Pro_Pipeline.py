@@ -242,7 +242,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.0.2"
+VERSION = "2.0.3"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -369,6 +369,9 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         # needs to be threaded rather than a plain synchronous call.
         self._preview_worker = None
         self._preview_pending = False
+        # A "Run this stage"/"Run all" click that arrived while the above
+        # preview fetch was in flight — see _launch()'s guard.
+        self._pending_launch = None
 
         # Scratch folder for expensive intermediate results (currently the
         # StarNet star/starless split used by the Hubble Palette stage) so
@@ -675,10 +678,17 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
 
     def _on_preview_fetch_done(self):
         """Shared tail of all three PreviewFetchWorker outcomes: clear the
-        in-flight marker, then re-run _refresh_preview() if a newer
-        request arrived while this fetch was running (see the
+        in-flight marker, then either fire a queued "Run this stage"/"Run
+        all" click (see _launch()'s guard — takes priority, since it's an
+        explicit user action) or re-run _refresh_preview() if a newer
+        navigation request arrived while this fetch was running (see the
         _preview_pending comment in _refresh_preview)."""
         self._preview_worker = None
+        if self._pending_launch is not None:
+            stage_fns, self._pending_launch = self._pending_launch, None
+            self._preview_pending = False
+            self._launch(stage_fns)
+            return
         if self._preview_pending:
             self._refresh_preview()
 
@@ -883,6 +893,18 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         if self.worker and self.worker.isRunning():
             QMessageBox.information(self, "Busy", "A stage is already running.")
             return
+        # A background PreviewFetchWorker may still be fetching Siril's
+        # current image (e.g. right after opening the window, for whichever
+        # stage has no snapshot yet — see _refresh_preview). Starting the
+        # stage-execution Worker while that's in flight means two threads
+        # hit the same Siril connection at once, which can hang rather than
+        # error. Queue the launch instead and fire it from
+        # _on_preview_fetch_done() once the fetch clears.
+        if self._preview_worker is not None and self._preview_worker.isRunning():
+            self._pending_launch = stage_fns
+            self.status_label.setText("Waiting for preview to finish loading…")
+            return
+        self._pending_launch = None
 
         def job(progress):
             for fn in stage_fns:

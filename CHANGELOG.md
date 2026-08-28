@@ -1,5 +1,18 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.0.3
+
+* **Fixed: "Run this stage" could stall with nothing happening, even on
+  the very first stage.** Introduced by 2.0.2: opening the window kicks
+  off a background `PreviewFetchWorker` fetch for whichever stage has no
+  snapshot yet (stage 1, on a fresh launch), and `_launch()` had no guard
+  against starting the stage-execution `Worker` while that fetch was
+  still in flight — two threads then called into the same Siril
+  connection at once, which hangs rather than errors. `_launch()` now
+  queues the run request instead (`_pending_launch`) if a preview fetch
+  is in progress, and fires it from the fetch's completion handler once
+  the connection is free.
+
 ## 2.0.2
 
 * **Fixed: switching to a stage that hasn't run yet could briefly stall
