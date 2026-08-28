@@ -13,7 +13,7 @@ _stage_toggle_pairs — so no stage mixin needs editing to boot on v2.
 Stages then migrate to `_advanced_section()` one at a time.
 """
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QFrame, QGroupBox, QHBoxLayout, QLabel,
     QProgressBar, QPushButton, QScrollArea, QSplitter, QStackedWidget,
@@ -178,7 +178,21 @@ class UiV2Mixin:
         # never fires) — call this explicitly so the very first stage shown
         # already reflects whatever's loaded in Siril, same as every later
         # stage change does via _on_preview_stage_changed.
-        self._refresh_preview()
+        #
+        # Deferred via singleShot(0) rather than called directly: this
+        # method fetches Siril's *full-resolution* current image
+        # (self.siril.get_image_pixeldata()) and runs it through
+        # to_hwc_float/display_autostretch/make_qimage — real work, and on
+        # a typical smart-telescope stack (tens of megapixels) not
+        # instant. _build_ui() runs inside __init__(), which runs before
+        # the caller's win.show() — so calling this directly here meant
+        # the whole plugin window stayed unshown/frozen for however long
+        # that fetch+stretch took, on every single launch (whenever Siril
+        # already had an image loaded, the normal case). Queuing it for
+        # the next event-loop tick instead lets __init__ finish and the
+        # window actually appear first; the preview then pops in a beat
+        # later instead of blocking the launch itself.
+        QTimer.singleShot(0, self._refresh_preview)
 
     def _build_preview(self):
         right = QWidget()

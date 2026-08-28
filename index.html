@@ -504,6 +504,26 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.0.1</td><td><b>Fixed: the window could take a long time
+        to appear after launching.</b> The v2 window shell's
+        <code>_build_ui()</code> ended with an unconditional call to
+        <code>_refresh_preview()</code>, which fetches Siril's
+        full-resolution current image and runs it through the display
+        stretch/QImage conversion — real work, easily a few seconds on
+        a typical smart-telescope stack. Since <code>_build_ui()</code>
+        runs inside <code>__init__()</code>, which runs before the
+        window is shown, that whole fetch+stretch blocked the window
+        from appearing at all, on every launch where Siril already had
+        an image loaded (the normal case). Deferred with
+        <code>QTimer.singleShot(0, ...)</code> so the window now
+        appears immediately; the preview populates a beat later
+        instead of gating the launch itself. Also fixed a startup
+        crash ("no FITS image" right after opening, before loading
+        anything) — sirilpy's <code>get_image_pixeldata()</code>
+        raises its own <code>SirilError</code> directly instead of
+        returning <code>None</code>, which the existing guard didn't
+        catch; normalized to <code>RuntimeError</code> like every
+        other caller already expects.</td></tr>
       <tr><td>2.0.0</td><td><b>Rebuilt window: new dark "Industry" theme, permanent stage rail, one-stage-at-a-time settings pane.</b> The 13 stages become a permanent left rail (grouped Stack / Clean / Stretch / Finish) that doubles as the progress display, replacing the old scrolling column of thirteen stacked cards. Each stage keeps two or three controls visible with the rest behind an ADVANCED disclosure. Image info and run progress move to a session ribbon across the top; the bottom buttons collapse to one primary (Run Full Pipeline), one secondary (Save image) and an overflow menu. "Expand All"/"Collapse All" are gone (their enable/disable job moved into the overflow menu). New square-cornered, hairline-bordered theme with one steel-blue accent; window adapts below 1180px, minimum 960×640.</td></tr>
       <tr><td>1.56.0</td><td><b>New "📥 Import annotation details..."
         button.</b> The companion <code>annotated_*.json</code> file
@@ -1045,6 +1065,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.0.1</td><td><b>修正：啟動後視窗可能要等很久才會出現。</b>v2 視窗架構的 <code>_build_ui()</code> 結尾原本會無條件呼叫 <code>_refresh_preview()</code>，這個函式會取得 Siril 目前載入的「完整解析度」影像，並執行顯示用拉伸與 QImage 轉換——這是真正的運算量，對一般智慧望遠鏡疊圖（動輒數千萬像素）來說，輕鬆就要花上好幾秒。由於 <code>_build_ui()</code> 是在 <code>__init__()</code> 內執行，而這又發生在視窗顯示「之前」，因此只要 Siril 已經載入影像（也就是一般情況：先疊圖，再啟動這個外掛），整個擷取＋拉伸的過程就會讓視窗完全無法顯示。現已改用 <code>QTimer.singleShot(0, ...)</code> 延後執行，讓視窗立即顯示；預覽畫面則會稍後才補上，不再卡住整個啟動流程。另外也修正了一個啟動時的當機問題——在尚未載入任何影像的情況下開啟外掛時會出現「no FITS image」錯誤：sirilpy 的 <code>get_image_pixeldata()</code> 在沒有影像時會直接丟出自己的 <code>SirilError</code>，而不是回傳 <code>None</code>，導致原本的判斷式沒能攔截到這個情況；現已統一轉換為 <code>RuntimeError</code>，與其他呼叫端原本預期的行為一致。</td></tr>
       <tr><td>2.0.0</td><td><b>重新打造主視窗：全新深色「Industry」主題、常駐步驟導覽列、一次只顯示一個步驟的設定面板。</b>13 個步驟改為常駐在左側的導覽列（依 Stack／Clean／Stretch／Finish 四個階段分組），同時兼作進度顯示——取代原本一長串垂直捲動、十三張卡片疊在一起的版面，設定面板現在一次只顯示一個步驟。每個步驟在面板中保留二、三個最常用的控制項，其餘設定收在「ADVANCED（進階）」摺疊區塊中（預設收合，並標示裡面有幾項設定、是否維持預設值）。影像資訊與執行進度移到視窗頂端的工作階段狀態列；底部按鈕精簡為一個主要按鈕（Run Full Pipeline）、一個次要按鈕（Save image）與一個「更多」選單。「Expand All」／「Collapse All」已移除——一次只顯示一個步驟，沒有需要展開的東西，其啟用／停用功能改移到「更多」選單中。新增方角、細邊框、單一鋼藍色點綴的新主題；視窗寬度低於 1180px 時會自動調整，最小視窗尺寸為 960×640。</td></tr>
       <tr><td>1.56.0</td><td><b>新增「📥 Import annotation details...（匯入標註詳細資料...）」按鈕。</b>1.55.0 版開始，標註步驟每次執行都會自動儲存一份對應的 <code>annotated_*.json</code> 檔案，現在這份檔案可以重新匯入——此按鈕會讀取先前儲存的 JSON，並把裡面記錄的天體直接畫回目前尚未標註的基底影像上，完全不需要重新查詢星表或重新板解算。這個功能是設計用來把儲存過的標註結果，重新套用回「原本產生它的那張影像」——並非通用的「把任意標註套用到任意影像」工具；如果檔案記錄的影像尺寸與目前影像不符，會跳出警告（但仍會繼續匯入）。與「選擇要顯示的天體...」相同，匯入會完全取代目前畫面上顯示的內容，而不是疊加上去。JSON 匯出格式也新增了兩個欄位（<code>label_font_scale</code>、<code>label_thickness_px</code>），用來支援完整的往返還原——舊版（1.55.0）沒有這兩個欄位的檔案仍可正常匯入，只是會改用通用的預設值。</td></tr>
       <tr><td>1.55.0</td><td><b>標註步驟現在每次執行都會自動儲存一份對應的 JSON 檔案。</b>除了原本的 <code>annotated_YYYY-MM-DD_HHMM.jpg</code> 之外，現在也會一併寫出 <code>annotated_YYYY-MM-DD_HHMM.json</code>——記錄該次執行中每個標示天體的完整資訊：名稱、星表類型、赤經赤緯（RA/Dec，度）、視大小（角分）、OpenNGC 詳細欄位（若有：類型／星等／所屬星座），以及產生該畫面所用的完整樣式（像素座標、標記樣式、標記／十字／文字顏色，以 <code>[R, G, B]</code> 表示、線寬、十字幾何參數、標籤內容）。此檔案會在每次「實際執行」結束時自動寫出，與 JPG 檔案的儲存時機相同——之後在「選擇要顯示的天體...」「移除全部標註」「在影像上點選物件」等互動操作，只會更新即時預覽，不會重新寫入這份檔案；下一次執行才會更新。</td></tr>

@@ -1,5 +1,31 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.0.1
+
+* **Fixed: the pipeline window could take a long time to even appear
+  after launching.** The v2 window shell's `_build_ui()` ended with an
+  unconditional call to `_refresh_preview()`, which fetches Siril's
+  *full-resolution* current image and runs it through the display
+  stretch/QImage conversion — real work, easily a few seconds on a
+  typical smart-telescope stack (tens of megapixels). Since
+  `_build_ui()` runs inside `__init__()`, which runs *before* the
+  window is shown, that whole fetch+stretch blocked the window from
+  appearing at all, on every launch where Siril already had an image
+  loaded (the normal case — you stack, then launch the pipeline).
+  Deferred with `QTimer.singleShot(0, ...)` so the window now appears
+  immediately; the preview populates a beat later instead of gating
+  the launch itself.
+* **Fixed: startup crash "no FITS image" right after opening the
+  pipeline**, before loading anything. `_get_current_image()` called
+  sirilpy's `get_image_pixeldata()`, which raises its own `SirilError`
+  directly when nothing's loaded (it never returns `None`) — the
+  existing `if data is None: raise RuntimeError(...)` guard never
+  caught that case, so the exception propagated uncaught out of the
+  new startup preview-refresh call and crashed window construction.
+  Normalized to `RuntimeError` so every existing caller that already
+  expects/catches that (the preview refresh, "Use Siril's image", and
+  every stage's execution on the worker thread) is covered.
+
 ## 2.0.0
 
 * **Rebuilt window: new dark "Industry" theme, permanent stage rail,
