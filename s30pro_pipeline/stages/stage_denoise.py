@@ -31,6 +31,14 @@ class DenoiseMixin:
         self.denoise_models = get_available_local_models("denoise-ai-models")
         self.denoise_model_combo.addItems(sorted(self.denoise_models.keys())
                                           or ["No models found"])
+        self.denoise_model_combo.setToolTip(
+            "Known issue on Mac: the 3.x denoise models (3.0.0/3.0.1/3.0.2)\n"
+            "fail to compile under CoreML with an 'Espresso exception:\n"
+            "Invalid blob shape' error, so GPU acceleration silently falls\n"
+            "back to CPU for them (see the Denoise completion log). This is\n"
+            "a bug in the 3.x model's ONNX export, not a setting here — see\n"
+            "github.com/Steffenhir/GraXpert/issues/178. If you hit that on\n"
+            "GPU acceleration, a 2.x model compiles and runs on GPU fine.")
         if self.denoise_models:
             self.denoise_model_combo.setCurrentIndex(
                 self.denoise_model_combo.count() - 1)
@@ -120,10 +128,29 @@ class DenoiseMixin:
             requested = graxpert_helpers.LAST_ONNX_REQUESTED_PROVIDERS
             err = graxpert_helpers.LAST_ONNX_FALLBACK_ERROR
             if err:
-                self.siril.log(
-                    f"Denoise: GPU acceleration was requested but creating "
-                    f"the ONNX session with {requested} failed, so it fell "
-                    f"back to CPU. Error: {err}", LogColor.SALMON)
+                if "Espresso exception" in err and "Invalid blob shape" in err:
+                    # Confirmed match against a known upstream bug: the 3.x
+                    # denoise models' ONNX export doesn't compile under
+                    # CoreML on Mac at all (same error, same tensor shapes,
+                    # reported against GraXpert's own desktop app —
+                    # github.com/Steffenhir/GraXpert/issues/178). Not
+                    # something this plugin or its settings can work
+                    # around; a 2.x model is reported to compile and run
+                    # on GPU fine.
+                    self.siril.log(
+                        f"Denoise: GPU acceleration failed because the "
+                        f"selected model doesn't compile under CoreML on "
+                        f"Mac (known bug in the 3.x denoise models' ONNX "
+                        f"export — see github.com/Steffenhir/GraXpert/"
+                        f"issues/178). Fell back to CPU. Try a 2.x model "
+                        f"instead if you want GPU acceleration.",
+                        LogColor.SALMON)
+                else:
+                    self.siril.log(
+                        f"Denoise: GPU acceleration was requested but "
+                        f"creating the ONNX session with {requested} "
+                        f"failed, so it fell back to CPU. Error: {err}",
+                        LogColor.SALMON)
             elif requested and requested != ["CPUExecutionProvider"]:
                 self.siril.log(
                     f"Denoise: GPU acceleration was requested and "

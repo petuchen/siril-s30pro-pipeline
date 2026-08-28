@@ -1,5 +1,20 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.1.3
+
+* **Identified: GPU acceleration failing on the 3.x denoise models is a
+  known upstream bug, not a local issue.** A user's diagnostic log (from
+  2.1.2's new error reporting) showed `Error compiling model: compiler
+  error: Espresso exception: "Invalid blob shape" ... (1, 300, 1, 1)
+  (1, 123, 1, 1)` — an exact match, down to the tensor shapes, for
+  [Steffenhir/GraXpert#178](https://github.com/Steffenhir/GraXpert/issues/178):
+  the 3.x denoise models' ONNX export doesn't compile under CoreML on
+  Mac at all. 2.x models are reported to work fine on GPU. Added a
+  tooltip on the Denoise stage's model dropdown explaining this, and
+  the completion log now recognizes this specific error and points
+  straight at the known cause and the 2.x-model workaround instead of
+  the more generic diagnostic message.
+
 ## 2.1.2
 
 * **Added: diagnostics when Denoise's "GPU acceleration" is checked but
