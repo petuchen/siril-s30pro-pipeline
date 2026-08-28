@@ -1,5 +1,18 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.0.4
+
+* **Improved: the split preview's right half no longer goes blank for a
+  stage that hasn't run yet.** For a stage with no snapshot,
+  `_refresh_preview()`'s background fetch was showing the current Siril
+  image as "before" with `None` for "after" — leaving the right half of
+  the split view black, which read as broken rather than "nothing to
+  compare yet". Now shows the same image on both sides instead, so the
+  split divider still works (drag it and both halves match) without
+  implying a stage result that doesn't exist. Each stage's before/after
+  once it *has* run is unchanged — this only affects the not-yet-run
+  case.
+
 ## 2.0.3
 
 * **Fixed: "Run this stage" could stall with nothing happening, even on

@@ -242,7 +242,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.0.3"
+VERSION = "2.0.4"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -693,7 +693,14 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
             self._refresh_preview()
 
     def _on_preview_fetch_succeeded(self, qimg):
-        self.compare.set_images(qimg, None)
+        # Same image on both sides rather than (qimg, None): a stage that
+        # hasn't run yet has no real "after" to show, but passing None
+        # leaves the right half of the split view blank/black, which reads
+        # as broken rather than "nothing to compare yet". Filling both
+        # sides keeps the split divider meaningful (drag it and both
+        # halves show the same picture) without implying a stage result
+        # that doesn't exist.
+        self.compare.set_images(qimg, qimg)
         self._on_preview_fetch_done()
 
     def _on_preview_fetch_empty(self):
