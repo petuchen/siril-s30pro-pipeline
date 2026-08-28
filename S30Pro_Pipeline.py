@@ -1019,7 +1019,16 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
 
     def _get_current_image(self):
         """Current Siril image as float32 planar, 0..1."""
-        data = self.siril.get_image_pixeldata()
+        try:
+            data = self.siril.get_image_pixeldata()
+        except Exception as e:
+            # sirilpy raises its own SirilError (not a None return) when
+            # nothing's loaded yet — e.g. "no FITS image" right after the
+            # pipeline window opens, before the user has loaded anything.
+            # Every caller here already expects/catches RuntimeError for
+            # "nothing to preview yet", so normalize to that instead of
+            # letting sirilpy's exception type crash the caller.
+            raise RuntimeError(f"No image loaded in Siril ({e}).") from e
         if data is None:
             raise RuntimeError("No image loaded in Siril.")
         if data.ndim == 2:
