@@ -504,6 +504,24 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.2.0</td><td><b>Added: Denoise can run pre-converted
+        CoreML models directly on Mac, bypassing ONNX Runtime's CoreML
+        execution provider entirely.</b> If a model folder has been
+        converted in-place to CoreML (<code>model.mlpackage</code>
+        placed next to the existing <code>model.onnx</code> — e.g. via
+        <a href="https://github.com/lonely-lockley/GraXpert"
+        target="_blank">lonely-lockley/GraXpert</a>'s
+        <code>tools/convert_models_to_coreml.py --in-place</code>, run
+        once, separately, outside this plugin), it's detected and
+        preferred automatically. Inference runs through coremltools'
+        <code>MLModel.predict()</code> directly instead of ONNX
+        Runtime — measurably faster (<a
+        href="https://github.com/Steffenhir/GraXpert/issues/252"
+        target="_blank">Steffenhir/GraXpert#252</a>: ~6-7x on the same
+        model/image) and sidesteps the 3.x-denoise-model CoreML
+        compile failure diagnosed in 2.1.3. coremltools installs on
+        demand, only when a <code>.mlpackage</code> is actually
+        selected.</td></tr>
       <tr><td>2.1.3</td><td><b>Identified: GPU acceleration failing on
         the 3.x denoise models is a known upstream bug, not a local
         issue.</b> A diagnostic log (from 2.1.2's new error reporting)
@@ -1135,6 +1153,9 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.2.0</td><td><b>新增：在 Mac 上，Denoise 現在可以直接執行事先轉換好的 CoreML 模型，完全繞過 ONNX Runtime 的 CoreML 執行提供者。</b>如果某個模型資料夾已經就地轉換成 CoreML（也就是在既有的 <code>model.onnx</code> 旁邊多了一個 <code>model.mlpackage</code>——例如透過
+        <a href="https://github.com/lonely-lockley/GraXpert" target="_blank">lonely-lockley/GraXpert</a>
+        的 <code>tools/convert_models_to_coreml.py --in-place</code>，在本外掛之外單獨執行一次即可），現在會自動偵測並優先使用。推論會直接透過 coremltools 的 <code>MLModel.predict()</code> 執行，而不再經過 ONNX Runtime——實測明顯更快（<a href="https://github.com/Steffenhir/GraXpert/issues/252" target="_blank">Steffenhir/GraXpert#252</a>：同一模型／影像下約快 6-7 倍），也能避開 2.1.3 版診斷出的 3.x 去噪模型編譯失敗問題。coremltools 只有在真正選到 <code>.mlpackage</code> 時才會安裝。</td></tr>
       <tr><td>2.1.3</td><td><b>確認：3.x 去噪模型在 GPU 加速下失敗，是已知的上游問題，不是本外掛的問題。</b>根據 2.1.2 版新增的錯誤診斷所擷取到的紀錄，與
         <a href="https://github.com/Steffenhir/GraXpert/issues/178" target="_blank">Steffenhir/GraXpert#178</a>
         完全吻合，連張量形狀都一模一樣：3.x 版去噪模型的 ONNX 匯出檔在 Mac 上的 CoreML 編譯器完全無法編譯。有使用者回報 2.x 版模型可以正常在 GPU 上運作。已在 Denoise 步驟的模型下拉選單加上說明提示，完成後的紀錄也會辨識這個特定錯誤，直接指出已知原因並建議改用 2.x 模型。</td></tr>

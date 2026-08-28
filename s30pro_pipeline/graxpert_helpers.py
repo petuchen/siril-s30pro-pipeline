@@ -20,8 +20,8 @@ onnx_helper = s.ONNXHelper()
 onnx_helper.install_onnxruntime()
 
 __all__ = [
-    "get_available_local_models", "make_onnx_session", "gaussian_kernel",
-    "_make_gaussian_psf", "richardson_lucy_sharpen",
+    "get_available_local_models", "make_onnx_session", "make_coreml_session",
+    "gaussian_kernel", "_make_gaussian_psf", "richardson_lucy_sharpen",
     "graxpert_extract_background", "graxpert_apply_correction",
     "graxpert_denoise", "LAST_ONNX_PROVIDER",
     "LAST_ONNX_REQUESTED_PROVIDERS", "LAST_ONNX_FALLBACK_ERROR",
@@ -29,14 +29,31 @@ __all__ = [
 
 
 def get_available_local_models(subdir):
-    """Return {model_name: model.onnx path} from the GraXpert data dir."""
+    """Return {model_name: path} from the GraXpert data dir.
+
+    If a model folder has been converted in-place to CoreML — e.g. via
+    github.com/lonely-lockley/GraXpert's tools/convert_models_to_coreml.py
+    --in-place, which drops a model.mlpackage next to the existing
+    model.onnx rather than creating a separate '-metal' entry — the
+    .mlpackage path is preferred. graxpert_denoise() detects that
+    extension and runs it through coremltools directly instead of ONNX
+    Runtime, which sidesteps both the general CPU-fallback slowness and
+    the 3.x-denoise-model CoreML compile failure documented in
+    Steffenhir/GraXpert#252 and #178. Callers that don't yet handle a
+    .mlpackage path (make_onnx_session) raise a clear error rather than
+    failing confusingly on a directory where a file was expected.
+    """
     models_dir = os.path.join(user_data_dir(appname="GraXpert"), subdir)
     model_paths = {}
     if os.path.isdir(models_dir):
         for sub in sorted(os.listdir(models_dir)):
-            p = os.path.join(models_dir, sub, "model.onnx")
-            if os.path.isfile(p):
-                model_paths[sub] = p
+            sub_dir = os.path.join(models_dir, sub)
+            mlpackage = os.path.join(sub_dir, "model.mlpackage")
+            onnx = os.path.join(sub_dir, "model.onnx")
+            if os.path.isdir(mlpackage):
+                model_paths[sub] = mlpackage
+            elif os.path.isfile(onnx):
+                model_paths[sub] = onnx
     return model_paths
 
 
@@ -63,6 +80,18 @@ def make_onnx_session(ai_path, gpu):
     """
     global LAST_ONNX_PROVIDER, LAST_ONNX_REQUESTED_PROVIDERS, \
         LAST_ONNX_FALLBACK_ERROR
+    if str(ai_path).endswith(".mlpackage"):
+        # get_available_local_models() prefers a .mlpackage when one has
+        # been converted in-place, but only graxpert_denoise() currently
+        # branches on that — other callers (e.g. Background Extraction)
+        # still route through here. Fail clearly rather than handing a
+        # directory to onnxruntime.InferenceSession(), which would raise
+        # a confusing native error instead.
+        raise RuntimeError(
+            f"'{ai_path}' is a CoreML .mlpackage, but this stage only "
+            f"supports .onnx models. Delete the .mlpackage folder (or use "
+            f"a different model version without one) to use the .onnx "
+            f"model here instead.")
     LAST_ONNX_FALLBACK_ERROR = None
     with s.SuppressedStderr():
         providers = onnx_helper.get_execution_providers_ordered(gpu)
@@ -78,6 +107,38 @@ def make_onnx_session(ai_path, gpu):
     except Exception:
         LAST_ONNX_PROVIDER = "unknown"
     return sess
+
+
+def make_coreml_session(ai_path, gpu):
+    """Load a pre-converted CoreML .mlpackage and return
+    (model, input_name, output_name) for direct MLModel.predict() calls.
+
+    This bypasses ONNX Runtime's CoreML execution provider entirely,
+    running the model through coremltools' own compiler instead — which
+    both measures faster (Steffenhir/GraXpert#252: ~6-7x on the same
+    model/image) and sidesteps the 3.x-denoise-model 'Espresso exception:
+    Invalid blob shape' compile failure that ONNX Runtime's CoreML EP
+    hits (Steffenhir/GraXpert#178), since it's a different conversion
+    path (coremltools' MIL compiler vs. ORT's CoreML graph partitioner).
+
+    The .mlpackage itself isn't produced here — it's expected to already
+    exist, placed in-place next to model.onnx by an external converter
+    such as github.com/lonely-lockley/GraXpert's
+    tools/convert_models_to_coreml.py --in-place, run once, separately,
+    outside this plugin (that tool's own venv needs torch/onnx2torch/
+    coremltools; this plugin only needs coremltools, to load and run the
+    result). coremltools is installed on demand here rather than at
+    import time, since only Mac users who've actually converted a model
+    ever take this path.
+    """
+    global LAST_ONNX_PROVIDER
+    s.ensure_installed("coremltools")
+    import coremltools as ct
+    compute_units = ct.ComputeUnit.ALL if gpu else ct.ComputeUnit.CPU_ONLY
+    model = ct.models.MLModel(ai_path, compute_units=compute_units)
+    desc = model.get_spec().description
+    LAST_ONNX_PROVIDER = "CoreML (.mlpackage)" if gpu else "CoreML (.mlpackage, CPU only)"
+    return model, desc.input[0].name, desc.output[0].name
 
 # =============================================================================
 #  GRAXPERT BACKGROUND EXTRACTION  (adapted from GraXpert-AI.py)
@@ -242,7 +303,11 @@ def graxpert_denoise(image, ai_path, batch_size=4, gpu=True,
     image = np.concatenate((image[:, :offset, :], image), axis=1)
 
     output = copy.deepcopy(image)
-    session = make_onnx_session(ai_path, gpu)
+    is_coreml = str(ai_path).endswith(".mlpackage")
+    if is_coreml:
+        coreml_model, coreml_in, coreml_out = make_coreml_session(ai_path, gpu)
+    else:
+        session = make_onnx_session(ai_path, gpu)
     last_p = 0
 
     for b in range(0, ith * itw + batch_size, batch_size):
@@ -260,10 +325,15 @@ def graxpert_denoise(image, ai_path, batch_size=4, gpu=True,
         if not tiles:
             continue
         tiles = np.array(tiles)
-        result, session = onnx_helper.run(session, ai_path, None,
-                                          {"gen_input_image": tiles},
-                                          return_first_output=True)
-        out_tiles = np.array(list(result))
+        if is_coreml:
+            predictions = coreml_model.predict(
+                {coreml_in: tiles.astype(np.float32)})
+            out_tiles = np.array(predictions[coreml_out])
+        else:
+            result, session = onnx_helper.run(session, ai_path, None,
+                                              {"gen_input_image": tiles},
+                                              return_first_output=True)
+            out_tiles = np.array(list(result))
         for t_idx, tile in enumerate(out_tiles):
             index = b + t_idx
             i, j = index % ith, index // ith

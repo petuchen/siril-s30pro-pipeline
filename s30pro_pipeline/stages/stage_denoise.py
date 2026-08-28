@@ -38,7 +38,16 @@ class DenoiseMixin:
             "back to CPU for them (see the Denoise completion log). This is\n"
             "a bug in the 3.x model's ONNX export, not a setting here — see\n"
             "github.com/Steffenhir/GraXpert/issues/178. If you hit that on\n"
-            "GPU acceleration, a 2.x model compiles and runs on GPU fine.")
+            "GPU acceleration, a 2.x model compiles and runs on GPU fine.\n"
+            "\n"
+            "Faster alternative on Mac: if a model folder here has been\n"
+            "converted in-place to CoreML (model.mlpackage placed next to\n"
+            "model.onnx — e.g. via github.com/lonely-lockley/GraXpert's\n"
+            "tools/convert_models_to_coreml.py --in-place, run once,\n"
+            "separately from this plugin), it's used automatically and runs\n"
+            "through coremltools directly instead of ONNX Runtime — faster,\n"
+            "and sidesteps the 3.x compile failure above too. The Denoise\n"
+            "completion log shows 'CoreML (.mlpackage)' when that's active.")
         if self.denoise_models:
             self.denoise_model_combo.setCurrentIndex(
                 self.denoise_model_combo.count() - 1)

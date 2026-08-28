@@ -1,5 +1,29 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.2.0
+
+* **Added: Denoise can run pre-converted CoreML models directly on
+  Mac, bypassing ONNX Runtime's CoreML execution provider entirely.**
+  If a model folder under `denoise-ai-models/<version>/` has been
+  converted in-place to CoreML (`model.mlpackage` placed next to the
+  existing `model.onnx` — e.g. via
+  [lonely-lockley/GraXpert](https://github.com/lonely-lockley/GraXpert)'s
+  `tools/convert_models_to_coreml.py --in-place`, run once, separately,
+  outside this plugin), it's now detected and preferred automatically.
+  Inference runs through `coremltools`' `MLModel.predict()` directly
+  instead of ONNX Runtime — measurably faster
+  ([Steffenhir/GraXpert#252](https://github.com/Steffenhir/GraXpert/issues/252):
+  ~6-7x on the same model/image) and sidesteps the 3.x-denoise-model
+  CoreML compile failure diagnosed in 2.1.3
+  ([#178](https://github.com/Steffenhir/GraXpert/issues/178)), since
+  it's a different conversion path than ONNX Runtime's CoreML EP.
+  `coremltools` installs on demand (only when a `.mlpackage` is
+  actually selected); the completion log shows `CoreML (.mlpackage)`
+  when this path is active. Other stages that share the same model
+  loader (Background Extraction) don't yet support `.mlpackage` and
+  raise a clear error rather than failing on a directory where a file
+  was expected, if one is ever selected there.
+
 ## 2.1.3
 
 * **Identified: GPU acceleration failing on the 3.x denoise models is a
