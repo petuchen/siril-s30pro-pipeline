@@ -24,6 +24,7 @@ __all__ = [
     "_make_gaussian_psf", "richardson_lucy_sharpen",
     "graxpert_extract_background", "graxpert_apply_correction",
     "graxpert_denoise", "LAST_ONNX_PROVIDER",
+    "LAST_ONNX_REQUESTED_PROVIDERS", "LAST_ONNX_FALLBACK_ERROR",
 ]
 
 
@@ -40,6 +41,13 @@ def get_available_local_models(subdir):
 
 
 LAST_ONNX_PROVIDER = "unknown"
+# Diagnostics for "GPU was requested but the run used CPU" reports — see
+# stage_denoise.py's completion log, which surfaces these when that
+# mismatch happens. Previously this fell back to CPU silently on any
+# exception, with no way to tell whether the accelerator was never
+# offered, was offered and failed, or was accepted but not actually used.
+LAST_ONNX_REQUESTED_PROVIDERS = []
+LAST_ONNX_FALLBACK_ERROR = None
 
 
 def make_onnx_session(ai_path, gpu):
@@ -53,12 +61,16 @@ def make_onnx_session(ai_path, gpu):
     the providers accordingly; we record which one actually got used so
     the log can show it.
     """
-    global LAST_ONNX_PROVIDER
+    global LAST_ONNX_PROVIDER, LAST_ONNX_REQUESTED_PROVIDERS, \
+        LAST_ONNX_FALLBACK_ERROR
+    LAST_ONNX_FALLBACK_ERROR = None
     with s.SuppressedStderr():
         providers = onnx_helper.get_execution_providers_ordered(gpu)
+        LAST_ONNX_REQUESTED_PROVIDERS = list(providers)
         try:
             sess = onnxruntime.InferenceSession(ai_path, providers=providers)
-        except Exception:
+        except Exception as e:
+            LAST_ONNX_FALLBACK_ERROR = str(e)
             sess = onnxruntime.InferenceSession(
                 ai_path, providers=["CPUExecutionProvider"])
     try:

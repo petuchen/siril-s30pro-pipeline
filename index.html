@@ -504,6 +504,15 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.1.2</td><td><b>Added: diagnostics when Denoise's "GPU
+        acceleration" is checked but the run still uses CPU.</b>
+        Previously it fell back to CPU silently on any error, with no
+        way to tell why. Now the completion log distinguishes three
+        cases: CoreML raised an error creating the session, CoreML was
+        accepted with no error but the session still reports CPU as
+        active (possibly a stale cached decision in Siril's own
+        <code>siril_onnx.conf</code>), or sirilpy didn't offer a GPU
+        provider for this platform/model at all.</td></tr>
       <tr><td>2.1.1</td><td><b>Fixed confusing wording: the enable
         checkbox at the top of each stage's pane was also labeled "Run
         this stage".</b> Identical text to the button at the bottom of
@@ -1114,6 +1123,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.1.2</td><td><b>新增：當 Denoise 勾選了「GPU acceleration」但實際仍使用 CPU 執行時，會顯示診斷資訊。</b>先前只要建立 GPU 執行階段失敗就會靜默改用 CPU，完全看不出原因。現在完成後的紀錄會區分三種情況：CoreML 在建立階段時真的丟出錯誤、CoreML 被接受但沒有報錯、執行階段卻仍顯示 CPU 為使用中（可能是 Siril 自己的 <code>siril_onnx.conf</code> 快取了舊的判斷結果），或是 sirilpy 對這個平台／模型根本沒有提供 GPU 選項。</td></tr>
       <tr><td>2.1.1</td><td><b>修正易混淆的文字：每個步驟面板最上方的啟用勾選框，原本也寫著「Run this stage（執行此步驟）」。</b>這跟面板最下方那個真正會立刻執行該步驟的按鈕文字完全一樣，很容易搞混。這個勾選框其實只是控制這個步驟要不要納入「Run Full Pipeline」，本身並不會執行任何動作。已改名為「Enable stage（啟用步驟）」，與「更多」選單中原本就有的「Enable all stages」／「Disable all stages」批次操作用詞一致。</td></tr>
       <tr><td>2.1.0</td><td><b>新增：進度條旁即時顯示百分比與經過時間。</b>進度條本身縮短（並關閉內建的百分比文字），空出空間放兩個新標籤：一個是隨著進度更新的百分比，另一個是每秒自動跳動的經過時間時鐘——即使某個步驟中間隔很久才回報一次進度，時間顯示依然會持續走動，不會卡住。</td></tr>
       <tr><td>2.0.4</td><td><b>改善：尚未執行過的步驟，分割預覽的右半邊不再顯示一片黑。</b>對於還沒有快照的步驟，背景預覽擷取原本會把 Siril 目前的影像顯示在「BEFORE」，「AFTER」則是空的，導致分割畫面右半邊變成一片黑，看起來像壞掉了。現在改成兩側都顯示同一張影像，分割拉桿依然可以正常拖動，但不會誤導使用者以為有實際的執行結果。已經執行過的步驟，其真正的 before/after 顯示方式不受影響。</td></tr>

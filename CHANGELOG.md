@@ -1,5 +1,21 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.1.2
+
+* **Added: diagnostics when Denoise's "GPU acceleration" is checked but
+  the run still uses CPU.** `graxpert_helpers.make_onnx_session()`
+  previously fell back to `CPUExecutionProvider` silently on any
+  exception, with no way to tell whether an accelerator was ever
+  attempted. It now records which providers were actually requested
+  and, if session creation raised, the exception itself
+  (`LAST_ONNX_REQUESTED_PROVIDERS`, `LAST_ONNX_FALLBACK_ERROR`). The
+  Denoise stage's completion log surfaces this whenever GPU was
+  requested but the result was CPU — distinguishing "CoreML raised an
+  error", "CoreML was accepted but the session still reports CPU as
+  active" (possibly a stale cached provider decision in Siril's own
+  `siril_onnx.conf`), and "sirilpy didn't offer a GPU provider at all"
+  — three different situations that previously looked identical.
+
 ## 2.1.1
 
 * **Fixed confusing wording: the enable checkbox at the top of each

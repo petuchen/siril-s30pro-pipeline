@@ -13,6 +13,8 @@ import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QCheckBox, QComboBox, QGridLayout, QHBoxLayout, QLabel, QSlider, QSpinBox
 
+from sirilpy import LogColor
+
 from s30pro_pipeline.constants import IDX_DEN
 from s30pro_pipeline import graxpert_helpers
 from s30pro_pipeline.graxpert_helpers import get_available_local_models, graxpert_denoise
@@ -105,7 +107,37 @@ class DenoiseMixin:
             denoised * strength + before * (1.0 - strength)
         after = after.astype(np.float32)
         self._set_current_image(after, f"AstroPipeline: denoise {strength:.2f}")
+        # GPU was requested but the run still ended up on CPU: this used to
+        # be a silent fallback with no way to tell whether an accelerator
+        # was even attempted. Surface whatever diagnostics
+        # graxpert_helpers.make_onnx_session() recorded, since on Mac this
+        # is a known onnxruntime/CoreML reliability issue (not something
+        # this plugin controls), and the actual reason — an exception vs.
+        # sirilpy not offering a GPU provider at all vs. a cached decision
+        # in Siril's own onnx config — points to a different next step.
+        provider = graxpert_helpers.LAST_ONNX_PROVIDER
+        if self.denoise_gpu.isChecked() and provider == "CPUExecutionProvider":
+            requested = graxpert_helpers.LAST_ONNX_REQUESTED_PROVIDERS
+            err = graxpert_helpers.LAST_ONNX_FALLBACK_ERROR
+            if err:
+                self.siril.log(
+                    f"Denoise: GPU acceleration was requested but creating "
+                    f"the ONNX session with {requested} failed, so it fell "
+                    f"back to CPU. Error: {err}", LogColor.SALMON)
+            elif requested and requested != ["CPUExecutionProvider"]:
+                self.siril.log(
+                    f"Denoise: GPU acceleration was requested and "
+                    f"{requested} was attempted with no error, but the "
+                    f"session still reports CPUExecutionProvider as active. "
+                    f"sirilpy may have a cached provider decision — see "
+                    f"siril_onnx.conf in Siril's config folder.",
+                    LogColor.SALMON)
+            else:
+                self.siril.log(
+                    "Denoise: GPU acceleration was requested but sirilpy "
+                    "did not offer a GPU provider for this platform/model, "
+                    "so it ran on CPU.", LogColor.SALMON)
         self._finish_stage(
             IDX_DEN, before, after, "Denoise: done.",
-            f"Denoising complete (execution provider: {graxpert_helpers.LAST_ONNX_PROVIDER})",
+            f"Denoising complete (execution provider: {provider})",
             progress=progress)

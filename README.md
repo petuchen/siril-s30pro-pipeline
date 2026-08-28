@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.1.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.1.2-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -320,6 +320,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.1.2 | Added: diagnostics when Denoise's GPU acceleration is checked but the run still uses CPU — the log now distinguishes a CoreML error, a stale cached provider decision, and sirilpy simply not offering a GPU provider. |
 | 2.1.1 | Fixed confusing wording: the per-stage enable checkbox was also labeled "Run this stage", same text as the button that actually runs it. Renamed to "Enable stage". |
 | 2.1.0 | Added: live percentage and elapsed-time readout next to the progress bar (shortened to make room), the clock ticks once a second on its own timer. |
 | 2.0.4 | Improved: a not-yet-run stage's split preview now shows the same image on both sides instead of leaving the right half blank/black. |
