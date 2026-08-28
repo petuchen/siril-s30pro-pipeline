@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.3.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.4.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -320,6 +320,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.4.0 | Added a "Save annotation details..." button in the Annotate stage — writes the current in-memory object list (including per-object 🎨 style edits) to JSON on demand, since a Run always rebuilds from scratch and previously discarded edits. |
 | 2.3.0 | Added: live preview while dragging Crop's Rotate slider — a quick on-screen approximation, not a re-run of Siril's `rotate` command per tick. |
 | 2.2.2 | Fixed the "SESSION" line always reading "No image loaded" (never wired up); fixed the Annotate panel needing horizontal scroll (unwrapped labels/checkboxes forced it too wide); reorganized and de-iconified Annotate's bottom action buttons. |
 | 2.2.1 | Fixed a process-crashing abort (SIGABRT) that could hit when navigating to another stage right after one finished — a background preview-fetch thread could be destroyed while Qt still considered it running. Added `wait()` before every worker reference drop/reassignment. |

@@ -1,5 +1,21 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.4.0
+
+* **Added: "Save annotation details..." button in the Annotate stage.**
+  Per-object 🎨 style edits (made via "Select objects..." → edit) only
+  ever lived in memory — the `annotated_*.json` companion file was
+  written once, automatically, at the end of a Run, and a Run always
+  rebuilds its object list from the catalogues from scratch, discarding
+  any edits made since. There was no way to actually save an edited
+  object list until now. The new button writes the *current* in-memory
+  object list (`self._ann_drawn`), edits included, straight to a JSON
+  file on demand, no re-run needed. Defaults to the last auto-saved
+  JSON's path (or a fresh timestamped name if the stage hasn't run
+  yet); a dialog lets you pick a different location. Also corrected
+  `_write_annotation_details_json`'s docstring, which previously (and
+  inaccurately) implied a subsequent Run would pick up pending edits.
+
 ## 2.3.0
 
 * **Added: live preview while dragging Crop's Rotate slider.** The

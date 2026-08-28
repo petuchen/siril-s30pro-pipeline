@@ -604,7 +604,8 @@ class AnnotateMixin:
             "Load a previously saved annotated_*.json (auto-saved next "
             "to the JPG every time this stage actually runs — see the "
             "Run button above; \"Update preview\" doesn't write a new "
-            "one) and redraw exactly those objects onto the current "
+            "one, but \"Save annotation details...\" below does, on "
+            "demand) and redraw exactly those objects onto the current "
             "un-annotated base canvas — no catalogue queries or plate "
             "solving needed. Meant for re-applying a saved annotation "
             "set to the same image it came from; a warning appears if "
@@ -613,6 +614,20 @@ class AnnotateMixin:
         self.ann_import_btn.clicked.connect(self._import_annotation_details_json)
         file_row.addWidget(self.ann_import_btn)
         v.addLayout(file_row)
+
+        save_json_row = QHBoxLayout()
+        self.ann_save_json_btn = QPushButton("Save annotation details...")
+        self.ann_save_json_btn.setToolTip(
+            "Write the objects currently shown — including any per-object "
+            "🎨 style edits made via \"Select objects...\" — straight to a "
+            "JSON file now, without re-running the stage. The auto-saved "
+            "JSON from the last Run doesn't include those edits, since a "
+            "run always rebuilds its object list from the catalogues; "
+            "this is the only way to capture them.")
+        self.ann_save_json_btn.clicked.connect(
+            self._save_annotation_details_json_now)
+        save_json_row.addWidget(self.ann_save_json_btn)
+        v.addLayout(save_json_row)
 
         self.ann_pick_btn.setToolTip(
             "Click this, then click anywhere on the preview image to add "
@@ -1047,9 +1062,16 @@ class AnnotateMixin:
         Annotate run (see _exec_stage_ann), covering exactly the objects
         that ended up in that run's output image — not a live/interactive
         snapshot, so later "Select objects to show..."/"Remove all
-        annotations"/pick-object edits (which only touch the on-screen
-        preview, never re-save the JPG) don't rewrite it either; the next
-        actual Run does.
+        annotations"/pick-object 🎨 style edits (which only touch the
+        on-screen preview, never re-save the JPG) don't rewrite it either.
+        Note this file is NOT rewritten by a subsequent Run either, in the
+        sense of preserving those edits: a real run always rebuilds its
+        object list from scratch by re-querying the catalogues, so any
+        per-object style edits made since the last run are discarded, not
+        carried forward. The only way to capture the current in-memory
+        state (self._ann_drawn), edits included, is the on-demand "Save
+        annotation details..." button, which calls this same method
+        directly — see _save_annotation_details_json_now.
 
         Marker/text colors are exported as `[R, G, B]` (0-255) even
         though this stage stores them internally as OpenCV's native BGR
@@ -1563,6 +1585,7 @@ class AnnotateMixin:
             now = datetime.now().strftime("%Y-%m-%d_%H%M")
             out_path = os.path.join(self.cwd, f"annotated_{now}.jpg")
             cv2.imwrite(out_path, canvas, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            self._ann_last_out_path = out_path
             json_path = os.path.splitext(out_path)[0] + ".json"
             try:
                 self._write_annotation_details_json(
@@ -1577,6 +1600,7 @@ class AnnotateMixin:
         else:
             self._ann_base_canvas = canvas.copy()
             self._ann_drawn = []
+            self._ann_last_out_path = None
 
         # keep the raw BGR canvas around so "Save annotated image..." and
         # "Select objects to show..." can work from it without re-running
@@ -2703,6 +2727,41 @@ class AnnotateMixin:
               "to export.")
         self.status_label.setText(msg)
         self.siril.log(f"Select objects: {msg}", LogColor.GREEN)
+
+    def _save_annotation_details_json_now(self):
+        """Writes the CURRENT in-memory object list (self._ann_drawn) to a
+        JSON file on demand, without re-running the stage — the only way
+        to capture per-object 🎨 style edits made via "Select objects...",
+        since a real Run always rebuilds its object list from the
+        catalogues from scratch and would discard them. See
+        _write_annotation_details_json's docstring for the file format."""
+        drawn = getattr(self, "_ann_drawn", None)
+        W = getattr(self, "_ann_img_w", None)
+        H = getattr(self, "_ann_img_h", None)
+        if not drawn or not W or not H:
+            QMessageBox.information(
+                self, "Nothing to save",
+                "Run the Annotate stage at least once first — there are "
+                "no labeled objects to save yet.")
+            return
+        last_out = getattr(self, "_ann_last_out_path", None)
+        now = datetime.now().strftime("%Y-%m-%d_%H%M")
+        default_path = (
+            os.path.splitext(last_out)[0] + ".json" if last_out
+            else os.path.join(self.cwd, f"annotated_{now}.json"))
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save annotation details", default_path,
+            "JSON Files (*.json)")
+        if not path:
+            return
+        try:
+            self._write_annotation_details_json(
+                path, drawn, W, H, last_out or path)
+            self.status_label.setText(
+                f"Annotation details saved: {os.path.basename(path)}")
+            self.siril.log(f"Annotation details saved: {path}", LogColor.GREEN)
+        except Exception as e:
+            QMessageBox.critical(self, "Save failed", str(e))
 
     def on_save_annotated_image(self):
         """Export the last annotated (or plain, if the overlay is hidden)
