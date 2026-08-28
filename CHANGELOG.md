@@ -1,5 +1,25 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.2.1
+
+* **Fixed a process-crashing abort (SIGABRT) that could hit right after
+  a stage finished, if you navigated to another stage (rail click, or
+  prev/next) within about the next second or two.** A user's macOS
+  crash log pinned it exactly: the main thread aborted inside
+  `QThread::~QThread()` via `qFatal()`, triggered from
+  `PyObject_SetAttr` inside a Qt slot call — i.e. reassigning a Python
+  attribute that held a `PreviewFetchWorker` dropped its last
+  reference while Qt still considered the underlying thread "running",
+  which aborts the whole process instead of raising a Python
+  exception. `_on_preview_fetch_done()`'s `self._preview_worker = None`
+  was doing exactly this from what's effectively that worker's own
+  completion handler — `isRunning()` being False by then doesn't
+  guarantee the OS thread has fully joined. Added `wait()` before every
+  place a worker reference gets dropped or reassigned
+  (`_on_preview_fetch_done`, `_launch`, `_refresh_preview`,
+  `closeEvent`) — a no-op in the common case since the thread's already
+  done, closing the race in the rare one.
+
 ## 2.2.0
 
 * **Added: Denoise can run pre-converted CoreML models directly on

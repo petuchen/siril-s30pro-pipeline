@@ -242,7 +242,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.2.0"
+VERSION = "2.2.1"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -677,6 +677,12 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
                 hwc = display_autostretch(hwc)
             return make_qimage(hwc)
 
+        # Same defense-in-depth as _launch()/_on_preview_fetch_done(): the
+        # isRunning() check above can be False while the previous worker's
+        # OS thread hasn't fully joined yet; wait() closes that race before
+        # the reassignment below drops the last reference to it.
+        if self._preview_worker is not None:
+            self._preview_worker.wait()
         worker = PreviewFetchWorker(fetch)
         worker.succeeded.connect(self._on_preview_fetch_succeeded)
         worker.empty.connect(self._on_preview_fetch_empty)
@@ -690,7 +696,23 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         all" click (see _launch()'s guard — takes priority, since it's an
         explicit user action) or re-run _refresh_preview() if a newer
         navigation request arrived while this fetch was running (see the
-        _preview_pending comment in _refresh_preview)."""
+        _preview_pending comment in _refresh_preview).
+
+        This runs as a slot connected to a signal the worker emits from
+        inside its own run() — i.e. we're clearing our reference to it
+        from what's practically its own completion handler. run() has
+        already returned by the time a queued cross-thread signal is
+        delivered, but that's not the same guarantee as the underlying
+        OS thread having fully joined; destroying a QThread Qt still
+        considers "running" at the C++ level aborts the whole process
+        (QThread::~QThread() calls qFatal(), not a Python exception —
+        this crashed the plugin in practice, one 'next stage' click
+        landing during a background preview fetch). wait() blocks until
+        the thread has genuinely finished — a no-op in effect here since
+        run() is already done, but it closes the race for good.
+        """
+        if self._preview_worker is not None:
+            self._preview_worker.wait()
         self._preview_worker = None
         if self._pending_launch is not None:
             stage_fns, self._pending_launch = self._pending_launch, None
@@ -926,6 +948,14 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
                 fn(progress)
 
         self._set_running(True)
+        # Defense-in-depth against the same QThread-destroyed-while-running
+        # abort fixed in _on_preview_fetch_done(): isRunning() above being
+        # False doesn't guarantee the previous worker's OS thread has fully
+        # joined, and dropping the reference here (via reassignment) would
+        # destroy it if not. wait() is a no-op in the common case (the
+        # thread's already done) and closes the race in the rare one.
+        if self.worker is not None:
+            self.worker.wait()
         self.worker = Worker(job)
         self.worker.progressed.connect(self._on_progress)
         self.worker.failed.connect(self._on_failed)
@@ -1817,6 +1847,14 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
                                 "Please wait for it to finish before closing.")
             event.ignore()
             return
+        if self._preview_worker and self._preview_worker.isRunning():
+            # Closing while a background preview fetch is in flight risks
+            # the same QThread-destroyed-while-running abort fixed
+            # elsewhere in this file (_launch/_refresh_preview/
+            # _on_preview_fetch_done) — the fetch is normally quick
+            # (a second or so), so just wait for it rather than blocking
+            # the close with a dialog over something this minor.
+            self._preview_worker.wait()
         reply = QMessageBox.question(
             self, "Close S30 Pro Pipeline",
             "Close the pipeline window?\n\n"
