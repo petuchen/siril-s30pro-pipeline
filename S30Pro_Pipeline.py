@@ -242,7 +242,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.0.4"
+VERSION = "2.1.0"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -372,6 +372,14 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         # A "Run this stage"/"Run all" click that arrived while the above
         # preview fetch was in flight — see _launch()'s guard.
         self._pending_launch = None
+        # Elapsed-time readout next to the progress bar: a real-time ticking
+        # clock rather than something only updated when a progress() call
+        # happens to fire, since some stages go a long stretch between
+        # progress updates.
+        self._run_start_time = None
+        self._elapsed_timer = QTimer(self)
+        self._elapsed_timer.setInterval(1000)
+        self._elapsed_timer.timeout.connect(self._update_elapsed_label)
 
         # Scratch folder for expensive intermediate results (currently the
         # StarNet star/starless split used by the Hubble Palette stage) so
@@ -973,13 +981,36 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         self.progress_bar.setVisible(running)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
+        self.progress_pct_label.setVisible(running)
+        self.progress_time_label.setVisible(running)
         if running:
             self.status_label.setText("Working...")
+            self.progress_pct_label.setText("0%")
+            self.progress_time_label.setText("0:00")
+            self._run_start_time = time.monotonic()
+            self._elapsed_timer.start()
+        else:
+            self._elapsed_timer.stop()
+            self._run_start_time = None
+
+    def _update_elapsed_label(self):
+        """Ticks once a second while a stage/run-all is in progress, so the
+        elapsed-time readout is a live clock rather than only updating
+        whenever a progress() call happens to fire (some stages go a long
+        stretch between those)."""
+        if self._run_start_time is None:
+            return
+        secs = int(time.monotonic() - self._run_start_time)
+        m, s = divmod(secs, 60)
+        h, m = divmod(m, 60)
+        text = f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+        self.progress_time_label.setText(text)
 
     def _on_progress(self, msg, p):
         self.status_label.setText(msg)
         if p > 0:
             self.progress_bar.setValue(int(p * 100))
+            self.progress_pct_label.setText(f"{int(p * 100)}%")
         try:
             self.siril.update_progress(msg, p)
         except Exception:
@@ -1753,6 +1784,8 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         self.status_label.setText("Ready.")
         self.progress_bar.setVisible(False)
         self.progress_bar.setValue(0)
+        self.progress_pct_label.setVisible(False)
+        self.progress_time_label.setVisible(False)
 
         # pick a new session folder
         selected = QFileDialog.getExistingDirectory(

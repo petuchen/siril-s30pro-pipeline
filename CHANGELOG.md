@@ -1,5 +1,16 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.1.0
+
+* **Added: live percentage and elapsed-time readout next to the
+  progress bar.** The ribbon's progress bar is shortened (200px → 120px,
+  its own built-in percentage text turned off) to make room for two new
+  labels beside it: a percentage (updated on every progress() call, same
+  as the bar) and an elapsed-time clock that ticks once a second on its
+  own timer — so it stays live even during stages that go a long
+  stretch between progress updates, rather than only updating when one
+  happens to fire.
+
 ## 2.0.4
 
 * **Improved: the split preview's right half no longer goes blank for a

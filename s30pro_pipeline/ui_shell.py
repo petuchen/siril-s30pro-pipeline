@@ -273,7 +273,19 @@ class SessionRibbon(QWidget):
         self.count = QLabel("")
         self.count.setObjectName("SubHeader")
         self.progress = progress_bar        # the window's own QProgressBar
-        self.progress.setFixedWidth(200)
+        # Shortened to make room for the percentage/elapsed-time labels
+        # beside it — the bar's own built-in percentage text is turned off
+        # (progress_pct replaces it) so the number isn't shown twice.
+        self.progress.setFixedWidth(120)
+        self.progress.setTextVisible(False)
+        self.progress_pct = QLabel("")
+        self.progress_pct.setObjectName("SubHeader")
+        self.progress_pct.setFixedWidth(34)
+        self.progress_pct.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.progress_time = QLabel("")
+        self.progress_time.setObjectName("SubHeader")
+        self.progress_time.setFixedWidth(48)
         top.addWidget(self.kicker)
         top.addWidget(self.target)
         top.addWidget(self.folder)
@@ -281,6 +293,8 @@ class SessionRibbon(QWidget):
         top.addWidget(self.status)
         top.addWidget(self.count)
         top.addWidget(self.progress)
+        top.addWidget(self.progress_pct)
+        top.addWidget(self.progress_time)
         v.addLayout(top)
 
         bottom = QHBoxLayout()

@@ -504,6 +504,13 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.1.0</td><td><b>Added: live percentage and elapsed-time
+        readout next to the progress bar.</b> The bar is shortened
+        (its own built-in percentage text turned off) to make room for
+        two labels beside it — a percentage that updates alongside the
+        bar, and an elapsed-time clock that ticks once a second on its
+        own timer, so it stays live even during stages that go a long
+        stretch between progress updates.</td></tr>
       <tr><td>2.0.4</td><td><b>Improved: the split preview's right half
         no longer goes blank for a stage that hasn't run yet.</b> For a
         stage with no snapshot, the background preview fetch was
@@ -1098,6 +1105,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.1.0</td><td><b>新增：進度條旁即時顯示百分比與經過時間。</b>進度條本身縮短（並關閉內建的百分比文字），空出空間放兩個新標籤：一個是隨著進度更新的百分比，另一個是每秒自動跳動的經過時間時鐘——即使某個步驟中間隔很久才回報一次進度，時間顯示依然會持續走動，不會卡住。</td></tr>
       <tr><td>2.0.4</td><td><b>改善：尚未執行過的步驟，分割預覽的右半邊不再顯示一片黑。</b>對於還沒有快照的步驟，背景預覽擷取原本會把 Siril 目前的影像顯示在「BEFORE」，「AFTER」則是空的，導致分割畫面右半邊變成一片黑，看起來像壞掉了。現在改成兩側都顯示同一張影像，分割拉桿依然可以正常拖動，但不會誤導使用者以為有實際的執行結果。已經執行過的步驟，其真正的 before/after 顯示方式不受影響。</td></tr>
       <tr><td>2.0.3</td><td><b>修正：按下「Run this stage」可能會卡住、完全沒有反應，即使是第一個步驟也一樣。</b>這是 2.0.2 版引入的回歸問題：視窗一開啟就會為尚未有快照的步驟（剛啟動時就是第一個步驟）在背景啟動 <code>PreviewFetchWorker</code> 擷取，而 <code>_launch()</code> 原本沒有檢查這個背景擷取是否還在進行中，就直接啟動流程執行的 <code>Worker</code>——結果兩個執行緒同時呼叫同一條 Siril 連線，導致卡住而不是報錯。現在 <code>_launch()</code> 會在偵測到預覽擷取仍在進行時，把執行請求排入佇列，等連線空出來後再啟動。</td></tr>
       <tr><td>2.0.2</td><td><b>修正：切換到尚未執行過的步驟時，視窗可能會短暫卡住。</b><code>_refresh_preview()</code> 在每次切換步驟（導覽列或上一步／下一步按鈕）時都會執行；若該步驟這次還沒跑過、沒有快照，就會退回去抓取 Siril 目前的完整解析度影像並套用顯示拉伸——這正是 2.0.1 修正過的啟動卡住問題所做的同一件事，只不過這次是每次點擊都會發生，而不只是啟動時一次。現已改用新的 <code>PreviewFetchWorker</code> 背景執行緒處理，讓切換步驟不再卡住視窗。同一時間只會有一個擷取在執行——如果在擷取進行中又點了一次，或是某個步驟正在實際執行（會與流程執行緒共用同一條 Siril 連線），這次請求會排入佇列，等目前的工作結束後再重新執行，而不是同時搶著呼叫 Siril。</td></tr>
