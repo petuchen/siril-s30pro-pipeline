@@ -504,6 +504,15 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.1.1</td><td><b>Fixed confusing wording: the enable
+        checkbox at the top of each stage's pane was also labeled "Run
+        this stage".</b> Identical text to the button at the bottom of
+        the pane that actually executes the stage immediately, making
+        the two easy to mix up. The checkbox only toggles whether the
+        stage participates in Run Full Pipeline. Renamed to "Enable
+        stage", matching the wording already used by the "Enable all
+        stages"/"Disable all stages" bulk actions in the overflow
+        menu.</td></tr>
       <tr><td>2.1.0</td><td><b>Added: live percentage and elapsed-time
         readout next to the progress bar.</b> The bar is shortened
         (its own built-in percentage text turned off) to make room for
@@ -1105,6 +1114,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.1.1</td><td><b>修正易混淆的文字：每個步驟面板最上方的啟用勾選框，原本也寫著「Run this stage（執行此步驟）」。</b>這跟面板最下方那個真正會立刻執行該步驟的按鈕文字完全一樣，很容易搞混。這個勾選框其實只是控制這個步驟要不要納入「Run Full Pipeline」，本身並不會執行任何動作。已改名為「Enable stage（啟用步驟）」，與「更多」選單中原本就有的「Enable all stages」／「Disable all stages」批次操作用詞一致。</td></tr>
       <tr><td>2.1.0</td><td><b>新增：進度條旁即時顯示百分比與經過時間。</b>進度條本身縮短（並關閉內建的百分比文字），空出空間放兩個新標籤：一個是隨著進度更新的百分比，另一個是每秒自動跳動的經過時間時鐘——即使某個步驟中間隔很久才回報一次進度，時間顯示依然會持續走動，不會卡住。</td></tr>
       <tr><td>2.0.4</td><td><b>改善：尚未執行過的步驟，分割預覽的右半邊不再顯示一片黑。</b>對於還沒有快照的步驟，背景預覽擷取原本會把 Siril 目前的影像顯示在「BEFORE」，「AFTER」則是空的，導致分割畫面右半邊變成一片黑，看起來像壞掉了。現在改成兩側都顯示同一張影像，分割拉桿依然可以正常拖動，但不會誤導使用者以為有實際的執行結果。已經執行過的步驟，其真正的 before/after 顯示方式不受影響。</td></tr>
       <tr><td>2.0.3</td><td><b>修正：按下「Run this stage」可能會卡住、完全沒有反應，即使是第一個步驟也一樣。</b>這是 2.0.2 版引入的回歸問題：視窗一開啟就會為尚未有快照的步驟（剛啟動時就是第一個步驟）在背景啟動 <code>PreviewFetchWorker</code> 擷取，而 <code>_launch()</code> 原本沒有檢查這個背景擷取是否還在進行中，就直接啟動流程執行的 <code>Worker</code>——結果兩個執行緒同時呼叫同一條 Siril 連線，導致卡住而不是報錯。現在 <code>_launch()</code> 會在偵測到預覽擷取仍在進行時，把執行請求排入佇列，等連線空出來後再啟動。</td></tr>

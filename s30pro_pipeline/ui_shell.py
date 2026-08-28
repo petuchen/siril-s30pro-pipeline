@@ -359,7 +359,13 @@ class PaneHeader(QWidget):
         top = QHBoxLayout()
         kicker = QLabel(f"STAGE {number:02d}")
         kicker.setObjectName("Kicker")
-        self.enable = QCheckBox("Run this stage")
+        # Matches the wording of the "Enable all stages"/"Disable all
+        # stages" bulk actions in the overflow menu. Previously labeled
+        # "Run this stage" — identical text to the *button* at the bottom
+        # of the pane that actually executes the stage immediately, which
+        # made the two easy to confuse (this one only toggles participation
+        # in Run Full Pipeline; it doesn't run anything by itself).
+        self.enable = QCheckBox("Enable stage")
         self.enable.setToolTip(
             "Whether this stage runs as part of Run Full Pipeline.")
         self.enable.toggled.connect(self.enabledToggled.emit)

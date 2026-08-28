@@ -1,5 +1,16 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.1.1
+
+* **Fixed confusing wording: the enable checkbox at the top of each
+  stage's pane was also labeled "Run this stage"** — identical text to
+  the button at the bottom of the pane that actually executes the
+  stage immediately, making the two easy to mix up. The checkbox only
+  toggles whether the stage participates in Run Full Pipeline; it
+  doesn't run anything by itself. Renamed to "Enable stage", matching
+  the wording already used by the "Enable all stages"/"Disable all
+  stages" bulk actions in the overflow menu.
+
 ## 2.1.0
 
 * **Added: live percentage and elapsed-time readout next to the
