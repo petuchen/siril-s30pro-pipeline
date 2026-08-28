@@ -1,5 +1,18 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.4.1
+
+* **Removed the "Use Siril's image" button from the Preprocess stage.**
+  It never made sense there: Preprocess reads raw light frames straight
+  from disk and issues `siril.cmd("close")` as its very first action —
+  it never starts from whatever happens to be currently loaded in
+  Siril, so the button had nothing real to do on that stage. Every
+  other stage keeps the button unchanged. The underlying
+  `_load_siril_current_into_stage()` method is untouched — Comet Stack
+  mode still calls it internally to pull in the manually-recomposited
+  result after its Star Recomposition guided pause, which is a
+  genuinely different, still-needed use of the same method.
+
 ## 2.4.0
 
 * **Added: "Save annotation details..." button in the Annotate stage.**

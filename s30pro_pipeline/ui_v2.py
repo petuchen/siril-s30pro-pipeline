@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-from s30pro_pipeline.constants import STAGES
+from s30pro_pipeline.constants import IDX_PP, STAGES
 from s30pro_pipeline.ui_widgets import CompareView
 from s30pro_pipeline.ui_shell import (
     ActionBar, AdvancedSection, COMPACT_WIDTH, PaneHeader, SessionRibbon,
@@ -315,9 +315,16 @@ class UiV2Mixin:
 
         header = PaneHeader(number, title)
         header.set_description(STAGE_BLURBS.get(idx, ""))
-        header.useSirilRequested.connect(
-            lambda _=False, i=idx, t=title:
-            self._load_siril_current_into_stage(i, t))
+        if idx == IDX_PP:
+            # Preprocess reads raw light frames straight from disk (and
+            # closes any currently-loaded Siril image as its very first
+            # action) — it never starts from "whatever's loaded in
+            # Siril right now", so the button doesn't apply here.
+            header.set_use_siril_visible(False)
+        else:
+            header.useSirilRequested.connect(
+                lambda _=False, i=idx, t=title:
+                self._load_siril_current_into_stage(i, t))
         pl.addWidget(header)
         pl.addWidget(hairline())
 

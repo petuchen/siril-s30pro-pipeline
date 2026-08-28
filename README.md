@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.4.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.4.1-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -87,9 +87,11 @@ recomposited result and runs exactly as it would for any other stacking
 method.
 
 Every stage shows a **before/after comparison** (drag the divider!) and can be
-**undone**. Every stage also has a small "Use Siril's image" button to pull in
-whatever's currently loaded in Siril — handy if you did something outside
-the pipeline and want to continue here. Run stages one at a time, or tick
+**undone**. Every stage except Preprocess also has a small "Use Siril's
+image" button to pull in whatever's currently loaded in Siril — handy if
+you did something outside the pipeline and want to continue here.
+Preprocess doesn't get the button since it always starts from raw light
+frames on disk, never from whatever's loaded in Siril. Run stages one at a time, or tick
 the ones you want and hit **Run Full Pipeline**.
 
 ---
@@ -320,6 +322,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.4.1 | Removed the "Use Siril's image" button from the Preprocess stage — it reads raw light frames from disk and never starts from Siril's currently-loaded image, so the button had nothing to do there. |
 | 2.4.0 | Added a "Save annotation details..." button in the Annotate stage — writes the current in-memory object list (including per-object 🎨 style edits) to JSON on demand, since a Run always rebuilds from scratch and previously discarded edits. |
 | 2.3.0 | Added: live preview while dragging Crop's Rotate slider — a quick on-screen approximation, not a re-run of Siril's `rotate` command per tick. |
 | 2.2.2 | Fixed the "SESSION" line always reading "No image loaded" (never wired up); fixed the Annotate panel needing horizontal scroll (unwrapped labels/checkboxes forced it too wide); reorganized and de-iconified Annotate's bottom action buttons. |

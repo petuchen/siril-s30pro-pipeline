@@ -393,19 +393,29 @@ class PaneHeader(QWidget):
         sl.setSpacing(8)
         self.source = QLabel("Starting from: previous stage")
         self.source.setObjectName("SubHeader")
-        use_btn = QPushButton("\u21e9 USE SIRIL'S IMAGE")
-        use_btn.setObjectName("Link")
-        use_btn.setToolTip(
+        self.use_btn = QPushButton("\u21e9 USE SIRIL'S IMAGE")
+        self.use_btn.setObjectName("Link")
+        self.use_btn.setToolTip(
             "Preview whatever image is currently loaded in Siril as this "
             "stage's starting point.")
-        use_btn.clicked.connect(self.useSirilRequested.emit)
+        self.use_btn.clicked.connect(self.useSirilRequested.emit)
         sl.addWidget(self.source, 1)
-        sl.addWidget(use_btn)
+        sl.addWidget(self.use_btn)
+        self.src_row = src
         v.addWidget(src)
 
     def set_description(self, text):
         self.desc.setText(text)
         self.desc.setVisible(bool(text))
+
+    def set_use_siril_visible(self, on):
+        """Hide the whole "Starting from / Use Siril's image" row for
+        stages where it's logically meaningless \u2014 currently just
+        Preprocess, which reads raw light frames from disk (and issues
+        `siril.cmd("close")` as its very first action) rather than
+        starting from whatever's currently loaded in Siril, so the
+        button had nothing real to do there."""
+        self.src_row.setVisible(on)
 
     def set_source(self, text):
         self.source.setText(text)
