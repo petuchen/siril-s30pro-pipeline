@@ -242,7 +242,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.2.1"
+VERSION = "2.2.2"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -1070,19 +1070,30 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
 
     def _update_image_info(self):
         """Show target / date / integration / FOV / size of the current image."""
+        folder = os.path.basename(self.cwd.rstrip(os.sep)) if getattr(self, "cwd", None) else ""
         try:
             if not self.siril.is_image_loaded():
                 self.image_info_label.setText("No image loaded.")
+                # ribbon.set_target() is the "SESSION" line at the top of
+                # the window — previously never called at all, so it sat
+                # on its widget-default text ("No image loaded") forever,
+                # even once an image with a real target name was loaded.
+                # Still show the working folder here even without an
+                # image, so the session identity isn't blank before the
+                # first stage runs.
+                self.ribbon.set_target(None, folder)
                 return
             hdr = self.siril.get_image_fits_header(return_as="dict")
         except Exception:
             self.image_info_label.setText("No image loaded.")
+            self.ribbon.set_target(None, folder)
             return
         parts = []
 
         obj = str(hdr.get("OBJECT", "")).strip()
         if obj and obj.lower() != "unknown":
             parts.append(f"🎯 {obj}")
+        self.ribbon.set_target(obj if obj and obj.lower() != "unknown" else None, folder)
 
         # capture date(s): range scanned from all subs (stage 1), single
         # header date otherwise

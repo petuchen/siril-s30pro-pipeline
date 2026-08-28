@@ -1,5 +1,31 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.2.2
+
+* **Fixed: the "SESSION" line at the top of the window always read "No
+  image loaded".** `SessionRibbon.set_target()` existed but was never
+  called anywhere — it just sat on its widget-default text forever, even
+  once a real image with a target name (FITS `OBJECT` header) was
+  loaded. Now wired up from `_update_image_info()`, showing the target
+  name (when the header has one) and the working folder.
+* **Fixed: the Annotate stage's panel needed horizontal scrolling.**
+  Several grid-row `QLabel`s ("Label distance (× radius):", "Arm length
+  (× radius):", etc.) and the "Custom color (override per-catalogue
+  colors)" checkboxes didn't wrap, forcing the whole panel wider than
+  the pane's max width. Long labels now wrap via a small `_ann_wlabel()`
+  helper, and several checkbox/label strings were shortened (detail
+  moved into their existing tooltips, e.g. "NGC (New General
+  Catalogue)" → "NGC") — the panel now fits without a horizontal
+  scrollbar.
+* **Reorganized the Annotate stage's bottom action buttons and dropped
+  their icons**, for consistency with the rest of the pipeline's action
+  buttons and to fix inconsistent row widths from varying icon-glyph
+  widths. Regrouped by what they actually do rather than the previous
+  arbitrary pairing: which objects are shown (Select objects.../Pick
+  object on image...), quick re-render actions that don't need a full
+  re-run (Update preview/Remove all), and file I/O (Save image.../
+  Import annotation details...).
+
 ## 2.2.1
 
 * **Fixed a process-crashing abort (SIGABRT) that could hit right after

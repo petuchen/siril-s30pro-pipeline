@@ -504,6 +504,22 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.2.2</td><td><b>Fixed: the "SESSION" line at the top of
+        the window always read "No image loaded".</b>
+        <code>SessionRibbon.set_target()</code> existed but was never
+        called anywhere. Now wired up from
+        <code>_update_image_info()</code>, showing the target name
+        (FITS <code>OBJECT</code> header, when present) and the
+        working folder.
+        <b>Fixed: the Annotate stage's panel needed horizontal
+        scrolling</b> — several grid-row labels and checkboxes didn't
+        wrap, forcing the panel wider than the pane's max width; long
+        labels now wrap and a few checkbox strings were shortened
+        (detail moved into their existing tooltips).
+        <b>Reorganized Annotate's bottom action buttons and dropped
+        their icons</b> for consistency with the rest of the pipeline,
+        regrouped by what they actually do: which objects are shown,
+        quick re-render actions, and file I/O.</td></tr>
       <tr><td>2.2.1</td><td><b>Fixed a process-crashing abort (SIGABRT)
         that could hit right after a stage finished, if you navigated
         to another stage within about the next second or two.</b> A
@@ -1165,6 +1181,9 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.2.2</td><td><b>修正：視窗頂端的「SESSION」那一行文字，永遠顯示「No image loaded」。</b><code>SessionRibbon.set_target()</code> 這個函式雖然存在，但從來沒有被呼叫過。現在已經在 <code>_update_image_info()</code> 中接上，會顯示目標名稱（若 FITS 標頭有 <code>OBJECT</code> 欄位）與工作資料夾。
+        <b>修正：Annotate 步驟面板需要左右捲動。</b>幾個表格列標籤與勾選框文字沒有自動換行，把整個面板撐得比面板本身的最大寬度還寬；現已改為自動換行，並縮短了幾個勾選框文字（細節移到既有的提示文字中）。
+        <b>重新整理 Annotate 步驟最下方的操作按鈕，並移除了圖示</b>，以與整個外掛其他操作按鈕的風格一致，並依實際功能重新分組：哪些天體要顯示、不需要重新執行的快速重繪動作、以及檔案存取。</td></tr>
       <tr><td>2.2.1</td><td><b>修正一個會讓整個程式當掉（SIGABRT）的問題：某個步驟剛執行完，若在接下來一兩秒內切換到別的步驟，可能會直接崩潰。</b>使用者提供的 macOS 當機記錄精準定位了原因：主執行緒在 <code>QThread::~QThread()</code> 內透過 <code>qFatal()</code> 中止，起因是某個 Qt 插槽把一個原本存著背景預覽擷取執行緒的 Python 屬性重新賦值，導致那個物件的最後一個參照被釋放——但 Qt 當下仍認為那條執行緒「正在執行中」，於是直接中止整個程式，而不是丟出 Python 例外。已在每個會釋放或重新賦值執行緒參照的地方加上 <code>wait()</code>：一般情況下這是零成本的（該執行緒早就跑完了），但在罕見的競態情況下能徹底避免這個問題。</td></tr>
       <tr><td>2.2.0</td><td><b>新增：在 Mac 上，Denoise 現在可以直接執行事先轉換好的 CoreML 模型，完全繞過 ONNX Runtime 的 CoreML 執行提供者。</b>如果某個模型資料夾已經就地轉換成 CoreML（也就是在既有的 <code>model.onnx</code> 旁邊多了一個 <code>model.mlpackage</code>——例如透過
         <a href="https://github.com/lonely-lockley/GraXpert" target="_blank">lonely-lockley/GraXpert</a>

@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.2.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.2.2-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -320,6 +320,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.2.2 | Fixed the "SESSION" line always reading "No image loaded" (never wired up); fixed the Annotate panel needing horizontal scroll (unwrapped labels/checkboxes forced it too wide); reorganized and de-iconified Annotate's bottom action buttons. |
 | 2.2.1 | Fixed a process-crashing abort (SIGABRT) that could hit when navigating to another stage right after one finished — a background preview-fetch thread could be destroyed while Qt still considered it running. Added `wait()` before every worker reference drop/reassignment. |
 | 2.2.0 | Added: Denoise auto-detects and prefers an in-place-converted CoreML `.mlpackage` on Mac, running inference through coremltools directly instead of ONNX Runtime — faster and sidesteps the 3.x compile failure. |
 | 2.1.3 | Identified GPU-on-3.x-denoise-models failure as a known upstream CoreML bug ([GraXpert#178](https://github.com/Steffenhir/GraXpert/issues/178)) — added a model-dropdown tooltip and a specific log message pointing at 2.x models as the workaround. |

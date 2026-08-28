@@ -53,10 +53,24 @@ class AnnotateMixin:
             "border: 1px solid rgba(255,255,255,60);")
         return lbl
 
+    @staticmethod
+    def _ann_wlabel(text):
+        """QLabel that wraps instead of forcing a wide minimum width. Plain
+        QLabel refuses to wrap by default, so a handful of longer grid-row
+        labels here (e.g. "Label distance (× radius):") were each forcing
+        the whole Annotate panel wider than the pane's own max width
+        (PANE_MAX in ui_v2.py), which the QScrollArea in _stage_box()
+        could only accommodate by growing a horizontal scrollbar. Wrapping
+        lets the layout shrink these to fit instead."""
+        lbl = QLabel(text)
+        lbl.setWordWrap(True)
+        return lbl
+
     def _build_stage_ann(self):
         box, v = self._stage_box(12, "Annotate — Stars & Deep-Sky Objects",
                                  enabled_check=False)
         self.stage_ann_box = box
+        wlabel = self._ann_wlabel
 
         info = QLabel("Labels stars and deep-sky objects for whatever's "
                       "actually in the plate-solved field. Three steps "
@@ -107,7 +121,7 @@ class AnnotateMixin:
         og.addWidget(self._color_swatch(CATALOG_COLORS["star"]), row, 0)
         og.addWidget(self.ann_stars_checkbox, row, 1)
         row += 1
-        og.addWidget(QLabel("Star mag limit:"), row, 0)
+        og.addWidget(wlabel("Star mag limit:"), row, 0)
         self.ann_mag_spin = QDoubleSpinBox()
         self.ann_mag_spin.setRange(0.0, 12.0)
         self.ann_mag_spin.setSingleStep(0.5)
@@ -125,20 +139,20 @@ class AnnotateMixin:
         og.addWidget(self.ann_cat_messier_checkbox, row, 1)
         row += 1
 
-        self.ann_cat_ngc_checkbox = QCheckBox("NGC (New General Catalogue)")
+        self.ann_cat_ngc_checkbox = QCheckBox("NGC")
         self.ann_cat_ngc_checkbox.setChecked(True)
         self.ann_cat_ngc_checkbox.setToolTip(
-            "~8,000 NGC objects, from the same cached OpenNGC data as "
-            "Messier above.")
+            "New General Catalogue — ~8,000 NGC objects, from the same "
+            "cached OpenNGC data as Messier above.")
         og.addWidget(self._color_swatch(CATALOG_COLORS["ngc"]), row, 0)
         og.addWidget(self.ann_cat_ngc_checkbox, row, 1)
         row += 1
 
-        self.ann_cat_ic_checkbox = QCheckBox("IC (Index Catalogue)")
+        self.ann_cat_ic_checkbox = QCheckBox("IC")
         self.ann_cat_ic_checkbox.setChecked(True)
         self.ann_cat_ic_checkbox.setToolTip(
-            "~5,000 IC objects, from the same cached OpenNGC data as "
-            "Messier above.")
+            "Index Catalogue — ~5,000 IC objects, from the same cached "
+            "OpenNGC data as Messier above.")
         og.addWidget(self._color_swatch(CATALOG_COLORS["ic"]), row, 0)
         og.addWidget(self.ann_cat_ic_checkbox, row, 1)
         row += 1
@@ -153,21 +167,22 @@ class AnnotateMixin:
         og.addWidget(self.ann_cat_sh2_checkbox, row, 1)
         row += 1
 
-        self.ann_cat_ldn_checkbox = QCheckBox("Lynds Dark Nebulae (LdN)")
+        self.ann_cat_ldn_checkbox = QCheckBox("Lynds Dark Nebulae")
         self.ann_cat_ldn_checkbox.setToolTip(
-            "Lynds Catalogue of Dark Nebulae, queried live from VizieR "
-            "(catalogue VII/7A) for the current field. Needs internet on "
-            "every run — off by default for that reason.")
+            "Lynds Catalogue of Dark Nebulae (LdN), queried live from "
+            "VizieR (catalogue VII/7A) for the current field. Needs "
+            "internet on every run — off by default for that reason.")
         og.addWidget(self._color_swatch(CATALOG_COLORS["ldn"]), row, 0)
         og.addWidget(self.ann_cat_ldn_checkbox, row, 1)
         row += 1
 
-        self.ann_online_checkbox = QCheckBox("All stars < mag limit (online BSC)")
+        self.ann_online_checkbox = QCheckBox("All stars < mag limit (online)")
         self.ann_online_checkbox.setToolTip(
             "Siril's local star catalogue covers the field well already; "
             "this additionally runs Siril's own online conesearch against "
-            "the VizieR Bright Star Catalogue for every star below the "
-            "star magnitude limit, for denser coverage. Needs internet.")
+            "the VizieR Bright Star Catalogue (BSC) for every star below "
+            "the star magnitude limit, for denser coverage. Needs "
+            "internet.")
         og.addWidget(self.ann_online_checkbox, row, 0, 1, 2)
         row += 1
 
@@ -202,7 +217,7 @@ class AnnotateMixin:
         og.addWidget(self.ann_const_names_checkbox, row, 0, 1, 2)
         row += 1
 
-        og.addWidget(QLabel("Line width:"), row, 0)
+        og.addWidget(wlabel("Line width:"), row, 0)
         self.ann_const_width_spin = QSpinBox()
         self.ann_const_width_spin.setRange(1, 8)
         self.ann_const_width_spin.setValue(1)
@@ -212,7 +227,7 @@ class AnnotateMixin:
         og.addWidget(self.ann_const_width_spin, row, 1)
         row += 1
 
-        og.addWidget(QLabel("Gap (px):"), row, 0)
+        og.addWidget(wlabel("Gap (px):"), row, 0)
         self.ann_const_gap_spin = QSpinBox()
         self.ann_const_gap_spin.setRange(0, 60)
         self.ann_const_gap_spin.setValue(8)
@@ -223,7 +238,7 @@ class AnnotateMixin:
         og.addWidget(self.ann_const_gap_spin, row, 1)
         row += 1
 
-        og.addWidget(QLabel("Color preset:"), row, 0)
+        og.addWidget(wlabel("Color preset:"), row, 0)
         self.ann_const_preset_combo = QComboBox()
         self.ann_const_preset_combo.addItem("Custom")
         self.ann_const_preset_combo.addItems(
@@ -287,14 +302,14 @@ class AnnotateMixin:
         sg.setVerticalSpacing(8)
         sg.setColumnStretch(1, 1)
 
-        sg.addWidget(QLabel("Label size:"), 0, 0)
+        sg.addWidget(wlabel("Label size:"), 0, 0)
         self.ann_size_spin = QDoubleSpinBox()
         self.ann_size_spin.setRange(0.5, 3.0)
         self.ann_size_spin.setSingleStep(0.1)
         self.ann_size_spin.setValue(1.0)
         sg.addWidget(self.ann_size_spin, 0, 1)
 
-        sg.addWidget(QLabel("Marker style:"), 1, 0)
+        sg.addWidget(wlabel("Marker style:"), 1, 0)
         self.ann_marker_style_combo = QComboBox()
         self.ann_marker_style_combo.addItems(
             ["Circle", "Open Cross", "Circle + Open Cross"])
@@ -309,7 +324,7 @@ class AnnotateMixin:
             "updates immediately as you change the style.")
         sg.addWidget(self.ann_marker_style_combo, 1, 1)
 
-        sg.addWidget(QLabel("Label distance (× radius):"), 2, 0)
+        sg.addWidget(wlabel("Label distance (× radius):"), 2, 0)
         self.ann_cross_label_dist_spin = QDoubleSpinBox()
         self.ann_cross_label_dist_spin.setRange(-2.0, 5.0)
         self.ann_cross_label_dist_spin.setSingleStep(0.1)
@@ -343,7 +358,7 @@ class AnnotateMixin:
             "and label size, same as before this option existed. Uncheck "
             "to set a fixed pixel thickness instead.")
         circ_g.addWidget(self.ann_circle_auto_th_checkbox, 0, 0, 1, 2)
-        circ_g.addWidget(QLabel("Thickness (px):"), 1, 0)
+        circ_g.addWidget(wlabel("Thickness (px):"), 1, 0)
         self.ann_circle_th_spin = QSpinBox()
         self.ann_circle_th_spin.setRange(1, 12)
         self.ann_circle_th_spin.setValue(2)
@@ -351,7 +366,7 @@ class AnnotateMixin:
         circ_g.addWidget(self.ann_circle_th_spin, 1, 1)
 
         self.ann_circle_custom_color_checkbox = QCheckBox(
-            "Custom color (override per-catalogue colors)")
+            "Custom color override")
         self.ann_circle_custom_color_checkbox.setToolTip(
             "Off (default): each catalogue keeps its own color, matching "
             "the swatches above. On: every circle uses the single color "
@@ -380,7 +395,7 @@ class AnnotateMixin:
             self.ann_circle_auto_th_checkbox.toolTip().replace(
                 "circle's", "cross's"))
         cross_g.addWidget(self.ann_cross_auto_th_checkbox, 0, 0, 1, 2)
-        cross_g.addWidget(QLabel("Thickness (px):"), 1, 0)
+        cross_g.addWidget(wlabel("Thickness (px):"), 1, 0)
         self.ann_cross_th_spin = QSpinBox()
         self.ann_cross_th_spin.setRange(1, 12)
         self.ann_cross_th_spin.setValue(2)
@@ -388,7 +403,7 @@ class AnnotateMixin:
         cross_g.addWidget(self.ann_cross_th_spin, 1, 1)
 
         self.ann_cross_custom_color_checkbox = QCheckBox(
-            "Custom color (override per-catalogue colors)")
+            "Custom color override")
         self.ann_cross_custom_color_checkbox.setToolTip(
             "Same idea as the circle's custom color above, independent of "
             "it — you can have a custom cross color with per-catalogue "
@@ -403,7 +418,7 @@ class AnnotateMixin:
         cross_g.addWidget(self.ann_cross_swatch, 3, 0)
         cross_g.addWidget(self.ann_cross_color_btn, 3, 1)
 
-        cross_g.addWidget(QLabel("Gap (× radius):"), 4, 0)
+        cross_g.addWidget(wlabel("Gap (× radius):"), 4, 0)
         self.ann_cross_gap_spin = QDoubleSpinBox()
         self.ann_cross_gap_spin.setRange(0.0, 3.0)
         self.ann_cross_gap_spin.setSingleStep(0.1)
@@ -413,7 +428,7 @@ class AnnotateMixin:
             "multiple of the marker's own radius — so it scales with the "
             "object's apparent size instead of being a fixed pixel gap.")
         cross_g.addWidget(self.ann_cross_gap_spin, 4, 1)
-        cross_g.addWidget(QLabel("Arm length (× radius):"), 5, 0)
+        cross_g.addWidget(wlabel("Arm length (× radius):"), 5, 0)
         self.ann_cross_arm_spin = QDoubleSpinBox()
         self.ann_cross_arm_spin.setRange(0.1, 3.0)
         self.ann_cross_arm_spin.setSingleStep(0.1)
@@ -423,7 +438,7 @@ class AnnotateMixin:
             "marker's radius — also scales with object size.")
         cross_g.addWidget(self.ann_cross_arm_spin, 5, 1)
 
-        cross_g.addWidget(QLabel("Label position:"), 6, 0)
+        cross_g.addWidget(wlabel("Label position:"), 6, 0)
         self.ann_cross_label_pos_combo = QComboBox()
         self.ann_cross_label_pos_combo.addItems(
             ["Auto (avoid overlap)", "NE", "NW", "SE", "SW"])
@@ -497,7 +512,7 @@ class AnnotateMixin:
         ld_g.addWidget(self.ann_detail_size_checkbox, 1, 1)
         ld_v.addLayout(ld_g)
 
-        ld_custom_label = QLabel("Custom lines (added to every label, in "
+        ld_custom_label = wlabel("Custom lines (added to every label, in "
                                  "this order — type one label line per "
                                  "row of text):")
         ld_v.addWidget(ld_custom_label)
@@ -527,26 +542,28 @@ class AnnotateMixin:
             lambda: self._launch([self._exec_stage_ann]), undo_stage=IDX_ANN)
         v.addLayout(row)
 
-        # 2 buttons per row instead of 4 in one — same width fix already
-        # applied to the bottom Save/Export/Reset/Close row.
-        save_row1 = QHBoxLayout()
-        self.ann_save_btn = QPushButton("💾  Save image...")
-        self.ann_save_btn.setToolTip(
-            "Export the last annotated result as JPEG or PNG, wherever "
-            "you choose.")
-        self.ann_save_btn.clicked.connect(self.on_save_annotated_image)
-        save_row1.addWidget(self.ann_save_btn)
-        self.ann_select_btn = QPushButton("☑  Select objects...")
+        # 2 buttons per row (same width fix as the bottom Save/Export/
+        # Reset/Close row), grouped by what they actually do rather than
+        # the previous arbitrary pairing — icons dropped for consistency
+        # with the rest of the pipeline's action buttons:
+        #   Row 1: which objects are shown (menu-picked, or click-to-add)
+        #   Row 2: quick re-render actions that don't need a full re-run
+        #   Row 3: file I/O (export the image, re-import a saved JSON)
+        pick_row = QHBoxLayout()
+        self.ann_select_btn = QPushButton("Select objects...")
         self.ann_select_btn.setToolTip(
             "Pick which of the labeled objects stay visible — unchecking "
             "one removes it from the preview and export immediately, no "
             "need to re-run the stage.")
         self.ann_select_btn.clicked.connect(self._show_object_selector_dialog)
-        save_row1.addWidget(self.ann_select_btn)
-        v.addLayout(save_row1)
+        pick_row.addWidget(self.ann_select_btn)
+        self.ann_pick_btn = QPushButton("Pick object on image...")
+        self.ann_pick_btn.setCheckable(True)
+        pick_row.addWidget(self.ann_pick_btn)
+        v.addLayout(pick_row)
 
-        save_row2 = QHBoxLayout()
-        self.ann_update_preview_btn = QPushButton("🔄  Update preview")
+        redraw_row = QHBoxLayout()
+        self.ann_update_preview_btn = QPushButton("Update preview")
         self.ann_update_preview_btn.setToolTip(
             "Re-renders every currently shown object using the "
             "Annotation style panel's *current* settings — marker style, "
@@ -561,8 +578,8 @@ class AnnotateMixin:
             "re-run to remove those).")
         self.ann_update_preview_btn.clicked.connect(
             self._update_annotation_preview)
-        save_row2.addWidget(self.ann_update_preview_btn)
-        self.ann_remove_all_btn = QPushButton("🗑  Remove all")
+        redraw_row.addWidget(self.ann_update_preview_btn)
+        self.ann_remove_all_btn = QPushButton("Remove all")
         self.ann_remove_all_btn.setToolTip(
             "Hide every labeled object at once — one click, no need to "
             "open \"Select objects to show...\" and uncheck them "
@@ -572,23 +589,31 @@ class AnnotateMixin:
             "affect constellation lines — uncheck \"Constellation lines\" "
             "and re-run to remove those.")
         self.ann_remove_all_btn.clicked.connect(self._remove_all_annotations)
-        save_row2.addWidget(self.ann_remove_all_btn)
-        v.addLayout(save_row2)
+        redraw_row.addWidget(self.ann_remove_all_btn)
+        v.addLayout(redraw_row)
 
-        self.ann_import_btn = QPushButton("📥  Import annotation details...")
+        file_row = QHBoxLayout()
+        self.ann_save_btn = QPushButton("Save image...")
+        self.ann_save_btn.setToolTip(
+            "Export the last annotated result as JPEG or PNG, wherever "
+            "you choose.")
+        self.ann_save_btn.clicked.connect(self.on_save_annotated_image)
+        file_row.addWidget(self.ann_save_btn)
+        self.ann_import_btn = QPushButton("Import annotation details...")
         self.ann_import_btn.setToolTip(
             "Load a previously saved annotated_*.json (auto-saved next "
-            "to the JPG on every run) and redraw exactly those objects "
-            "onto the current un-annotated base canvas — no catalogue "
-            "queries or plate solving needed. Meant for re-applying a "
-            "saved annotation set to the same image it came from; a "
-            "warning appears if the file's image size doesn't match "
-            "the current one, since every position would then be off.")
+            "to the JPG every time this stage actually runs — see the "
+            "Run button above; \"Update preview\" doesn't write a new "
+            "one) and redraw exactly those objects onto the current "
+            "un-annotated base canvas — no catalogue queries or plate "
+            "solving needed. Meant for re-applying a saved annotation "
+            "set to the same image it came from; a warning appears if "
+            "the file's image size doesn't match the current one, since "
+            "every position would then be off.")
         self.ann_import_btn.clicked.connect(self._import_annotation_details_json)
-        v.addWidget(self.ann_import_btn)
+        file_row.addWidget(self.ann_import_btn)
+        v.addLayout(file_row)
 
-        self.ann_pick_btn = QPushButton("🖱  Pick object on image...")
-        self.ann_pick_btn.setCheckable(True)
         self.ann_pick_btn.setToolTip(
             "Click this, then click anywhere on the preview image to add "
             "a custom object right there — its RA/Dec (from the same "
@@ -599,7 +624,6 @@ class AnnotateMixin:
             "its style, or remove it afterward via \"Select objects...\" "
             "🎨 editor, same as any catalogue object.")
         self.ann_pick_btn.toggled.connect(self._toggle_ann_pick_mode)
-        v.addWidget(self.ann_pick_btn)
         self.ann_pick_hint = QLabel("")
         self.ann_pick_hint.setObjectName("SubHeader")
         self.ann_pick_hint.setWordWrap(True)
