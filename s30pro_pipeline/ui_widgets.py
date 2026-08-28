@@ -579,3 +579,44 @@ class Worker(QThread):
             traceback.print_exc()
             self.failed.emit(str(e))
 
+
+class PreviewFetchWorker(QThread):
+    """Runs a zero-argument callable off the GUI thread and reports its
+    result back via signals — specifically for
+    UnifiedPipelineWindow._refresh_preview()'s "no snapshot yet for this
+    stage, so show whatever Siril currently has loaded instead" path,
+    which fetches Siril's full-resolution current image and runs it
+    through the display stretch/QImage conversion. That's real work
+    (easily a second or more on a typical smart-telescope stack), and
+    _refresh_preview() fires on every stage-navigation click for any
+    stage that hasn't run yet this session — done synchronously on the
+    GUI thread, each of those clicks would briefly freeze the whole
+    window. Not a replacement for `Worker` above, which drives a full
+    stage's execution with progress reporting; this is for the much
+    lighter, much more frequent "just show me the current image" case,
+    with no progress reporting of its own.
+
+    `fn` is expected to return a QImage (or None) on success, or raise —
+    `RuntimeError` specifically means "nothing loaded in Siril yet",
+    which is a normal, expected outcome (see _get_current_image), not a
+    real failure, so it gets its own `empty` signal instead of `failed`."""
+    succeeded = pyqtSignal(object)  # QImage
+    empty = pyqtSignal()
+    failed = pyqtSignal(str)
+
+    def __init__(self, fn):
+        super().__init__()
+        self.fn = fn
+
+    def run(self):
+        try:
+            result = self.fn()
+        except RuntimeError:
+            self.empty.emit()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.failed.emit(str(e))
+        else:
+            self.succeeded.emit(result)
+

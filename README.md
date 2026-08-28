@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.0.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.2-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -320,6 +320,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.0.2 | Fixed: switching to a not-yet-run stage could briefly stall the window (the same full-resolution image fetch+stretch as the 2.0.1 launch fix, but firing on every stage-navigation click). Moved to a background thread that also holds off while a stage is actively running. |
 | 2.0.1 | Fixed: the window could take a long time to appear after launching (a full-resolution image fetch+stretch at the end of `_build_ui()` blocked window construction — now deferred to right after the window shows). Also fixed a startup crash ("no FITS image" right after opening, before loading anything). |
 | 2.0.0 | Rebuilt window: permanent left stage rail (grouped Stack / Clean / Stretch / Finish) doubling as the progress display, one-stage-at-a-time settings pane with an ADVANCED disclosure per stage, session ribbon for image info/progress, collapsed action bar (Run / Save / overflow menu), and a new dark "Industry" theme (square corners, hairline borders, one steel accent). |
 | 1.56.0 | New "📥 Import annotation details..." button reloads a saved `annotated_*.json` and redraws exactly those objects onto the current base image, no catalogue queries needed. JSON export gained font size/thickness fields for a full round-trip. |

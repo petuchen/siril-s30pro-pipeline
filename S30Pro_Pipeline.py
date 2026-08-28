@@ -242,7 +242,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.0.1"
+VERSION = "2.0.2"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -277,7 +277,9 @@ from s30pro_pipeline.veralux_stretch import VeraLuxCore, veralux_stretch
 from s30pro_pipeline.image_utils import (
     to_hwc_float, display_autostretch, make_qimage,
 )
-from s30pro_pipeline.ui_widgets import CompareView, HistogramEditor, Worker
+from s30pro_pipeline.ui_widgets import (
+    CompareView, HistogramEditor, Worker, PreviewFetchWorker,
+)
 from s30pro_pipeline.catalog_data import (
     BRIGHT_STARS, OPENNGC_URL, ANNOTATE_MAX_PER_CATALOG,
     CATALOG_COLORS, CATALOG_LABELS, _ang_sep, _sexa_to_deg, _http_get,
@@ -362,6 +364,11 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         self.snapshots_raw_after = {}
         self.undo_buttons = {}
         self.worker = None
+        # Background fetch for _refresh_preview()'s "no snapshot yet, show
+        # Siril's current image" path — see _refresh_preview for why this
+        # needs to be threaded rather than a plain synchronous call.
+        self._preview_worker = None
+        self._preview_pending = False
 
         # Scratch folder for expensive intermediate results (currently the
         # StarNet star/starless split used by the Hubble Palette stage) so
@@ -624,15 +631,69 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         # the "Use Siril's image" button; doing it automatically here
         # means moving to the next stage always shows the image it
         # would process, without an extra click.
-        try:
-            arr = self._get_current_image()
-        except RuntimeError:
-            self.compare.set_images(None, None)
+        #
+        # Fetching + stretching that image is real work (a second or
+        # more on a typical smart-telescope stack), and this method
+        # fires on every stage-navigation click for any stage that
+        # hasn't run yet — so it's threaded via PreviewFetchWorker
+        # rather than done inline, to avoid freezing the whole window on
+        # every such click. Only one fetch runs at a time: if a click
+        # arrives while one is already in flight, it's recorded as
+        # `_preview_pending` and re-evaluated (from scratch, via this
+        # same method — a snapshot may exist by then, or the user may
+        # have moved on to yet another stage) once the in-flight one
+        # finishes, instead of starting a second overlapping Siril call.
+        if self._preview_worker is not None and self._preview_worker.isRunning():
+            self._preview_pending = True
             return
-        hwc = to_hwc_float(arr)
-        if self.chk_display_stretch.isChecked():
-            hwc = display_autostretch(hwc)
-        self.compare.set_images(make_qimage(hwc), None)
+        # Also hold off while a stage is actually executing (self.worker):
+        # both that thread and this one would call Siril's API concurrently
+        # otherwise. Stage navigation itself isn't blocked during a run
+        # (_set_running() only disables the per-stage Run buttons, not the
+        # rail), so this can genuinely happen. Re-checked from _on_succeeded/
+        # _on_failed once the run finishes, same as the in-flight case above.
+        if self.worker is not None and self.worker.isRunning():
+            self._preview_pending = True
+            return
+        self._preview_pending = False
+
+        stretch_on = self.chk_display_stretch.isChecked()
+
+        def fetch():
+            arr = self._get_current_image()  # may raise RuntimeError
+            hwc = to_hwc_float(arr)
+            if stretch_on:
+                hwc = display_autostretch(hwc)
+            return make_qimage(hwc)
+
+        worker = PreviewFetchWorker(fetch)
+        worker.succeeded.connect(self._on_preview_fetch_succeeded)
+        worker.empty.connect(self._on_preview_fetch_empty)
+        worker.failed.connect(self._on_preview_fetch_failed)
+        self._preview_worker = worker
+        worker.start()
+
+    def _on_preview_fetch_done(self):
+        """Shared tail of all three PreviewFetchWorker outcomes: clear the
+        in-flight marker, then re-run _refresh_preview() if a newer
+        request arrived while this fetch was running (see the
+        _preview_pending comment in _refresh_preview)."""
+        self._preview_worker = None
+        if self._preview_pending:
+            self._refresh_preview()
+
+    def _on_preview_fetch_succeeded(self, qimg):
+        self.compare.set_images(qimg, None)
+        self._on_preview_fetch_done()
+
+    def _on_preview_fetch_empty(self):
+        self.compare.set_images(None, None)
+        self._on_preview_fetch_done()
+
+    def _on_preview_fetch_failed(self, msg):
+        self.compare.set_images(None, None)
+        self.siril.log(f"Preview refresh failed: {msg}", LogColor.SALMON)
+        self._on_preview_fetch_done()
 
     def _on_snapshot_ready(self, stage_idx):
         self.preview_stage_combo.setCurrentIndex(stage_idx)
@@ -900,6 +961,11 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         self.status_label.setText(f"Error: {err}")
         self.siril.log(f"Pipeline error: {err}", LogColor.RED)
         QMessageBox.critical(self, "Pipeline error", err)
+        # A preview fetch may have been deferred while this stage ran
+        # (see _refresh_preview's self.worker.isRunning() guard) — retry it
+        # now that the Siril connection is free again.
+        if self._preview_pending:
+            self._refresh_preview()
 
     def _on_succeeded(self):
         self._set_running(False)
@@ -909,6 +975,8 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
             self.siril.reset_progress()
         except Exception:
             pass
+        if self._preview_pending:
+            self._refresh_preview()
 
     def _update_image_info(self):
         """Show target / date / integration / FOV / size of the current image."""

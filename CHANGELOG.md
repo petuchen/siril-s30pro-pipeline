@@ -1,5 +1,21 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.0.2
+
+* **Fixed: switching to a stage that hasn't run yet could briefly stall
+  the window.** `_refresh_preview()` fires on every stage-navigation
+  click (rail or stepper); for a stage with no snapshot yet it falls
+  back to fetching Siril's current full-resolution image and running it
+  through the display stretch, the same real work that used to block
+  the launch itself before v2.0.1's fix — except this path runs on
+  every click, not just once at startup. Moved that fetch to a new
+  `PreviewFetchWorker` background thread so stage navigation no longer
+  freezes the window while it runs. Only one fetch runs at a time: a
+  click that arrives while one is already in flight, or while a stage
+  is actively executing (sharing the same Siril connection as the
+  pipeline's stage-execution thread), is queued and re-run once the
+  in-flight work finishes instead of overlapping it.
+
 ## 2.0.1
 
 * **Fixed: the pipeline window could take a long time to even appear
