@@ -16,6 +16,20 @@ modern UI and per-stage before/after preview:
 CHANGELOG (recent — see CHANGELOG.md / S30Pro_Pipeline_README.html for
 full history)
 ------------------------------------------------------------------------
+* 2.0.0 — Rebuilt window: the 13 stages become a permanent left rail
+  (grouped Stack / Clean / Stretch / Finish) that doubles as the progress
+  display, and the settings panel shows one stage at a time instead of
+  thirteen stacked cards. Each stage keeps two or three controls visible
+  with the rest behind an ADVANCED disclosure. Image info and run progress
+  move to a session ribbon across the top; the four bottom buttons collapse
+  to one primary (Run Full Pipeline), one secondary (Save image) and an
+  overflow menu; settings JSON import/export gets a permanent home in the
+  rail footer. "Use Siril's image" moves to the top of each stage as a
+  "Starting from" row. Expand All / Collapse All are gone — with one stage
+  on screen there is nothing to expand; their enable/disable job is in the
+  overflow menu. New dark theme: square corners, hairline borders, one
+  steel accent. Window adapts below 1180px (rail collapses to numbers,
+  ribbon detail behind a disclosure); minimum 960x640.
 * 1.29.5 — Two "Combine with existing master" improvements:
   1) Total integration time is now the *sum* of this run's own subs and
   the existing master's, not just whatever Siril's `stack` naturally
@@ -228,7 +242,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "1.56.0"
+VERSION = "2.0.0"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -286,8 +300,9 @@ from s30pro_pipeline.stages.stage_palette import PaletteMixin
 from s30pro_pipeline.stages.stage_stretch import StretchMixin
 from s30pro_pipeline.stages.stage_annotate import AnnotateMixin
 from s30pro_pipeline.stages.stage1_preprocess import Stage1Mixin
+from s30pro_pipeline.ui_v2 import UiV2Mixin
 
-class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMixin, StarsMixin, BgeMixin, DenoiseMixin, HistMixin, TouchMixin, WatermarkMixin, AgrMixin, CropMixin, ScnrMixin, QMainWindow):
+class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMixin, StarsMixin, BgeMixin, DenoiseMixin, HistMixin, TouchMixin, WatermarkMixin, AgrMixin, CropMixin, ScnrMixin, QMainWindow):
 
     snapshot_ready = pyqtSignal(int)
     log_d_solved = pyqtSignal(float)
@@ -485,384 +500,6 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
 
     # --------------------------------------------------------------------- UI
 
-    def _build_ui(self):
-        central = QWidget()
-        self.setCentralWidget(central)
-        root = QHBoxLayout(central)
-        root.setContentsMargins(14, 14, 14, 14)
-        root.setSpacing(0)
-
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setChildrenCollapsible(False)
-        splitter.setHandleWidth(10)
-        splitter.setStyleSheet(
-            "QSplitter::handle { background: transparent; }"
-            "QSplitter::handle:hover { background: #2e4a8f; border-radius: 3px; }")
-        root.addWidget(splitter)
-
-        # ---------------- left: pipeline controls (resizable)
-        # Target width is roughly 1/3 of the window (see splitter.setSizes
-        # and the (1, 2) stretch factors below) — every stage's internal
-        # grid/row layout is written to fit and stay fully readable at
-        # that width with no horizontal scrolling needed.
-        left = QWidget()
-        left.setMinimumWidth(360)
-        lv = QVBoxLayout(left)
-        lv.setContentsMargins(0, 0, 8, 0)
-        lv.setSpacing(10)
-
-        header = QLabel("S30 Pro Pipeline")
-        header.setObjectName("Header")
-        sub = QLabel("Preprocess  →  Remove BG  →  Denoise  →  Stretch")
-        sub.setObjectName("SubHeader")
-        lv.addWidget(header)
-        lv.addWidget(sub)
-
-        # Populated by _stage_box, one (header checkbox, expand arrow)
-        # pair per stage card, so "Expand All"/"Collapse All" below can
-        # reach every stage without each stage mixin needing to expose
-        # its own widgets for this. Must exist before the first
-        # _stage_box() call, a few lines down (see
-        # iv.addWidget(self._build_stage1()) etc.).
-        self._stage_toggle_pairs = []
-
-        # One row, three equally-sized buttons (equal stretch factors
-        # below, rather than each button's natural text width) — "Import
-        # settings" is the longest label, so without equal stretch the
-        # other two would look noticeably smaller/off-balance next to it.
-        io_row = QHBoxLayout()
-        io_row.setSpacing(8)
-        import_btn = QPushButton("⤒  Import settings")
-        import_btn.setToolTip("Load all pipeline settings from a JSON file")
-        import_btn.clicked.connect(self.on_import_settings)
-        io_row.addWidget(import_btn, 1)
-        expand_all_btn = QPushButton("⌄  Expand All")
-        expand_all_btn.setToolTip(
-            "Selects (enables) and expands every stage at once — the "
-            "same as checking every stage's own header checkbox, which "
-            "already expands each one automatically.")
-        expand_all_btn.clicked.connect(self.on_expand_all_stages)
-        io_row.addWidget(expand_all_btn, 1)
-        collapse_all_btn = QPushButton("⌃  Collapse All")
-        collapse_all_btn.setToolTip(
-            "Deselects (disables) and collapses every stage at once — "
-            "the same as unchecking every stage's own header checkbox, "
-            "which already collapses each one automatically.")
-        collapse_all_btn.clicked.connect(self.on_collapse_all_stages)
-        io_row.addWidget(collapse_all_btn, 1)
-        lv.addLayout(io_row)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        inner = QWidget()
-        iv = QVBoxLayout(inner)
-        iv.setContentsMargins(0, 0, 8, 0)
-        iv.setSpacing(14)
-
-        iv.addWidget(self._build_stage1())
-        iv.addWidget(self._build_stage_crop())
-        iv.addWidget(self._build_stage_scnr())
-        iv.addWidget(self._build_stage_agr())
-        iv.addWidget(self._build_stage2())
-        iv.addWidget(self._build_stage_stars())
-        iv.addWidget(self._build_stage3())
-        iv.addWidget(self._build_stage_palette())
-        iv.addWidget(self._build_stage4())
-        iv.addWidget(self._build_stage_hist())
-        iv.addWidget(self._build_stage_touch())
-        iv.addWidget(self._build_stage_ann())
-        iv.addWidget(self._build_stage_watermark())
-        iv.addStretch()
-        scroll.setWidget(inner)
-        lv.addWidget(scroll, 1)
-
-        self.run_all_btn = QPushButton("▶   Run Full Pipeline")
-        self.run_all_btn.setObjectName("RunAll")
-        self.run_all_btn.clicked.connect(self.on_run_all)
-        lv.addWidget(self.run_all_btn)
-
-        # Split across two rows (2 buttons each) instead of one row of 4 —
-        # a single row of four labeled buttons pushed the left panel wider
-        # than it needed to be.
-        save_close_row1 = QHBoxLayout()
-        save_close_row1.setSpacing(8)
-        self.save_file_btn = QPushButton("💾  Save File...")
-        self.save_file_btn.setToolTip(
-            "Save the image currently loaded in Siril as FITS, JPEG, PNG or "
-            "TIFF, wherever you choose (uses Siril's own save commands).")
-        self.save_file_btn.clicked.connect(self.on_save_file)
-        save_close_row1.addWidget(self.save_file_btn)
-        self.export_settings_btn = QPushButton("⤓  Export settings")
-        self.export_settings_btn.setToolTip(
-            "Save all pipeline settings to a JSON file")
-        self.export_settings_btn.clicked.connect(self.on_export_settings)
-        save_close_row1.addWidget(self.export_settings_btn)
-        lv.addLayout(save_close_row1)
-
-        save_close_row2 = QHBoxLayout()
-        save_close_row2.setSpacing(8)
-        self.reset_btn = QPushButton("↺  Reset")
-        self.reset_btn.setToolTip(
-            "Resets every stage's settings to their defaults and clears all "
-            "before/after previews and undo history, then asks you to pick "
-            "a new session folder — for starting a fresh pipeline run "
-            "without closing and reopening the window. Asks for "
-            "confirmation first; doesn't touch anything already saved to "
-            "disk or the image currently loaded in Siril.")
-        self.reset_btn.clicked.connect(self.on_reset_pipeline)
-        save_close_row2.addWidget(self.reset_btn)
-        self.close_pipeline_btn = QPushButton("✕  Close Pipeline")
-        self.close_pipeline_btn.setToolTip(
-            "Closes this pipeline window (asks for confirmation first). The "
-            "image already loaded in Siril is not affected.")
-        self.close_pipeline_btn.clicked.connect(self.close)
-        save_close_row2.addWidget(self.close_pipeline_btn)
-        lv.addLayout(save_close_row2)
-
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        lv.addWidget(self.progress_bar)
-        self.status_label = QLabel("Ready.")
-        self.status_label.setObjectName("StatusLabel")
-        self.status_label.setWordWrap(True)
-        lv.addWidget(self.status_label)
-
-        # image info bar (target / date / integration / FOV / size)
-        info_row = QHBoxLayout()
-        info_row.setSpacing(6)
-        self.image_info_label = QLabel("No image loaded.")
-        self.image_info_label.setObjectName("SubHeader")
-        self.image_info_label.setWordWrap(True)
-        refresh_btn = QPushButton("↻")
-        refresh_btn.setObjectName("ABBtn")
-        refresh_btn.setFixedWidth(42)
-        refresh_btn.setToolTip("Refresh image info from the current Siril image")
-        refresh_btn.clicked.connect(self._update_image_info)
-        info_row.addWidget(self.image_info_label, 1)
-        info_row.addWidget(refresh_btn,
-                           alignment=Qt.AlignmentFlag.AlignTop)
-        lv.addLayout(info_row)
-
-        splitter.addWidget(left)
-
-        # ---------------- right: preview
-        right = QWidget()
-        right.setMinimumWidth(360)
-        rv = QVBoxLayout(right)
-        rv.setContentsMargins(8, 0, 0, 0)
-        rv.setSpacing(8)
-
-        bar = QHBoxLayout()
-        bar.addWidget(QLabel("Preview stage:"))
-        self.preview_stage_combo = QComboBox()
-        self.preview_stage_combo.addItems(STAGES)
-        self.preview_stage_combo.currentIndexChanged.connect(self._refresh_preview)
-        bar.addWidget(self.preview_stage_combo)
-        bar.addSpacing(16)
-
-        self.btn_before = QPushButton("Before")
-        self.btn_split = QPushButton("Split")
-        self.btn_after = QPushButton("After")
-        for b, m in ((self.btn_before, "before"), (self.btn_split, "split"),
-                     (self.btn_after, "after")):
-            b.setObjectName("ABBtn")
-            b.setCheckable(True)
-            b.clicked.connect(lambda _, mode=m: self._set_compare_mode(mode))
-            bar.addWidget(b)
-        self.btn_split.setChecked(True)
-        bar.addSpacing(16)
-
-        for text, tip, fn in (
-                ("−", "Zoom out", lambda: self.compare.zoom_by(0.8)),
-                ("+", "Zoom in", lambda: self.compare.zoom_by(1.25)),
-                ("⤢ Fit", "Reset zoom & position (or double-click the image)",
-                 lambda: self.compare.reset_view())):
-            b = QPushButton(text)
-            b.setObjectName("ABBtn")
-            b.setToolTip(tip)
-            b.clicked.connect(fn)
-            bar.addWidget(b)
-        bar.addStretch()
-        self.chk_display_stretch = QCheckBox("Auto-stretch preview (linear data)")
-        self.chk_display_stretch.setChecked(True)
-        self.chk_display_stretch.setToolTip(
-            "Applies a display-only screen stretch so linear images are visible.\n"
-            "Does not modify your data.")
-        bar.addWidget(self.chk_display_stretch)
-        rv.addLayout(bar)
-
-        self.compare = CompareView()
-        self.compare.selectionMade.connect(self._on_crop_selection)
-        self.compare.pointPicked.connect(self._on_ann_point_picked)
-        frame = QFrame()
-        frame.setStyleSheet(f"QFrame {{ background-color: #101216; border-radius: 10px; }}")
-        fl = QVBoxLayout(frame)
-        fl.setContentsMargins(6, 6, 6, 6)
-        fl.addWidget(self.compare)
-        rv.addWidget(frame, 1)
-
-        hint = QLabel("Drag divider to compare  •  drag image to move  •  scroll to zoom  "
-                      "•  double-click to fit  •  preview is downscaled — full "
-                      "resolution stays in Siril")
-        hint.setObjectName("SubHeader")
-        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        rv.addWidget(hint)
-        splitter.addWidget(right)
-        # 1:2 stretch keeps the control panel at roughly 1/3 of the window
-        # width — both on first show (setSizes below, matching the
-        # default 1440px window) and proportionally as the window is
-        # resized (unlike a (0, 1) factor, which would leave the left
-        # panel pinned at a fixed pixel width and hand 100% of any
-        # resize delta to the preview pane).
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
-        splitter.setSizes([470, 940])
-
-    def _stage_box(self, number, title, enabled_check=True,
-                   start_expanded=None):
-        """Build one of the 13 numbered stage cards. `enabled_check`
-        controls whether the stage's own header checkbox starts checked
-        (i.e. whether it runs as part of "Run all") — unrelated to
-        whether its settings are visible. `start_expanded` controls
-        that visibility independently: whether the "Use Siril's image"
-        row + all of this stage's own settings start shown or collapsed
-        behind the ▸/▾ arrow button in the header. Defaults to matching
-        `enabled_check` (so a stage that's off by default also starts
-        collapsed, keeping the panel short for a first-time user), but
-        callers can override it — e.g. Auto Gradient Removal starts
-        unchecked (most images don't need it) yet still starts expanded,
-        since it's one of the small set of stages a beginner is expected
-        to look at and decide on. After that initial state, though,
-        checking/unchecking the header checkbox always keeps the arrow
-        in sync — checking a stage expands it, unchecking one collapses
-        it back out of the way — so the panel stays as short as
-        possible once you've settled on which stages you want; the
-        arrow itself still works independently at any time if you just
-        want to peek at a stage's settings without enabling it."""
-        if start_expanded is None:
-            start_expanded = enabled_check
-        box = QGroupBox()
-        box.setCheckable(True)
-        outer = QVBoxLayout(box)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(6)
-        # Title gets its own full-width row — some stage titles ("Preprocess
-        # — Smart Telescope Stacking", "Annotate — Stars & Deep-Sky
-        # Objects") are long enough that sharing a row with the "Use
-        # Siril's image" button would force the row (and the whole panel)
-        # wider than the ~1/3-window-width target, since a plain QLabel
-        # won't shrink below its full text width. The button moves to its
-        # own short second row instead.
-        head = QHBoxLayout()
-        badge = QLabel(str(number))
-        badge.setObjectName("StageBadge")
-        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        t = QLabel(title)
-        t.setObjectName("StageTitle")
-        t.setWordWrap(True)
-        head.addWidget(badge)
-        head.addSpacing(6)
-        head.addWidget(t, 1)
-        expand_btn = QPushButton("▾" if start_expanded else "▸")
-        expand_btn.setObjectName("StageExpandBtn")
-        expand_btn.setCheckable(True)
-        expand_btn.setChecked(start_expanded)
-        expand_btn.setFixedWidth(26)
-        expand_btn.setToolTip(
-            "Show/hide this stage's settings — independent of the "
-            "checkbox above, which is whether the stage actually runs. "
-            "Checking/unchecking that checkbox always expands/collapses "
-            "the stage too; use this arrow to peek at a stage's "
-            "settings without enabling it.")
-        head.addWidget(expand_btn)
-        outer.addLayout(head)
-        # Registered (box, expand_btn) pair so the left panel's "Expand
-        # All"/"Collapse All" buttons (see _build_ui) can select/deselect
-        # AND expand/collapse every stage in one step. box.setChecked()
-        # alone would normally cascade into expand_btn via
-        # _on_enabled_toggle below — but only when it's an actual state
-        # *change*; a stage already sitting at the target checked state
-        # (e.g. Auto Gradient Removal, unchecked by default, when
-        # "Collapse All" is clicked) would never fire that toggled
-        # signal, silently leaving its arrow out of sync. Recording both
-        # widgets here lets the two bulk buttons set each directly and
-        # unconditionally, instead of depending on that signal firing.
-        # getattr guards this in case _stage_box is ever exercised before
-        # that list is initialized (e.g. a future standalone unit test
-        # of a single stage's UI).
-        stage_toggle_pairs = getattr(self, "_stage_toggle_pairs", None)
-        if stage_toggle_pairs is not None:
-            stage_toggle_pairs.append((box, expand_btn))
-
-        # Everything below the header — the "Use Siril's image" button and
-        # every one of this stage's own settings — lives in one `body`
-        # container so a single setVisible() call expands/collapses both
-        # in one step, independent of `content`'s own enabled/disabled
-        # (greyed-out) state below.
-        body = QWidget()
-        body.setObjectName("StageBody")
-        body.setStyleSheet("QWidget#StageBody { background: transparent; }")
-        bv = QVBoxLayout(body)
-        bv.setContentsMargins(0, 0, 0, 0)
-        bv.setSpacing(6)
-
-        load_row = QHBoxLayout()
-        load_row.addStretch()
-        load_btn = QPushButton("⇩  Use Siril's image")
-        load_btn.setObjectName("LoadCurrentBtn")
-        load_btn.setToolTip(
-            "Preview whatever image is currently loaded in Siril as this "
-            "stage's starting point — handy after doing something to it "
-            "manually in Siril's own GUI (or another script) outside "
-            "this pipeline. Every stage already runs on Siril's live "
-            "image regardless of what this preview shows (see "
-            "_get_current_image) — this button just lets you confirm/"
-            "see it here before continuing.")
-        load_btn.clicked.connect(
-            lambda: self._load_siril_current_into_stage(number - 1, title))
-        load_row.addWidget(load_btn)
-        bv.addLayout(load_row)
-
-        # Stage content lives in its own container so unchecking the header
-        # checkbox greys out/disables everything below it in one step, via
-        # Qt's normal parent->child disabled-state cascade — without
-        # touching each individual widget's own enabled flag (several
-        # widgets here manage their own conditional enabled state, e.g. the
-        # Undo button stays disabled until a backup exists, and margin
-        # spinboxes get disabled when Auto crop is on; blanket-toggling
-        # every descendant widget on the box itself would clobber those).
-        content = QWidget()
-        content.setObjectName("StageContent")
-        content.setStyleSheet("QWidget#StageContent { background: transparent; }")
-        v = QVBoxLayout(content)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(8)
-        bv.addWidget(content)
-
-        outer.addWidget(body)
-        body.setVisible(start_expanded)
-
-        def _on_expand_toggle(checked):
-            body.setVisible(checked)
-            expand_btn.setText("▾" if checked else "▸")
-        expand_btn.toggled.connect(_on_expand_toggle)
-
-        def _on_enabled_toggle(checked):
-            content.setEnabled(checked)
-            # Keep the arrow in sync with the checkbox: checking a stage
-            # expands it, unchecking one collapses it — connected only
-            # after the initial box.setChecked() call just below, so a
-            # stage's own start_expanded default (e.g. Auto Gradient
-            # Removal starting expanded even though unchecked) isn't
-            # immediately undone at construction time; from then on
-            # every actual check/uncheck (by the user, or by settings
-            # import via setChecked) re-syncs it.
-            expand_btn.setChecked(checked)
-        box.setChecked(enabled_check)
-        content.setEnabled(enabled_check)
-        box.toggled.connect(_on_enabled_toggle)
-        return box, v
-
     def _collapsible_section(self, title, start_expanded=False):
         """A titled, collapsible sub-section (arrow header + hideable
         content pane) for optional/advanced controls inside a stage card
@@ -978,8 +615,24 @@ class UnifiedPipelineWindow(Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMix
         snap = self.snapshots.get(idx)
         if snap:
             self.compare.set_images(snap.get("before"), snap.get("after"))
-        else:
+            return
+        # No snapshot yet for this stage (it hasn't been run this
+        # session) — rather than leaving the preview blank, show
+        # whatever's currently loaded in Siril, which is what this
+        # stage will actually start from once run. This is the same
+        # image _load_siril_current_into_stage() fetches on demand for
+        # the "Use Siril's image" button; doing it automatically here
+        # means moving to the next stage always shows the image it
+        # would process, without an extra click.
+        try:
+            arr = self._get_current_image()
+        except RuntimeError:
             self.compare.set_images(None, None)
+            return
+        hwc = to_hwc_float(arr)
+        if self.chk_display_stretch.isChecked():
+            hwc = display_autostretch(hwc)
+        self.compare.set_images(make_qimage(hwc), None)
 
     def _on_snapshot_ready(self, stage_idx):
         self.preview_stage_combo.setCurrentIndex(stage_idx)

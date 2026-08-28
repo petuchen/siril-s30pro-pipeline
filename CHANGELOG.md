@@ -1,5 +1,37 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.0.0
+
+* **Rebuilt window: new dark "Industry" theme, permanent stage rail,
+  one-stage-at-a-time settings pane.** The 13 stages become a permanent
+  left rail (grouped Stack / Clean / Stretch / Finish) that doubles as
+  the progress display, replacing the old scrolling column of thirteen
+  stacked cards — the settings panel now shows one stage at a time.
+  Each stage keeps two or three controls visible in the pane with the
+  rest behind an ADVANCED disclosure (collapsed by default, with a note
+  on how many settings are inside and whether they're at defaults).
+* Image info and run progress move to a session ribbon across the top
+  of the window. The four bottom buttons collapse to one primary
+  (Run Full Pipeline), one secondary (Save image) and an overflow menu;
+  settings JSON import/export gets a permanent home in the rail footer.
+  "Use Siril's image" moves to the top of each stage as a
+  "Starting from" row.
+* "Expand All" / "Collapse All" are gone — with one stage on screen at
+  a time there's nothing to expand; their enable/disable job moved into
+  the overflow menu ("Enable all stages" / "Disable all stages").
+* New dark theme (`theme.py`): square corners, hairline borders, one
+  steel-blue accent on a near-black ground — replaces the rounded,
+  filled 1.x look. Every 1.x widget object name is preserved so
+  un-migrated stage code keeps working unchanged.
+* Window adapts below 1180px width (rail collapses to numbers only,
+  ribbon detail tucks behind a disclosure); minimum window size is now
+  960x640.
+* New internal modules: `s30pro_pipeline/ui_shell.py` (`StageRail`,
+  `SessionRibbon`, `PaneHeader`, `ActionBar`, `AdvancedSection`) and
+  `s30pro_pipeline/ui_v2.py` (`UiV2Mixin`, providing the new
+  `_build_ui`/`_stage_box`). The old `_build_ui`/`_stage_box` in
+  `S30Pro_Pipeline.py` are removed now that every stage boots on v2.
+
 ## 1.56.0
 
 * **New: "📥 Import annotation details..." button.** The companion

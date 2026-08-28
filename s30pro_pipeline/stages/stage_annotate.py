@@ -229,6 +229,9 @@ class AnnotateMixin:
         self.ann_const_preset_combo.addItems(
             list(CONSTELLATION_COLOR_PRESETS.keys()))
         self.ann_const_preset_combo.setCurrentText(_default_preset)
+        self.ann_const_preset_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.ann_const_preset_combo.setMinimumContentsLength(16)
         self.ann_const_preset_combo.setToolTip(
             "Quick-pick a matched line/name color scheme. Picking either "
             "color manually below switches this back to \"Custom\".")
@@ -295,6 +298,9 @@ class AnnotateMixin:
         self.ann_marker_style_combo = QComboBox()
         self.ann_marker_style_combo.addItems(
             ["Circle", "Open Cross", "Circle + Open Cross"])
+        self.ann_marker_style_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.ann_marker_style_combo.setMinimumContentsLength(14)
         self.ann_marker_style_combo.setToolTip(
             "How each star/DSO marker is drawn. \"Open Cross\" is a "
             "reticle-style cross with a gap in the middle so it doesn't "
@@ -421,6 +427,9 @@ class AnnotateMixin:
         self.ann_cross_label_pos_combo = QComboBox()
         self.ann_cross_label_pos_combo.addItems(
             ["Auto (avoid overlap)", "NE", "NW", "SE", "SW"])
+        self.ann_cross_label_pos_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.ann_cross_label_pos_combo.setMinimumContentsLength(12)
         self.ann_cross_label_pos_combo.setToolTip(
             "The open cross leaves its 4 diagonal corners clear of arms — "
             "pick one to always place the name there, or leave on Auto to "

@@ -16,23 +16,30 @@ class ScnrMixin:
         info.setWordWrap(True)
         v.addWidget(info)
 
-        scnr_row = QHBoxLayout()
-        scnr_row.setSpacing(10)
-        scnr_row.addWidget(QLabel("Type:"))
+        # Two rows instead of one — four controls (combo, label, spin,
+        # checkbox) side by side don't fit the ~300-480px pane at any
+        # window width without forcing it to scroll sideways.
+        type_row = QHBoxLayout()
+        type_row.setSpacing(10)
+        type_row.addWidget(QLabel("Type:"))
         self.scnr_type_combo = QComboBox()
         self.scnr_type_combo.addItems(["Average neutral", "Maximum neutral"])
-        scnr_row.addWidget(self.scnr_type_combo, 1)
-        scnr_row.addWidget(QLabel("Amount:"))
+        type_row.addWidget(self.scnr_type_combo, 1)
+        v.addLayout(type_row)
+
+        amount_row = QHBoxLayout()
+        amount_row.setSpacing(10)
+        amount_row.addWidget(QLabel("Amount:"))
         self.scnr_amount = QDoubleSpinBox()
         self.scnr_amount.setRange(0.0, 1.0)
         self.scnr_amount.setSingleStep(0.05)
         self.scnr_amount.setValue(1.0)
-        scnr_row.addWidget(self.scnr_amount)
+        amount_row.addWidget(self.scnr_amount)
         self.scnr_preserve_checkbox = QCheckBox("Preserve lightness")
         self.scnr_preserve_checkbox.setChecked(True)
-        scnr_row.addWidget(self.scnr_preserve_checkbox)
-        scnr_row.addStretch()
-        v.addLayout(scnr_row)
+        amount_row.addWidget(self.scnr_preserve_checkbox)
+        amount_row.addStretch()
+        v.addLayout(amount_row)
 
         row, self.stage_scnr_run = self._run_row(
             lambda: self._launch([self._exec_stage_scnr]), undo_stage=IDX_SCNR)

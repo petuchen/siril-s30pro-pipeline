@@ -31,7 +31,9 @@ class TouchMixin:
         v.addWidget(info)
 
         top = QHBoxLayout()
-        self.touch_load_btn = QPushButton("📥  Load current image")
+        self.touch_load_btn = QPushButton("📥  Load image")
+        self.touch_load_btn.setToolTip("Load the image currently in Siril "
+                                       "into this stage's live preview.")
         self.touch_load_btn.clicked.connect(self._load_touch_preview)
         top.addWidget(self.touch_load_btn)
         top.addStretch()
@@ -72,6 +74,15 @@ class TouchMixin:
         self.touch_sharpen_mode_combo = QComboBox()
         self.touch_sharpen_mode_combo.addItems(
             ["Unsharp Mask (fast)", "Richardson-Lucy Deconvolution (recovers detail)"])
+        # Without this, QComboBox's default AdjustToContentsOnFirstShow
+        # policy sizes the closed box to fit its widest item — here the
+        # 48-character Richardson-Lucy label — which alone is wider than
+        # the whole pane. Cap it to a sane character count instead; the
+        # long item still shows in full in the dropdown, just elided
+        # when it's the current selection.
+        self.touch_sharpen_mode_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.touch_sharpen_mode_combo.setMinimumContentsLength(20)
         self.touch_sharpen_mode_combo.setToolTip(
             "Unsharp Mask boosts existing edge contrast (cheap, safe).\n"
             "Richardson-Lucy Deconvolution estimates the blur PSF and inverts "
