@@ -1,5 +1,24 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.3.0
+
+* **Added: live preview while dragging Crop's Rotate slider.** The
+  split preview now rotates in real time as you adjust the angle,
+  instead of only showing the rotation once you run the stage. It's a
+  quick on-screen approximation drawn with `QPainter`/`QTransform` on
+  the already-rendered preview image — not a re-run of Siril's own
+  `rotate` command on every tick, which would mean a full IPC
+  round-trip per slider movement — so treat it as a framing/angle
+  guide rather than a pixel-exact result; the actual crop still uses
+  Siril's `rotate` when the stage runs.
+  `_slider_spin_row()` gained an optional `on_change` callback to make
+  this possible: dragging the slider updates the paired spin box with
+  its signals blocked (so the two don't fight/loop), which meant a
+  plain `valueChanged` connection from calling code — the only option
+  before — silently missed every slider drag and only fired when
+  typing directly into the box. Existing callers are unaffected
+  (new parameter, defaults to `None`).
+
 ## 2.2.2
 
 * **Fixed: the "SESSION" line at the top of the window always read "No

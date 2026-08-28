@@ -504,6 +504,15 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.3.0</td><td><b>Added: live preview while dragging
+        Crop's Rotate slider.</b> The split preview now rotates in
+        real time as you adjust the angle, instead of only showing it
+        once you run the stage. It's a quick on-screen approximation
+        (Qt rotating the already-rendered preview image) rather than a
+        re-run of Siril's own <code>rotate</code> command on every
+        tick — treat it as a framing/angle guide, not a pixel-exact
+        result; the actual crop still uses Siril's <code>rotate</code>
+        when the stage runs.</td></tr>
       <tr><td>2.2.2</td><td><b>Fixed: the "SESSION" line at the top of
         the window always read "No image loaded".</b>
         <code>SessionRibbon.set_target()</code> existed but was never
@@ -1181,6 +1190,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.3.0</td><td><b>新增：拖動 Crop 步驟的「Rotate」滑桿時，預覽會即時旋轉。</b>分割預覽現在會隨著角度調整即時旋轉，而不是要等實際執行步驟才看得到旋轉結果。這只是螢幕上的快速近似效果（用 Qt 直接旋轉已經算好的預覽影像），並不是每次拖動都重新呼叫 Siril 的 <code>rotate</code> 指令——請把它當作抓角度／構圖用的參考，不是逐像素精確的結果；實際裁切時仍然是用 Siril 自己的 <code>rotate</code>。</td></tr>
       <tr><td>2.2.2</td><td><b>修正：視窗頂端的「SESSION」那一行文字，永遠顯示「No image loaded」。</b><code>SessionRibbon.set_target()</code> 這個函式雖然存在，但從來沒有被呼叫過。現在已經在 <code>_update_image_info()</code> 中接上，會顯示目標名稱（若 FITS 標頭有 <code>OBJECT</code> 欄位）與工作資料夾。
         <b>修正：Annotate 步驟面板需要左右捲動。</b>幾個表格列標籤與勾選框文字沒有自動換行，把整個面板撐得比面板本身的最大寬度還寬；現已改為自動換行，並縮短了幾個勾選框文字（細節移到既有的提示文字中）。
         <b>重新整理 Annotate 步驟最下方的操作按鈕，並移除了圖示</b>，以與整個外掛其他操作按鈕的風格一致，並依實際功能重新分組：哪些天體要顯示、不需要重新執行的快速重繪動作、以及檔案存取。</td></tr>

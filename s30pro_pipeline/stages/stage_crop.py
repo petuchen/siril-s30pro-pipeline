@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from PyQt6.QtGui import QImage, QPainter
 from PyQt6.QtWidgets import (
     QCheckBox, QDoubleSpinBox, QGridLayout, QHBoxLayout, QLabel, QPushButton,
 )
@@ -57,7 +58,12 @@ class CropMixin:
             "clockwise. Siril crops to the original frame size after "
             "rotating (no black borders), so set the margins/drawn box "
             "below generously enough to trim whatever the rotation "
-            "leaves ragged at the edges.")
+            "leaves ragged at the edges. The preview updates live as you "
+            "drag this — it's a quick on-screen approximation (Qt "
+            "rotating the already-rendered preview image), not the same "
+            "interpolation Siril's own `rotate` command uses, so treat it "
+            "as a guide for framing/angle, not a pixel-exact result.",
+            on_change=lambda _val: self._update_crop_rotate_preview())
         v.addLayout(rot_row)
 
         # manual crop by drawing a box in the preview
@@ -82,6 +88,50 @@ class CropMixin:
             lambda: self._launch([self._exec_stage_crop]), undo_stage=IDX_CROP)
         v.addLayout(row)
         return box
+
+    def _update_crop_rotate_preview(self):
+        """Live preview for the Rotate slider/spinbox: rotate the cached
+        un-rotated base image (see _on_preview_fetch_succeeded, which
+        keeps self._crop_rotate_base_img fresh whenever Crop's own
+        "before" preview gets fetched) with QPainter and show it on both
+        sides of the split view, in place of the plain base.
+
+        This is a quick on-screen approximation, not a re-run of Siril's
+        `rotate` command — doing that live, on every slider tick, would
+        mean a full Siril IPC round-trip per tick, which is exactly the
+        kind of thing PreviewFetchWorker was built to avoid doing
+        synchronously (see S30Pro_Pipeline.py's _refresh_preview). Qt's
+        own rotation is cheap enough to just do directly here.
+
+        Only meaningful while the Crop stage hasn't run yet (once it has,
+        the preview shows Crop's real before/after snapshot instead —
+        see _refresh_preview's snapshot-exists fast path, which this
+        never overrides). If nothing's cached yet (e.g. the background
+        fetch of the current Siril image hasn't completed), this is a
+        harmless no-op; it'll catch up once that fetch lands.
+        """
+        base = getattr(self, "_crop_rotate_base_img", None)
+        compare = getattr(self, "compare", None)
+        if base is None or compare is None:
+            return
+        if self.preview_stage_combo.currentIndex() != IDX_CROP:
+            return
+        angle = self.crop_rotate_spin.value()
+        if abs(angle) < 1e-6:
+            compare.set_images(base, base)
+            return
+        w, h = base.width(), base.height()
+        canvas = QImage(base.size(), base.format())
+        canvas.fill(0)  # black where the rotation leaves gaps at the corners
+        p = QPainter(canvas)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        p.translate(w / 2.0, h / 2.0)
+        p.rotate(-angle)  # Qt rotates clockwise for +angle; tooltip promises
+                          # positive = counter-clockwise, so negate
+        p.translate(-w / 2.0, -h / 2.0)
+        p.drawImage(0, 0, base)
+        p.end()
+        compare.set_images(canvas, canvas)
 
     def _toggle_crop_draw(self, checked):
         compare = getattr(self, "compare", None)

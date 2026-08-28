@@ -242,7 +242,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.2.2"
+VERSION = "2.3.0"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -372,6 +372,11 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         # A "Run this stage"/"Run all" click that arrived while the above
         # preview fetch was in flight — see _launch()'s guard.
         self._pending_launch = None
+        # Un-rotated base image for the Crop stage's live rotate preview
+        # (see _on_preview_fetch_succeeded and stage_crop.py's
+        # _update_crop_rotate_preview) — cached so dragging the Rotate
+        # slider doesn't need a fresh Siril fetch on every tick.
+        self._crop_rotate_base_img = None
         # Elapsed-time readout next to the progress bar: a real-time ticking
         # clock rather than something only updated when a progress() call
         # happens to fire, since some stages go a long stretch between
@@ -567,11 +572,20 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         row.addWidget(btn)
         return row, btn
 
-    def _slider_spin_row(self, label, minv, maxv, step, value, decimals, tooltip=""):
+    def _slider_spin_row(self, label, minv, maxv, step, value, decimals,
+                         tooltip="", on_change=None):
         """A labelled row with a slider and an editable QDoubleSpinBox kept
         in sync — the slider is a convenient drag handle, the box holds
         the exact value and can also be typed into directly. Returns
-        (row layout, spin box)."""
+        (row layout, spin box).
+
+        `on_change(value)`, if given, fires on every value change from
+        either control. Dragging the slider updates the box with its
+        signals blocked (so the two don't fight/loop), which means a
+        plain `box.valueChanged.connect(...)` from calling code misses
+        slider drags entirely — `on_change` is the one place both paths
+        reliably go through, for callers that need live updates while
+        dragging (e.g. the Crop stage's rotate-preview)."""
         row = QHBoxLayout()
         row.addWidget(QLabel(label))
 
@@ -595,11 +609,15 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
             box.blockSignals(True)
             box.setValue(minv + pos * step)
             box.blockSignals(False)
+            if on_change:
+                on_change(box.value())
 
         def from_box(val):
             slider.blockSignals(True)
             slider.setValue(int(round((val - minv) / step)))
             slider.blockSignals(False)
+            if on_change:
+                on_change(val)
 
         slider.valueChanged.connect(from_slider)
         box.valueChanged.connect(from_box)
@@ -731,6 +749,17 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         # halves show the same picture) without implying a stage result
         # that doesn't exist.
         self.compare.set_images(qimg, qimg)
+        # Cache the un-rotated base for the Crop stage's live rotate
+        # preview (_update_crop_rotate_preview in stage_crop.py) — this is
+        # the single point where Crop's "before" image gets (re)fetched
+        # while the stage hasn't run yet, so it's the natural place to
+        # keep that cache fresh rather than re-fetching from Siril on
+        # every spinbox tick (which would flood it with IPC calls while
+        # dragging).
+        if self.preview_stage_combo.currentIndex() == IDX_CROP:
+            self._crop_rotate_base_img = qimg
+            if abs(self.crop_rotate_spin.value()) > 1e-6:
+                self._update_crop_rotate_preview()
         self._on_preview_fetch_done()
 
     def _on_preview_fetch_empty(self):
