@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.5.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.5.1-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -322,6 +322,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.5.1 | Fixed "Use Siril's image" looking like it did nothing when the compare view was showing "After" — it now force-switches to "Before" so the newly imported image is always visible. |
 | 2.5.0 | Added Batch stacking to Preprocess — splits large sessions' lights into groups, stacks each, and folds the results into a running master weighted by sub count, so peak memory/disk stays bounded to one batch instead of the whole session. |
 | 2.4.1 | Removed the "Use Siril's image" button from the Preprocess stage — it reads raw light frames from disk and never starts from Siril's currently-loaded image, so the button had nothing to do there. |
 | 2.4.0 | Added a "Save annotation details..." button in the Annotate stage — writes the current in-memory object list (including per-object 🎨 style edits) to JSON on demand, since a Run always rebuilds from scratch and previously discarded edits. |

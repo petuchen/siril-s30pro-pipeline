@@ -242,7 +242,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.5.0"
+VERSION = "2.5.1"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -831,14 +831,25 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         (added in _stage_box). Refreshes just that stage's "before"
         preview with whatever is currently loaded in Siril right now, so
         work done manually in Siril's own GUI (or another script)
-        outside this pipeline is visible here before continuing.
+        outside this pipeline is visible here before continuing — e.g.
+        after redoing/tweaking something directly in Siril, this is how
+        you pull that change back into the pipeline's preview to keep
+        going from it.
 
         Every _exec_stage* function already reads Siril's live image at
         run time via _get_current_image() — this button doesn't change
         that behavior, it only lets you confirm/preview it first. Only
         the "before" thumbnail is touched; any existing "after" result
         from a previous run of this stage is left as-is rather than
-        being blanked out."""
+        being blanked out.
+
+        Also force-switches the compare view to "before" mode: the data
+        was always updated regardless of the previously active mode,
+        but if you'd been looking at "After" (a very normal thing to do
+        right before deciding to redo something in Siril), the new
+        image landed in a pane you weren't looking at and the click
+        appeared to do nothing. Switching to "before" here guarantees
+        you actually see what you just imported."""
         try:
             arr = self._get_current_image()
         except RuntimeError as e:
@@ -852,6 +863,7 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         snap["before"] = make_qimage(hwc)
         self.snapshots[stage_idx] = snap
         self.snapshot_ready.emit(stage_idx)
+        self._set_compare_mode("before")
         self.status_label.setText(
             f"{stage_label}: synced with Siril's current image.")
         self.siril.log(

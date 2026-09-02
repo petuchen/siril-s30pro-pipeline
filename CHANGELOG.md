@@ -1,5 +1,16 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.5.1
+
+* **Fixed: "Use Siril's image" could look like it did nothing.**
+  Clicking it always updated that stage's "before" preview data, but
+  the compare view could still be showing "After" (a normal thing to
+  be looking at right before deciding to redo something in Siril) —
+  so the newly imported image landed in a pane you weren't looking
+  at. The button now force-switches the compare view to "before"
+  mode, so the image you just pulled in from Siril is always
+  immediately visible.
+
 ## 2.5.0
 
 * **Added Batch stacking to the Preprocess stage**, for sessions with
