@@ -242,7 +242,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.5.1"
+VERSION = "2.5.2"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -1226,6 +1226,29 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
             "   •   ".join(parts) if parts else "Image loaded (no metadata).")
 
     # -------------------------------------------------------- image utilities
+
+    def _log_safe(self, message, color=None):
+        """Best-effort siril.log() that never lets a transient IPC
+        hiccup (SirilConnectionError — a socket timeout waiting for
+        Siril's ack; seen in practice during Batch stacking, whose
+        many sequential calls across a run that can take tens of
+        minutes give a single flaky round-trip more chances to show
+        up) abort an entire run over what's ultimately just an
+        informational message. Falls back to printing to stdout if
+        even that fails, so nothing is silently lost — but a failed
+        log line alone can no longer cost however many batches' worth
+        of already-completed stacking. Use this instead of
+        self.siril.log(...) at any call site where losing the whole
+        operation to a logging failure would be a bad trade (long-
+        running loops especially); plain self.siril.log(...) is still
+        fine for one-off calls where that trade-off doesn't apply."""
+        try:
+            if color is not None:
+                self.siril.log(message, color)
+            else:
+                self.siril.log(message)
+        except Exception as e:
+            print(f"[{APP_NAME}] (log call failed: {e}) {message}")
 
     def _get_current_image(self):
         """Current Siril image as float32 planar, 0..1."""

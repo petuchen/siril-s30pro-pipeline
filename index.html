@@ -504,6 +504,22 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.5.2</td><td><b>Fixed: Batch stacking could abort on a
+        plain logging hiccup.</b> A user hit a transient
+        <code>SirilConnectionError: Timeout while receiving data</code>
+        on the very first log message of a 438-light, 9-batch run —
+        not a real error, just a flaky IPC round-trip, but since
+        nothing caught it, it killed the whole run. Batch stacking
+        makes far more Siril calls than a normal run over what can be
+        a many-minutes-long operation, giving a single flaky log()
+        round-trip more chances to show up and take everything down
+        with it. Every logging call inside the batch loop now fails
+        safe instead of raising — a failed log line can no longer
+        cost however many batches' worth of already-completed
+        stacking. Doesn't change the normal single-pass path, and
+        doesn't paper over a timeout on an actual Siril command (those
+        still raise correctly — a lost ack there is a real problem,
+        not a cosmetic one).</td></tr>
       <tr><td>2.5.1</td><td><b>Fixed: "Use Siril's image" could look
         like it did nothing.</b> Clicking it always updated that
         stage's "before" preview data, but the compare view could
@@ -1230,6 +1246,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.5.2</td><td><b>修正：批次疊圖可能因為單純的記錄訊息逾時而中止整個流程。</b>有位使用者在處理 438 張、切成 9 批的疊圖時，在第一則記錄訊息就遇到暫時性的 <code>SirilConnectionError: Timeout while receiving data</code>——這其實不是真正的錯誤，只是一次不穩定的 IPC 往返逾時，但因為沒有攔截，整個執行就被中止了。批次疊圖在一次可能長達數十分鐘的執行過程中，會呼叫 Siril 的次數遠多於一般的前置處理執行，讓單一次不穩定的記錄呼叫有更多機會出現、進而拖垮整個流程。現在批次迴圈內的每一次記錄呼叫都會安全失敗、不再拋出例外——單純一行記錄訊息失敗，不會再賠上先前已經完成的好幾批疊圖成果。這項修正不影響一般單次執行的流程，也不會掩蓋真正 Siril 指令本身逾時的情況（那類情況仍會照常拋出錯誤——遺失指令的回覆確認是真正的問題，不是單純的顯示訊息）。</td></tr>
       <tr><td>2.5.1</td><td><b>修正：點擊「使用 Siril 目前影像」有時看起來像沒反應。</b>點擊後永遠都會更新該步驟的「before」預覽資料，但比較檢視畫面當時可能還停留在「After」（在決定要回 Siril 重做某些調整之前，停在 After 檢視是很常見的情況）——於是新匯入的影像其實已經更新，只是顯示在你當下沒在看的那一格。現在按下這個按鈕會強制把比較檢視切換到「Before」模式，確保剛匯入的影像一定會立刻顯示出來。</td></tr>
       <tr><td>2.5.0</td><td><b>為「預處理」步驟新增「批次疊圖」功能。</b>適用於子畫幅數量太多、無法一次全部對齊／疊圖的情況（記憶體或磁碟壓力）。新增可收合的「批次疊圖」區塊，可設定「每批子畫幅數」（預設 100）：把 lights 資料夾切成該大小的批次，每批都跑一次與一般執行相同的校正／對齊／疊圖流程，再把每批結果併入一個持續累積的主影像——採用與「與現有主影像合併」相同的加權合併方式，只是逐批套用。同一時間只有一批的子畫幅會被對齊／疊圖，因此尖峰記憶體／磁碟用量只需容納一批，而非整個工作階段。校正主檔仍只建立一次、供所有批次共用；SPCC 與「與現有主影像合併」也只在最終合併完成的結果上執行一次。此功能與 Comet Stack 模式不相容。</td></tr>
       <tr><td>2.4.1</td><td><b>移除「預處理」步驟的「使用 Siril 目前影像」按鈕。</b>這個按鈕在該步驟上本來就沒有意義：預處理一律直接從硬碟上的原始 light frame 開始處理，並且一開始就會關閉 Siril 目前載入的任何影像，從來不會以「Siril 目前載入的影像」作為起點。其他所有步驟的按鈕維持不變。</td></tr>

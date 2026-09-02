@@ -1,5 +1,26 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.5.2
+
+* **Fixed: Batch stacking could abort on a plain logging hiccup.** A
+  user hit `sirilpy.exceptions.SirilConnectionError: Timeout while
+  receiving data` on the very first `siril.log()` call of a 438-light,
+  9-batch run — a transient IPC round-trip timeout to Siril, not a
+  real error, but since nothing caught it, it killed the whole run.
+  Batch stacking makes far more Siril calls than a normal Preprocess
+  run over what can be a many-minutes-long operation, giving a single
+  flaky log() round-trip more chances to show up and take everything
+  down with it. Added `_log_safe()` (a `siril.log()` wrapper that
+  catches any exception and falls back to printing instead of
+  raising) and switched every logging call inside `_exec_stage1_batched`
+  and `_combine_two_masters` to use it — a failed *log line* can no
+  longer cost however many batches' worth of already-completed
+  stacking. Doesn't change behavior for the normal single-pass path,
+  and doesn't paper over a timeout on an actual `siril.cmd()` (those
+  still raise, correctly — a lost ack there is a real problem, not a
+  cosmetic one, and blindly retrying risks re-running an already-
+  completed command).
+
 ## 2.5.1
 
 * **Fixed: "Use Siril's image" could look like it did nothing.**

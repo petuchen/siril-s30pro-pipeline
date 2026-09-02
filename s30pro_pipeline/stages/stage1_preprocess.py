@@ -967,7 +967,7 @@ class Stage1Mixin:
         batches = [light_files[i:i + batch_size]
                   for i in range(0, len(light_files), batch_size)]
         n_batches = len(batches)
-        siril.log(
+        self._log_safe(
             f"Batch stacking: {len(light_files)} lights split into "
             f"{n_batches} batch(es) of up to {batch_size}.", LogColor.BLUE)
 
@@ -978,14 +978,14 @@ class Stage1Mixin:
         try:
             self.estimated_bortle = self._estimate_bortle_scale(lights_dir)
             if self.estimated_bortle:
-                siril.log(
+                self._log_safe(
                     f"Estimated sky: Bortle {self.estimated_bortle['bortle']} "
                     f"({self.estimated_bortle['name']}), "
                     f"~{self.estimated_bortle['sqm']:.2f} mag/arcsec² "
                     f"[{self.estimated_bortle['n_samples']} sample(s), est.]",
                     LogColor.BLUE)
         except Exception as e:
-            siril.log(f"Bortle estimate skipped: {e}", LogColor.SALMON)
+            self._log_safe(f"Bortle estimate skipped: {e}", LogColor.SALMON)
             self.estimated_bortle = None
         try:
             self.date_range = self._scan_capture_dates(lights_dir)
@@ -1071,7 +1071,7 @@ class Stage1Mixin:
             if running_master is None:
                 shutil.copy2(batch_result, running_master_path)
                 running_master = running_master_path
-                siril.log(
+                self._log_safe(
                     f"{prefix}stacked ({len(files)} subs) — seeded the "
                     "running master.", LogColor.BLUE)
             else:
@@ -1084,7 +1084,7 @@ class Stage1Mixin:
                 # running-master location (combine_scratch itself gets
                 # wiped at the start of the next call).
                 shutil.copy2(combined_path, running_master_path)
-                siril.log(
+                self._log_safe(
                     f"{prefix}folded into the running master "
                     f"(+{len(files)} subs).", LogColor.BLUE)
 
@@ -1111,7 +1111,7 @@ class Stage1Mixin:
         after_arr = self._get_current_image()
         self._store_snapshot(0, before_arr, after_arr,
                              before_linear=True, after_linear=True)
-        siril.log(
+        self._log_safe(
             f"Preprocess complete ({n_batches} batches, "
             f"{len(light_files)} subs total): {file_name}", LogColor.GREEN)
 
@@ -1146,7 +1146,7 @@ class Stage1Mixin:
             self._ensure_float32_fits(a_dst)
             self._ensure_float32_fits(b_dst)
         except Exception as e:
-            siril.log(
+            self._log_safe(
                 f"{log_prefix}Combine: couldn't normalize both frames to "
                 f"32-bit float ({e}) — stacking may fail if their "
                 "precision still doesn't match.", LogColor.SALMON)
@@ -1169,7 +1169,7 @@ class Stage1Mixin:
                               "-radius=25", *self._milkyway_solve_args())
                     registered = True
                 except (s.DataError, s.CommandError, s.SirilError) as e:
-                    siril.log(
+                    self._log_safe(
                         f"{log_prefix}Combine: plate-solve registration "
                         f"failed ({e}), falling back to star-based "
                         "registration.", LogColor.SALMON)
@@ -1178,7 +1178,7 @@ class Stage1Mixin:
                     siril.cmd("register", "combined_")
                     registered = True
                 except (s.DataError, s.CommandError, s.SirilError) as e:
-                    siril.log(
+                    self._log_safe(
                         f"{log_prefix}Combine: star-based registration "
                         f"also failed ({e}). Stacking without "
                         "registration — check the combined result "
@@ -1191,7 +1191,7 @@ class Stage1Mixin:
                               "-framing=max")
                     seq_for_stack = "r_combined_"
                 except (s.DataError, s.CommandError, s.SirilError) as e:
-                    siril.log(
+                    self._log_safe(
                         f"{log_prefix}Combine: couldn't apply a "
                         f"registration transform ({e}) — stacking "
                         "without re-aligning; check the combined result "
@@ -1215,7 +1215,7 @@ class Stage1Mixin:
                             hdr["STACKCNT"] = total_subs
                         hdul.flush()
                 except Exception as e:
-                    siril.log(
+                    self._log_safe(
                         f"{log_prefix}Combine: couldn't write the "
                         f"combined total integration time into the "
                         f"result's header ({e}).", LogColor.SALMON)
