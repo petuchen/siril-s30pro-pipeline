@@ -1,5 +1,28 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.5.3
+
+* **Fixed a hard process crash (SIGABRT) on a second Batch stacking
+  run.** A user's crash log showed the real faulting thread this time
+  (`Thread 2 Crashed:: Worker`): `abort()` <- `QMessageLogger::fatal`
+  <- `pyqt6_err_print()` <- `sipQThread::run()`. This is PyQt6/sip's
+  behavior when a Python exception escapes an overridden Qt virtual
+  method (like `QThread.run()`) completely uncaught — it doesn't stay
+  a Python-catchable failure, it aborts the *entire process*. `Worker.
+  run()` already wrapped its work in `try/except Exception`, but the
+  exception-handling code itself wasn't guarded: constructing the
+  failure message with `str(e)` can itself raise (e.g. on a malformed
+  exception argument from a corrupted/desynced socket read after a
+  Siril IPC hiccup), and that secondary exception had nothing left to
+  catch it, escaping `run()` and triggering the abort. Hardened both
+  `Worker.run()` and `PreviewFetchWorker.run()` (the two `QThread`
+  subclasses in the project) so every step — traceback printing,
+  message formatting, and even the signal emissions themselves — is
+  individually guarded; nothing can escape either method anymore. A
+  bad exception during Batch stacking (or anywhere else) now always
+  surfaces as a normal "Pipeline error: ..." message instead of taking
+  the whole application down, regardless of what raised it or why.
+
 ## 2.5.2
 
 * **Fixed: Batch stacking could abort on a plain logging hiccup.** A

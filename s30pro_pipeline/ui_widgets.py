@@ -2,6 +2,8 @@
 compare view, the interactive histogram editor, and the background
 worker thread (extracted from S30Pro_Pipeline.py)."""
 
+import traceback
+
 import numpy as np
 import cv2
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy
@@ -571,13 +573,56 @@ class Worker(QThread):
         self.fn = fn
 
     def run(self):
+        """Runs `self.fn` and reports the outcome via succeeded/failed —
+        deliberately paranoid about never letting ANY exception escape
+        this method. PyQt6/sip's rule for an overridden virtual method
+        like QThread.run(): if a Python exception propagates all the
+        way out of it uncaught, sip reports it via pyqt6_err_print()
+        and then calls Qt's own qFatal(), which aborts the *entire
+        process* (SIGABRT) — not a Python-catchable failure, a hard
+        crash, confirmed by a user's crash log showing exactly this
+        stack (abort -> QMessageLogger::fatal -> pyqt6_err_print ->
+        sipQThread::run(), on the Worker thread, during a Batch
+        stacking run). A single bad exception (e.g. a Siril IPC
+        timeout on an actual siril.cmd() call, which — unlike the
+        siril.log() case _log_safe fixed in 2.5.2 — legitimately needs
+        to surface as a failure) must never be allowed to take the
+        whole application down with it.
+
+        Every step that could conceivably raise is individually
+        guarded: constructing the failure message (str(e) itself can
+        raise, e.g. on a malformed/non-UTF8 exception argument from a
+        corrupted socket read), and even emitting the signals
+        themselves. Anything that still goes wrong past that point is
+        swallowed rather than re-raised — a silently-missing progress
+        update beats aborting every batch's worth of already-completed
+        work."""
         try:
             self.fn(lambda msg, p=0.0: self.progressed.emit(msg, p))
+        except BaseException as e:
+            try:
+                traceback.print_exc()
+            except BaseException:
+                pass
+            try:
+                msg = str(e)
+            except BaseException:
+                try:
+                    msg = repr(e)
+                except BaseException:
+                    msg = f"{type(e).__name__} (couldn't format the error message)"
+            try:
+                self.failed.emit(msg)
+            except BaseException:
+                pass
+            return
+        try:
             self.succeeded.emit()
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            self.failed.emit(str(e))
+        except BaseException:
+            try:
+                traceback.print_exc()
+            except BaseException:
+                pass
 
 
 class PreviewFetchWorker(QThread):
@@ -609,14 +654,41 @@ class PreviewFetchWorker(QThread):
         self.fn = fn
 
     def run(self):
+        """Same paranoia as Worker.run() above (see its docstring for
+        why): every exception, even a RuntimeError-turned-empty-signal
+        or the signal emissions themselves, is guarded so nothing can
+        ever escape this method uncaught and trigger PyQt6/sip's
+        qFatal()-on-unhandled-virtual-method-exception abort."""
         try:
             result = self.fn()
         except RuntimeError:
-            self.empty.emit()
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            self.failed.emit(str(e))
-        else:
+            try:
+                self.empty.emit()
+            except BaseException:
+                pass
+            return
+        except BaseException as e:
+            try:
+                traceback.print_exc()
+            except BaseException:
+                pass
+            try:
+                msg = str(e)
+            except BaseException:
+                try:
+                    msg = repr(e)
+                except BaseException:
+                    msg = f"{type(e).__name__} (couldn't format the error message)"
+            try:
+                self.failed.emit(msg)
+            except BaseException:
+                pass
+            return
+        try:
             self.succeeded.emit(result)
+        except BaseException:
+            try:
+                traceback.print_exc()
+            except BaseException:
+                pass
 
