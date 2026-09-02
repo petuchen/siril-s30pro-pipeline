@@ -1,5 +1,35 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.7.5
+
+* **Actually fixed batch masters coming out different sizes** — 2.7.3's
+  fix (turning off `-maximize` per batch) turned out not to address
+  the real cause, confirmed by a live run that hit the exact same
+  "Stacking error: input images have different sizes" at the combine
+  step afterward. The real mechanism: Siril's `seqapplyreg
+  -framing=max` (the default framing for Average (rejection), the
+  most common stack method) pads EACH frame only as much as THAT
+  frame's own shift needs — it does not pad every frame in the
+  sequence to one shared canvas size. So two different batches,
+  selecting different frame-range subsets of the one shared registered
+  sequence, legitimately produce different physical output sizes, no
+  matter what `-maximize` is set to on the per-batch `stack` call —
+  `-maximize` only reconciled sizes *within* one batch's own subset,
+  never *across* batches.
+
+  `_register_sequence` now takes a `framing` override, and Batch
+  stacking always passes `framing="min"` regardless of stack method —
+  the same framing Median/Sum stacking already use, which crops every
+  frame in the sequence to the area common to the *whole session* in
+  one seqapplyreg call. That's one fixed size, decided once, that
+  every later batch trivially shares no matter which frames it
+  contains — eliminating the size mismatch at its actual source
+  instead of trying to reconcile it after the fact. Same trade-off
+  Median/Sum already accept: the result only covers the overlap area
+  all frames share, not the full union any single frame touched. The
+  single-pass (non-batched) path is unaffected — it still uses "max"
+  framing for Average (rejection), unchanged.
+
 ## 2.7.4
 
 * **Fixed Batch stacking's final combine step never cleaning up its

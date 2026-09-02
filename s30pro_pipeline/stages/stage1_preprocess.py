@@ -390,7 +390,13 @@ class Stage1Mixin:
             "never actually the problem. Only the memory-heavy "
             "rejection-stacking step is split into groups of the "
             "size below, each group stacking its own frame range out "
-            "of that one shared, already-registered sequence.\n\n"
+            "of that one shared, already-registered sequence. "
+            "Registration always crops to the area common to the "
+            "whole session (\"minimum\" framing) here, regardless of "
+            "stack method, so every group shares one fixed canvas "
+            "size no matter which frames it contains — trading away "
+            "the outer edge only some frames touched for a guarantee "
+            "every group comes out identically sized.\n\n"
             "Because every group's master comes from the same "
             "registration pass and canvas framing, they're already "
             "pixel-aligned with each other, so the final combine is "
@@ -727,7 +733,7 @@ class Stage1Mixin:
         return seq_name
 
     def _register_sequence(self, progress, seq_name, progress_base=0.4,
-                           progress_span=0.2, log_prefix=""):
+                           progress_span=0.2, log_prefix="", framing=None):
         """Registers `seq_name` (plate-solve if local Gaia astrometry is
         available, falling back to star-based registration) and
         applies the registration (seqapplyreg), leaving every frame
@@ -740,7 +746,24 @@ class Stage1Mixin:
         shared registration pass are already pixel-aligned with each
         other, so combining them afterward needs no re-registration at
         all, unlike the earlier per-batch-independent-registration
-        design."""
+        design.
+
+        `framing` overrides the usual method-based choice (see below)
+        — Batch stacking forces `"min"` regardless of stack method.
+        With `-framing=max` (Average (rejection)'s normal default),
+        seqapplyreg pads EACH frame only as much as THAT frame's own
+        shift requires, not to one shared size for the whole session —
+        so two different frame-range subsets of the same registered
+        sequence can (and, confirmed against a live Siril instance,
+        reliably do) come out different physical sizes, since each
+        batch's own `-maximize` recompute at stack time only knows
+        about that batch's own frames' shift range. `-framing=min`
+        instead crops every frame to the area common to the WHOLE
+        sequence in this one seqapplyreg call — one fixed size,
+        decided once, that every later subset trivially shares no
+        matter which frames it contains. Same trade-off Median/Sum
+        already accept below: the result only covers the overlap area,
+        not the full union every frame touched."""
         siril = self.siril
         cleanup = self.cleanup_checkbox.isChecked()
         drizzle = self.drizzle_checkbox.isChecked()
@@ -788,8 +811,14 @@ class Stage1Mixin:
         # (-framing=min) — this guarantees uniform size without needing
         # stack's own -maximize at all. Trade-off: the Median/Sum result
         # only covers the overlap area, not the full union every frame
-        # touched (Average still gets the wider union canvas).
-        apply_framing = "max" if stack_method == "Average (rejection)" else "min"
+        # touched (Average still gets the wider union canvas). `framing`
+        # lets the caller override this — see the docstring for why
+        # Batch stacking always forces "min".
+        if framing is not None:
+            apply_framing = framing
+        else:
+            apply_framing = (
+                "max" if stack_method == "Average (rejection)" else "min")
 
         progress(f"{log_prefix}Preprocess: applying registration...",
                  progress_base + progress_span * 0.5)
@@ -1120,11 +1149,18 @@ class Stage1Mixin:
         # for every sub — this is the architectural fix: every batch
         # below stacks a subset of this one shared, identically
         # registered/framed sequence instead of registering its own
-        # independent subset.
+        # independent subset. framing="min" (not the Average
+        # (rejection) method's usual "max") is forced here regardless
+        # of stack method — see _register_sequence's docstring: "max"
+        # pads each frame only as much as ITS OWN shift needs, so two
+        # different batches' subsets come out different physical
+        # sizes; "min" crops every frame to one common, fixed size
+        # decided once for the whole session, which every batch then
+        # trivially shares.
         seq_name = self._convert_calibrate_seqsubsky(
             progress, 0.05, 0.13)
         reg_seq_name = self._register_sequence(
-            progress, seq_name, 0.19, 0.14)
+            progress, seq_name, 0.19, 0.14, framing="min")
 
         batch_root = os.path.join(proc_dir, "_batches")
         os.makedirs(batch_root, exist_ok=True)
