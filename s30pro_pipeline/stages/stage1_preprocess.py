@@ -376,6 +376,51 @@ class Stage1Mixin:
 
         v.addWidget(combine_box)
 
+        batch_box, batch_v, self.batch_toggle_btn = self._collapsible_section(
+            "Batch stacking")
+        batch_info = QLabel(
+            "For sessions with too many subs to register/stack all at "
+            "once (memory or disk pressure). Splits 'lights' into "
+            "groups of the size below, runs each group through the "
+            "same calibrate/register/stack pipeline as a normal run, "
+            "then folds each group's result into a running master "
+            "using the same weighted combine as \"Combine with "
+            "existing master\" above (more subs in a group correctly "
+            "outweighs fewer). Only one group's subs are ever "
+            "registered/stacked at a time, so peak memory/disk stays "
+            "bounded to one group instead of the whole session. SPCC "
+            "and \"Combine with existing master\" still run once, on "
+            "the final assembled result, not once per group. Not "
+            "compatible with Comet Stack mode.")
+        batch_info.setObjectName("SubHeader")
+        batch_info.setWordWrap(True)
+        batch_v.addWidget(batch_info)
+
+        self.batch_stacking_checkbox = QCheckBox("Batch stacking")
+        batch_v.addWidget(self.batch_stacking_checkbox)
+
+        batch_size_row = QHBoxLayout()
+        batch_size_row.setSpacing(8)
+        batch_size_row.addWidget(QLabel("Subs per batch:"))
+        self.batch_size_spin = QSpinBox()
+        self.batch_size_spin.setRange(5, 10000)
+        self.batch_size_spin.setValue(100)
+        self.batch_size_spin.setToolTip(
+            "How many light frames go into each batch. Lower uses less "
+            "memory/disk per batch but means more (slower) combine "
+            "rounds; higher is faster overall but each batch costs "
+            "more. 100 is a reasonable starting point — if you're "
+            "still hitting memory limits with 100, try 50.")
+        batch_size_row.addWidget(self.batch_size_spin)
+        batch_size_row.addStretch()
+        batch_v.addLayout(batch_size_row)
+
+        self.batch_stacking_checkbox.toggled.connect(
+            self.batch_size_spin.setEnabled)
+        self.batch_size_spin.setEnabled(False)
+
+        v.addWidget(batch_box)
+
         def _on_combine_toggle(checked):
             for w in (self.combine_master_path_edit,
                      self.combine_master_browse_btn,
@@ -489,7 +534,6 @@ class Stage1Mixin:
         return []
 
     def _exec_stage1(self, progress):
-        progress("Preprocess: starting...", 0.01)
         siril = self.siril
         cwd = self.cwd
         # Reset each run so a name from a previous, combine-enabled run
@@ -512,6 +556,12 @@ class Stage1Mixin:
                 "an earlier Remove Stars run (it belonged to the previous "
                 "stack, not this new one). Re-run Remove Stars after "
                 "Preprocess finishes if you need it again.", LogColor.SALMON)
+
+        if self.batch_stacking_checkbox.isChecked():
+            self._exec_stage1_batched(progress, lights_dir)
+            return
+
+        progress("Preprocess: starting...", 0.01)
 
         # grab a raw sub for the 'before' preview
         before_arr = self._load_raw_light_preview(lights_dir)
@@ -550,30 +600,91 @@ class Stage1Mixin:
         else:
             siril.cmd("setcompress", "0")
 
-        use_darks = self.darks_checkbox.isChecked()
-        use_flats = self.flats_checkbox.isChecked()
-        use_biases = self.biases_checkbox.isChecked()
-        drizzle = self.drizzle_checkbox.isChecked()
-        drizzle_amount = round(self.drizzle_amount.value(), 2)
-        pixfrac = round(self.pixel_fraction.value(), 2)
-        feather = self.feather_checkbox.isChecked()
-        feather_amount = self.feather_amount.value()
-        cleanup = self.cleanup_checkbox.isChecked()
-
         # ---- calibration masters
-        for name, use in (("biases", use_biases), ("flats", use_flats),
-                          ("darks", use_darks)):
+        self._build_calibration_masters(progress)
+
+        # ---- lights: convert / calibrate / (seqsubsky)
+        seq_name = self._convert_calibrate_seqsubsky(progress)
+
+        stack_method = self.stack_method_combo.currentText()
+
+        if stack_method == "Comet Stack":
+            # Comet Stack replaces everything from here through stacking
+            # with its own two-registration workflow (star registration,
+            # whole-sequence background/star removal, a spliced-in
+            # registration patch, comet registration + Star Recomposition
+            # — both GUI-only manual steps) — see
+            # _exec_stage1_comet_stack for the full sequence and why. It
+            # ends with Siril's currently-loaded image already being the
+            # user's accepted, recomposited result, and its own
+            # `siril.cmd("cd", "../")`, matching what the rest of this
+            # method (combine-with-master / SPCC / save, below) expects.
+            self._exec_stage1_comet_stack(progress, seq_name)
+        else:
+            self._register_and_stack(progress, seq_name)
+            siril.cmd("cd", "../")
+
+        # ---- combine with an existing master from an earlier session
+        # (no raw subs kept) — must happen before SPCC/save below so the
+        # rest of the pipeline (and the saved file) sees the combined
+        # result, not just this run's own stack.
+        if (self.combine_master_checkbox.isChecked()
+                and self.combine_master_path_edit.text().strip()):
+            self._combine_with_existing_master(progress)
+
+        # ---- SPCC
+        if self.spcc_checkbox.isChecked():
+            self._platesolve_and_spcc(progress)
+
+        # ---- save stacked result with a descriptive name
+        file_name = self._save_result_named()
+        progress("Preprocess: done.", 1.0)
+
+        after_arr = self._get_current_image()
+        self._store_snapshot(0, before_arr, after_arr,
+                             before_linear=True, after_linear=True)
+        siril.log(f"Preprocess complete: {file_name}", LogColor.GREEN)
+
+    def _build_calibration_masters(self, progress, progress_frac=0.05):
+        """Stacks whichever of biases/flats/darks are enabled into
+        <cwd>/process/{name}_stacked<ext>. Shared by the normal
+        single-pass Preprocess run and Batch stacking, which only
+        builds these once (reused by every batch — they're reference
+        calibration frames, not lights, so there's nothing to gain by
+        splitting them)."""
+        for name, use in (("biases", self.biases_checkbox.isChecked()),
+                          ("flats", self.flats_checkbox.isChecked()),
+                          ("darks", self.darks_checkbox.isChecked())):
             if use:
-                progress(f"Preprocess: stacking {name}...", 0.05)
+                progress(f"Preprocess: stacking {name}...", progress_frac)
                 self._convert_dir(name)
                 self._stack_calibration(name)
 
-        # ---- lights
-        progress("Preprocess: converting lights...", 0.15)
+    def _convert_calibrate_seqsubsky(self, progress, progress_base=0.15,
+                                     progress_span=0.18, log_prefix=""):
+        """Converts self.cwd's 'lights' folder into a Siril sequence,
+        calibrates it against whatever calibration masters already
+        exist in self.cwd/process (see _build_calibration_masters),
+        then optionally runs seqsubsky for per-frame background
+        equalization (the main mosaic-seam fix). Returns the resulting
+        sequence name prefix. Shared by the normal single-pass
+        Preprocess run and every batch of Batch stacking — both need
+        exactly this same treatment applied to whichever 'lights'
+        folder self.cwd currently points at."""
+        siril = self.siril
+        cleanup = self.cleanup_checkbox.isChecked()
+        drizzle = self.drizzle_checkbox.isChecked()
+        use_darks = self.darks_checkbox.isChecked()
+        use_flats = self.flats_checkbox.isChecked()
+        use_biases = self.biases_checkbox.isChecked()
+
+        progress(f"{log_prefix}Preprocess: converting lights...",
+                 progress_base)
         self._convert_dir("lights")
         seq_name = "lights_"
 
-        progress("Preprocess: calibrating lights...", 0.25)
+        progress(f"{log_prefix}Preprocess: calibrating lights...",
+                 progress_base + progress_span * 0.4)
         cmd = ["calibrate", seq_name]
         if use_darks and self._master_exists("darks"):
             cmd += ["-dark=darks_stacked", "-cc=dark"]
@@ -594,8 +705,9 @@ class Stage1Mixin:
         # degree-1 background from every sub BEFORE registration stops
         # bright strips appearing where panels overlap)
         if self.seqsubsky_checkbox.isChecked():
-            progress("Preprocess: per-frame background removal (seqsubsky)...",
-                     0.33)
+            progress(f"{log_prefix}Preprocess: per-frame background "
+                     "removal (seqsubsky)...",
+                     progress_base + progress_span * 0.75)
             try:
                 siril.cmd("seqsubsky", seq_name,
                           str(self.seqsubsky_degree_spin.value()))
@@ -603,208 +715,514 @@ class Stage1Mixin:
                     self._clean_process(seq_name)
                 seq_name = "bkg_" + seq_name
             except (s.DataError, s.CommandError, s.SirilError) as e:
-                siril.log(f"seqsubsky failed (continuing without it): {e}",
-                          LogColor.SALMON)
+                siril.log(f"{log_prefix}seqsubsky failed (continuing "
+                         f"without it): {e}", LogColor.SALMON)
+        return seq_name
 
+    def _register_and_stack(self, progress, seq_name, progress_base=0.4,
+                            progress_span=0.35, log_prefix=""):
+        """Registers `seq_name` (plate-solve if local Gaia astrometry is
+        available, falling back to star-based registration), applies
+        the registration, then stacks with whichever method/options
+        the Preprocess panel has selected — leaving the result at
+        self.cwd/process/result<ext> and loaded as Siril's current
+        image. Shared by the normal single-pass run (after its own
+        _convert_calibrate_seqsubsky) and every batch of Batch
+        stacking. Does not `cd` back out of process/ afterward — same
+        as before this was factored out, the caller does that."""
+        siril = self.siril
+        cleanup = self.cleanup_checkbox.isChecked()
+        drizzle = self.drizzle_checkbox.isChecked()
+        drizzle_amount = round(self.drizzle_amount.value(), 2)
+        pixfrac = round(self.pixel_fraction.value(), 2)
+        feather = self.feather_checkbox.isChecked()
+        feather_amount = self.feather_amount.value()
         stack_method = self.stack_method_combo.currentText()
 
-        if stack_method == "Comet Stack":
-            # Comet Stack replaces everything from here through stacking
-            # with its own two-registration workflow (star registration,
-            # whole-sequence background/star removal, a spliced-in
-            # registration patch, comet registration + Star Recomposition
-            # — both GUI-only manual steps) — see
-            # _exec_stage1_comet_stack for the full sequence and why. It
-            # ends with Siril's currently-loaded image already being the
-            # user's accepted, recomposited result, and its own
-            # `siril.cmd("cd", "../")`, matching what the rest of this
-            # method (combine-with-master / SPCC / save, below) expects.
-            self._exec_stage1_comet_stack(progress, seq_name)
-        else:
-            # ---- registration (plate solve for mosaics if Gaia is
-            # available, falling back to ordinary star-based registration
-            # if it fails — e.g. "Image ... did not solve", expected for
-            # very wide fields like Seestar's Milky Way Mode that span far
-            # more sky than Siril's astrometric solver reliably handles
-            # per-frame. Same fallback pattern as "Combine with existing
-            # master" below.)
-            plate_solved = False
-            if self.gaia_available:
-                progress("Preprocess: plate solving sequence...", 0.4)
-                try:
-                    siril.cmd("seqplatesolve", seq_name, "-nocache", "-force",
-                              "-disto=ps_distortion",
-                              f"-order={self.disto_order_spin.value()}",
-                              "-radius=25", *self._milkyway_solve_args())
-                    plate_solved = True
-                except (s.DataError, s.CommandError, s.SirilError) as e:
-                    siril.log(
-                        f"Preprocess: plate-solve registration failed ({e}), "
-                        "falling back to star-based registration.",
-                        LogColor.SALMON)
-            if not plate_solved:
-                progress("Preprocess: registering (2-pass)...", 0.4)
-                reg = ["register", seq_name, "-2pass"]
-                if drizzle:
-                    reg += ["-drizzle", f"-scale={drizzle_amount}", f"-pixfrac={pixfrac}"]
-                siril.cmd(*reg)
-
-            # Siril's "-maximize" framing (pad every frame to the union/max
-            # canvas at stack time) only works with the Average+rejection
-            # stack method — Median/Sum reject it outright ("Cannot upscale
-            # or maximize framing with median stacking. Disabling"), and once
-            # disabled, frames of differing sizes then abort stacking with
-            # "input images have different sizes". So for Median/Sum, crop
-            # every registered frame down to their common overlap instead
-            # (-framing=min) — this guarantees uniform size without needing
-            # stack's own -maximize at all. Trade-off: the Median/Sum result
-            # only covers the overlap area, not the full union every frame
-            # touched (Average still gets the wider union canvas).
-            apply_framing = "max" if stack_method == "Average (rejection)" else "min"
-
-            progress("Preprocess: applying registration...", 0.55)
-            apply_cmd = ["seqapplyreg", seq_name, "-kernel=square",
-                         f"-framing={apply_framing}"]
+        # ---- registration (plate solve for mosaics if Gaia is
+        # available, falling back to ordinary star-based registration
+        # if it fails — e.g. "Image ... did not solve", expected for
+        # very wide fields like Seestar's Milky Way Mode that span far
+        # more sky than Siril's astrometric solver reliably handles
+        # per-frame. Same fallback pattern as "Combine with existing
+        # master" below.)
+        plate_solved = False
+        if self.gaia_available:
+            progress(f"{log_prefix}Preprocess: plate solving sequence...",
+                     progress_base)
+            try:
+                siril.cmd("seqplatesolve", seq_name, "-nocache", "-force",
+                          "-disto=ps_distortion",
+                          f"-order={self.disto_order_spin.value()}",
+                          "-radius=25", *self._milkyway_solve_args())
+                plate_solved = True
+            except (s.DataError, s.CommandError, s.SirilError) as e:
+                siril.log(
+                    f"{log_prefix}Preprocess: plate-solve registration "
+                    f"failed ({e}), falling back to star-based "
+                    "registration.", LogColor.SALMON)
+        if not plate_solved:
+            progress(f"{log_prefix}Preprocess: registering (2-pass)...",
+                     progress_base)
+            reg = ["register", seq_name, "-2pass"]
             if drizzle:
-                apply_cmd += ["-drizzle", f"-scale={drizzle_amount}",
-                              f"-pixfrac={pixfrac}"]
-            siril.cmd(*apply_cmd)
-            if cleanup:
-                self._clean_process(seq_name)
-            seq_name = "r_" + seq_name
+                reg += ["-drizzle", f"-scale={drizzle_amount}", f"-pixfrac={pixfrac}"]
+            siril.cmd(*reg)
 
-            # ---- stacking (compression is always off for the final stack)
-            progress("Preprocess: stacking...", 0.7)
+        # Siril's "-maximize" framing (pad every frame to the union/max
+        # canvas at stack time) only works with the Average+rejection
+        # stack method — Median/Sum reject it outright ("Cannot upscale
+        # or maximize framing with median stacking. Disabling"), and once
+        # disabled, frames of differing sizes then abort stacking with
+        # "input images have different sizes". So for Median/Sum, crop
+        # every registered frame down to their common overlap instead
+        # (-framing=min) — this guarantees uniform size without needing
+        # stack's own -maximize at all. Trade-off: the Median/Sum result
+        # only covers the overlap area, not the full union every frame
+        # touched (Average still gets the wider union canvas).
+        apply_framing = "max" if stack_method == "Average (rejection)" else "min"
+
+        progress(f"{log_prefix}Preprocess: applying registration...",
+                 progress_base + progress_span * 0.4)
+        apply_cmd = ["seqapplyreg", seq_name, "-kernel=square",
+                     f"-framing={apply_framing}"]
+        if drizzle:
+            apply_cmd += ["-drizzle", f"-scale={drizzle_amount}",
+                          f"-pixfrac={pixfrac}"]
+        siril.cmd(*apply_cmd)
+        if cleanup:
+            self._clean_process(seq_name)
+        seq_name = "r_" + seq_name
+
+        # ---- stacking (compression is always off for the final stack)
+        progress(f"{log_prefix}Preprocess: stacking...",
+                 progress_base + progress_span * 0.7)
+        siril.cmd("setcompress", "0")
+        if stack_method == "Sum":
+            # Sum has no normalization/rejection/weighting (matches Siril's
+            # own restriction — meant for planetary/lucky imaging stacks).
+            stack_cmd = ["stack", seq_name, "sum", "-filter-included",
+                         "-out=result"]
+        elif stack_method == "Median (Milky Way Mode)":
+            # No -maximize (unsupported here — frames are already
+            # uniform size via -framing=min above), no weighting, and no
+            # -feather/-overlap_norm (both require -maximize per Siril).
+            stack_cmd = ["stack", seq_name, "med", "-norm=addscale",
+                         "-output_norm", "-rgb_equal",
+                         "-filter-included", "-32b", "-out=result"]
+        else:  # Average (rejection) — the default
+            stack_cmd = ["stack", seq_name, " rej 3 3", "-norm=addscale",
+                         "-output_norm", "-rgb_equal", "-maximize",
+                         "-filter-included", "-32b", "-out=result"]
+            if self.weighting_checkbox.isChecked():
+                wmap = {"Number of Stars": "nbstars",
+                        "Weighted FWHM": "wfwhm", "Noise": "noise"}
+                stack_cmd.append(
+                    "-weight="
+                    f"{wmap[self.weighting_method_combo.currentText()]}")
+            if feather:
+                stack_cmd.append(f"-feather={feather_amount}")
+            if self.overlap_norm_checkbox.isChecked():
+                stack_cmd.append("-overlap_norm")
+        siril.cmd(*stack_cmd)
+        if cleanup:
+            self._clean_process(seq_name)
+
+        siril.cmd("load", "result")
+
+    def _platesolve_and_spcc(self, progress):
+        """Plate-solves the current Siril image (Siril's own solver,
+        then local Astrometry.net, then a full blind solve for Milky
+        Way Mode's very wide field) and runs SPCC color calibration if
+        that succeeds. Shared by the normal single-pass path and Batch
+        stacking's final assembled result — SPCC only makes sense to
+        run once, on the fully combined image, not once per batch."""
+        siril = self.siril
+        progress("Preprocess: plate solving result + SPCC...", 0.85)
+        solved = False
+        mw_args = self._milkyway_solve_args()
+        is_milkyway = (self.stack_method_combo.currentText()
+                       == "Median (Milky Way Mode)")
+        try:
+            siril.cmd("platesolve", "-force", *mw_args)
+            solved = True
+        except (s.DataError, s.CommandError, s.SirilError) as e:
+            # Siril's own solver ("Generic Error" and similar) is known
+            # to fail on some stacked Seestar images even though the
+            # exact same image solves fine on nova.astrometry.net or a
+            # local Astrometry.net install — likely due to onboard-
+            # stacking edge artifacts confusing its star matcher. Retry
+            # once with -localasnet (local Astrometry.net solve-field)
+            # before giving up, matching the same "try the robust
+            # method, then fall back" pattern used for registration
+            # above. Requires a local Astrometry.net install (ansvr on
+            # Windows, `brew install astrometry-net` on Mac) with index
+            # files covering the field — if that isn't installed,
+            # -localasnet will fail too and we fall through cleanly.
+            siril.log(
+                f"Preprocess: plate-solve failed ({e}), retrying with "
+                "local Astrometry.net (-localasnet)...", LogColor.SALMON)
+            try:
+                siril.cmd("platesolve", "-force", "-localasnet",
+                          *mw_args)
+                solved = True
+            except (s.DataError, s.CommandError, s.SirilError) as e2:
+                if is_milkyway:
+                    # At Milky Way Mode's ~60-70 deg field of view, even
+                    # -localasnet's header-hinted near-search (using
+                    # FOCALLEN/XPIXSZ and the header's RA/Dec as a
+                    # starting guess, searching only a small cone around
+                    # it) reliably fails — confirmed by hand: the same
+                    # field only solved once asked to search completely
+                    # blindly. -blindpos/-blindres tell Astrometry.net
+                    # to ignore those hints and search the whole sky at
+                    # any scale, which is slower but far more robust for
+                    # a field this wide. Also needs wide-scale index
+                    # files (index-4116 through 4119 cover this FOV;
+                    # see download_wide_field_index.sh) — without them
+                    # this will fail just as fast as the hinted attempt.
+                    siril.log(
+                        f"Preprocess: -localasnet failed ({e2}), "
+                        "retrying blindly (-blindpos -blindres) — "
+                        "Milky Way Mode's wide field often needs a full "
+                        "blind solve instead of a header-hinted one...",
+                        LogColor.SALMON)
+                    try:
+                        siril.cmd("platesolve", "-force", "-localasnet",
+                                  "-blindpos", "-blindres", *mw_args)
+                        solved = True
+                    except (s.DataError, s.CommandError,
+                            s.SirilError) as e3:
+                        siril.log(
+                            f"Blind Astrometry.net solve also failed "
+                            f"({e3}). SPCC and the Annotate stage need "
+                            "a plate-solve solution — make sure the "
+                            "wide-field index files (index-4116 to "
+                            "4119) are installed and that Astrometry.net "
+                            "can find them (astrometry.cfg's add_path).",
+                            LogColor.SALMON)
+                else:
+                    siril.log(
+                        f"Astrometry.net fallback also failed ({e2}). "
+                        "SPCC and the Annotate stage need a plate-solve "
+                        "solution — if this keeps happening, install a "
+                        "local Astrometry.net solver (solve-field) with "
+                        "matching index files to enable -localasnet.",
+                        LogColor.SALMON)
+        if solved:
+            try:
+                self._run_spcc()
+            except (s.DataError, s.CommandError, s.SirilError) as e:
+                siril.log(f"SPCC failed (continuing): {e}",
+                          LogColor.SALMON)
+
+    # ------------------------------------------------------- Batch stacking
+
+    def _exec_stage1_batched(self, progress, lights_dir):
+        """Splits self.cwd's 'lights' folder into groups of up to
+        self.batch_size_spin.value() subs, runs each group through the
+        exact same convert/calibrate/(seqsubsky)/register/stack
+        pipeline as a normal Preprocess run (_convert_calibrate_seqsubsky
+        + _register_and_stack), then folds each group's freshly-stacked
+        master into a running combined master via _combine_two_masters
+        (Siril's -weight=nbstack, so a group built from more subs
+        correctly outweighs one built from fewer). Only one group's
+        worth of subs is ever registered/stacked at once — that's the
+        actual point, it bounds peak memory/disk to one group plus the
+        (much smaller) running master, instead of the whole session.
+
+        Calibration masters (darks/flats/biases) are still built once
+        against the full calibration-frame folders — those aren't
+        lights, splitting them wouldn't make sense — and
+        hardlinked/copied into each batch's own process/ folder so
+        `calibrate` can find them there.
+
+        Combine-with-existing-master, SPCC, and the final save all
+        still happen once, after every batch has been folded in — the
+        same order the single-pass path already uses for "Combine with
+        existing master" (combine first, SPCC after), and there's no
+        benefit to repeating a full-image operation like SPCC once per
+        batch when it can just run once on the final assembled result.
+
+        Comet Stack mode is not supported here (see the check below) —
+        its guided-pause manual steps don't make sense repeated per
+        batch."""
+        siril = self.siril
+        cwd = self.cwd
+
+        if self.stack_method_combo.currentText() == "Comet Stack":
+            raise RuntimeError(
+                "Batch stacking doesn't support Comet Stack mode — its "
+                "manual guided-pause steps don't make sense repeated "
+                "per batch. Turn off Batch stacking, or switch "
+                "Stacking method away from Comet Stack.")
+
+        batch_size = self.batch_size_spin.value()
+        light_files = sorted(
+            f for f in os.listdir(lights_dir)
+            if not f.startswith(".") and f.lower().endswith(
+                (".fit", ".fits", ".fit.fz", ".fits.fz")))
+        if not light_files:
+            raise RuntimeError("No FITS light frames found in 'lights'.")
+        batches = [light_files[i:i + batch_size]
+                  for i in range(0, len(light_files), batch_size)]
+        n_batches = len(batches)
+        siril.log(
+            f"Batch stacking: {len(light_files)} lights split into "
+            f"{n_batches} batch(es) of up to {batch_size}.", LogColor.BLUE)
+
+        progress("Preprocess: starting batch stacking...", 0.01)
+        before_arr = self._load_raw_light_preview(lights_dir)
+        progress("Preprocess: estimating sky brightness (Bortle, sample "
+                 "subs)...", 0.02)
+        try:
+            self.estimated_bortle = self._estimate_bortle_scale(lights_dir)
+            if self.estimated_bortle:
+                siril.log(
+                    f"Estimated sky: Bortle {self.estimated_bortle['bortle']} "
+                    f"({self.estimated_bortle['name']}), "
+                    f"~{self.estimated_bortle['sqm']:.2f} mag/arcsec² "
+                    f"[{self.estimated_bortle['n_samples']} sample(s), est.]",
+                    LogColor.BLUE)
+        except Exception as e:
+            siril.log(f"Bortle estimate skipped: {e}", LogColor.SALMON)
+            self.estimated_bortle = None
+        try:
+            self.date_range = self._scan_capture_dates(lights_dir)
+        except Exception:
+            self.date_range = None
+
+        proc_dir = os.path.join(cwd, "process")
+        if os.path.isdir(proc_dir):
+            shutil.rmtree(proc_dir, ignore_errors=True)
+        siril.cmd("close")
+        siril.cmd("cd", f'"{cwd}"')
+        if self.compression_checkbox.isChecked():
+            siril.cmd("setcompress", "1 -type=rice 16")
+        else:
             siril.cmd("setcompress", "0")
-            if stack_method == "Sum":
-                # Sum has no normalization/rejection/weighting (matches Siril's
-                # own restriction — meant for planetary/lucky imaging stacks).
-                stack_cmd = ["stack", seq_name, "sum", "-filter-included",
-                             "-out=result"]
-            elif stack_method == "Median (Milky Way Mode)":
-                # No -maximize (unsupported here — frames are already
-                # uniform size via -framing=min above), no weighting, and no
-                # -feather/-overlap_norm (both require -maximize per Siril).
-                stack_cmd = ["stack", seq_name, "med", "-norm=addscale",
-                             "-output_norm", "-rgb_equal",
-                             "-filter-included", "-32b", "-out=result"]
-            else:  # Average (rejection) — the default
-                stack_cmd = ["stack", seq_name, " rej 3 3", "-norm=addscale",
-                             "-output_norm", "-rgb_equal", "-maximize",
-                             "-filter-included", "-32b", "-out=result"]
-                if self.weighting_checkbox.isChecked():
-                    wmap = {"Number of Stars": "nbstars",
-                            "Weighted FWHM": "wfwhm", "Noise": "noise"}
-                    stack_cmd.append(
-                        "-weight="
-                        f"{wmap[self.weighting_method_combo.currentText()]}")
-                if feather:
-                    stack_cmd.append(f"-feather={feather_amount}")
-                if self.overlap_norm_checkbox.isChecked():
-                    stack_cmd.append("-overlap_norm")
-            siril.cmd(*stack_cmd)
+
+        self._build_calibration_masters(progress)
+
+        batch_root = os.path.join(proc_dir, "_batches")
+        os.makedirs(batch_root, exist_ok=True)
+        # Stable location for the running master, kept deliberately
+        # separate from combine_scratch below — _combine_two_masters
+        # wipes its work_dir at the start of every call, and the
+        # running master has to survive that (it's one of that call's
+        # own inputs, read back out as path_a).
+        running_master_path = os.path.join(
+            proc_dir, f"running_master{self.fits_extension}")
+        combine_scratch = os.path.join(proc_dir, "_batch_combine_scratch")
+        cleanup = self.cleanup_checkbox.isChecked()
+        real_cwd = cwd
+        running_master = None
+
+        for bi, files in enumerate(batches, start=1):
+            frac_base = 0.05 + (bi - 1) / n_batches * 0.75
+            frac_span = 0.75 / n_batches
+            prefix = f"Batch {bi}/{n_batches}: "
+            progress(f"{prefix}preparing {len(files)} sub(s)...", frac_base)
+
+            batch_dir = os.path.join(batch_root, f"batch_{bi:03d}")
+            batch_lights = os.path.join(batch_dir, "lights")
+            batch_process = os.path.join(batch_dir, "process")
+            os.makedirs(batch_lights, exist_ok=True)
+            os.makedirs(batch_process, exist_ok=True)
+            for fname in files:
+                src = os.path.join(lights_dir, fname)
+                dst = os.path.join(batch_lights, fname)
+                try:
+                    os.symlink(src, dst)
+                except (OSError, NotImplementedError, AttributeError):
+                    shutil.copy2(src, dst)
+            for master_name in ("darks_stacked", "flats_stacked",
+                                "biases_stacked"):
+                msrc = os.path.join(
+                    proc_dir, f"{master_name}{self.fits_extension}")
+                if os.path.isfile(msrc):
+                    mdst = os.path.join(
+                        batch_process, f"{master_name}{self.fits_extension}")
+                    try:
+                        os.link(msrc, mdst)
+                    except (OSError, NotImplementedError, AttributeError):
+                        shutil.copy2(msrc, mdst)
+
+            self.cwd = batch_dir
+            siril.cmd("cd", f'"{batch_dir}"')
+            try:
+                seq_name = self._convert_calibrate_seqsubsky(
+                    progress, frac_base, frac_span * 0.4, log_prefix=prefix)
+                self._register_and_stack(
+                    progress, seq_name,
+                    frac_base + frac_span * 0.4, frac_span * 0.5,
+                    log_prefix=prefix)
+                siril.cmd("cd", "../")
+            finally:
+                self.cwd = real_cwd
+                siril.cmd("cd", f'"{real_cwd}"')
+
+            batch_result = os.path.join(
+                batch_process, f"result{self.fits_extension}")
+            if not os.path.isfile(batch_result):
+                raise RuntimeError(
+                    f"{prefix}stacking didn't produce a result file.")
+
+            if running_master is None:
+                shutil.copy2(batch_result, running_master_path)
+                running_master = running_master_path
+                siril.log(
+                    f"{prefix}stacked ({len(files)} subs) — seeded the "
+                    "running master.", LogColor.BLUE)
+            else:
+                progress(f"{prefix}combining into the running master...",
+                         frac_base + frac_span * 0.95)
+                combined_path = self._combine_two_masters(
+                    progress, running_master, batch_result, combine_scratch,
+                    log_prefix=prefix)
+                # Copy the freshly combined result back into the stable
+                # running-master location (combine_scratch itself gets
+                # wiped at the start of the next call).
+                shutil.copy2(combined_path, running_master_path)
+                siril.log(
+                    f"{prefix}folded into the running master "
+                    f"(+{len(files)} subs).", LogColor.BLUE)
+
             if cleanup:
-                self._clean_process(seq_name)
+                shutil.rmtree(batch_dir, ignore_errors=True)
 
-            siril.cmd("load", "result")
-            siril.cmd("cd", "../")
+        final_dst = os.path.join(proc_dir, f"result{self.fits_extension}")
+        shutil.copy2(running_master, final_dst)
+        siril.cmd("cd", f'"{cwd}"')
+        siril.cmd("cd", "process")
+        siril.cmd("load", "result")
+        siril.cmd("cd", "..")
 
-        # ---- combine with an existing master from an earlier session
-        # (no raw subs kept) — must happen before SPCC/save below so the
-        # rest of the pipeline (and the saved file) sees the combined
-        # result, not just this run's own stack.
         if (self.combine_master_checkbox.isChecked()
                 and self.combine_master_path_edit.text().strip()):
             self._combine_with_existing_master(progress)
 
-        # ---- SPCC
         if self.spcc_checkbox.isChecked():
-            progress("Preprocess: plate solving result + SPCC...", 0.85)
-            solved = False
-            mw_args = self._milkyway_solve_args()
-            is_milkyway = (self.stack_method_combo.currentText()
-                           == "Median (Milky Way Mode)")
-            try:
-                siril.cmd("platesolve", "-force", *mw_args)
-                solved = True
-            except (s.DataError, s.CommandError, s.SirilError) as e:
-                # Siril's own solver ("Generic Error" and similar) is known
-                # to fail on some stacked Seestar images even though the
-                # exact same image solves fine on nova.astrometry.net or a
-                # local Astrometry.net install — likely due to onboard-
-                # stacking edge artifacts confusing its star matcher. Retry
-                # once with -localasnet (local Astrometry.net solve-field)
-                # before giving up, matching the same "try the robust
-                # method, then fall back" pattern used for registration
-                # above. Requires a local Astrometry.net install (ansvr on
-                # Windows, `brew install astrometry-net` on Mac) with index
-                # files covering the field — if that isn't installed,
-                # -localasnet will fail too and we fall through cleanly.
-                siril.log(
-                    f"Preprocess: plate-solve failed ({e}), retrying with "
-                    "local Astrometry.net (-localasnet)...", LogColor.SALMON)
-                try:
-                    siril.cmd("platesolve", "-force", "-localasnet",
-                              *mw_args)
-                    solved = True
-                except (s.DataError, s.CommandError, s.SirilError) as e2:
-                    if is_milkyway:
-                        # At Milky Way Mode's ~60-70 deg field of view, even
-                        # -localasnet's header-hinted near-search (using
-                        # FOCALLEN/XPIXSZ and the header's RA/Dec as a
-                        # starting guess, searching only a small cone around
-                        # it) reliably fails — confirmed by hand: the same
-                        # field only solved once asked to search completely
-                        # blindly. -blindpos/-blindres tell Astrometry.net
-                        # to ignore those hints and search the whole sky at
-                        # any scale, which is slower but far more robust for
-                        # a field this wide. Also needs wide-scale index
-                        # files (index-4116 through 4119 cover this FOV;
-                        # see download_wide_field_index.sh) — without them
-                        # this will fail just as fast as the hinted attempt.
-                        siril.log(
-                            f"Preprocess: -localasnet failed ({e2}), "
-                            "retrying blindly (-blindpos -blindres) — "
-                            "Milky Way Mode's wide field often needs a full "
-                            "blind solve instead of a header-hinted one...",
-                            LogColor.SALMON)
-                        try:
-                            siril.cmd("platesolve", "-force", "-localasnet",
-                                      "-blindpos", "-blindres", *mw_args)
-                            solved = True
-                        except (s.DataError, s.CommandError,
-                                s.SirilError) as e3:
-                            siril.log(
-                                f"Blind Astrometry.net solve also failed "
-                                f"({e3}). SPCC and the Annotate stage need "
-                                "a plate-solve solution — make sure the "
-                                "wide-field index files (index-4116 to "
-                                "4119) are installed and that Astrometry.net "
-                                "can find them (astrometry.cfg's add_path).",
-                                LogColor.SALMON)
-                    else:
-                        siril.log(
-                            f"Astrometry.net fallback also failed ({e2}). "
-                            "SPCC and the Annotate stage need a plate-solve "
-                            "solution — if this keeps happening, install a "
-                            "local Astrometry.net solver (solve-field) with "
-                            "matching index files to enable -localasnet.",
-                            LogColor.SALMON)
-            if solved:
-                try:
-                    self._run_spcc()
-                except (s.DataError, s.CommandError, s.SirilError) as e:
-                    siril.log(f"SPCC failed (continuing): {e}",
-                              LogColor.SALMON)
+            self._platesolve_and_spcc(progress)
 
-        # ---- save stacked result with a descriptive name
         file_name = self._save_result_named()
         progress("Preprocess: done.", 1.0)
 
         after_arr = self._get_current_image()
         self._store_snapshot(0, before_arr, after_arr,
                              before_linear=True, after_linear=True)
-        siril.log(f"Preprocess complete: {file_name}", LogColor.GREEN)
+        siril.log(
+            f"Preprocess complete ({n_batches} batches, "
+            f"{len(light_files)} subs total): {file_name}", LogColor.GREEN)
+
+        if cleanup and os.path.isdir(batch_root):
+            shutil.rmtree(batch_root, ignore_errors=True)
+
+    def _combine_two_masters(self, progress, path_a, path_b, work_dir,
+                             log_prefix=""):
+        """Registers and stacks two already-stacked FITS masters
+        together, weighted by each one's STACKCNT header (Siril's
+        `-weight=nbstack`) so the one built from more subs correctly
+        dominates, and patches the combined result's
+        LIVETIME/STACKCNT to the true sum of both inputs. Used by
+        Batch stacking to fold each new batch's master into the
+        running combined master, one batch at a time — the same
+        weighted-combine approach `_combine_with_existing_master` uses
+        for merging two whole sessions, just parameterized over two
+        arbitrary file paths instead of "this run's result" + "a
+        user-picked file". Returns the path to the new combined
+        result; never modifies path_a or path_b themselves (both are
+        only ever copied)."""
+        siril = self.siril
+        if os.path.isdir(work_dir):
+            shutil.rmtree(work_dir, ignore_errors=True)
+        os.makedirs(work_dir, exist_ok=True)
+
+        a_dst = os.path.join(work_dir, f"a{self.fits_extension}")
+        b_dst = os.path.join(work_dir, f"b{self.fits_extension}")
+        shutil.copy2(path_a, a_dst)
+        shutil.copy2(path_b, b_dst)
+        try:
+            self._ensure_float32_fits(a_dst)
+            self._ensure_float32_fits(b_dst)
+        except Exception as e:
+            siril.log(
+                f"{log_prefix}Combine: couldn't normalize both frames to "
+                f"32-bit float ({e}) — stacking may fail if their "
+                "precision still doesn't match.", LogColor.SALMON)
+
+        a_time, a_cnt, _ = self._read_integration_seconds(a_dst)
+        b_time, b_cnt, _ = self._read_integration_seconds(b_dst)
+        total_time = a_time + b_time
+        total_subs = a_cnt + b_cnt
+
+        siril.cmd("cd", f'"{work_dir}"')
+        try:
+            siril.cmd("convert", "combined", "-out=./")
+
+            registered = False
+            if self.gaia_available:
+                try:
+                    siril.cmd("seqplatesolve", "combined_", "-nocache",
+                              "-force", "-disto=ps_distortion",
+                              f"-order={self.disto_order_spin.value()}",
+                              "-radius=25", *self._milkyway_solve_args())
+                    registered = True
+                except (s.DataError, s.CommandError, s.SirilError) as e:
+                    siril.log(
+                        f"{log_prefix}Combine: plate-solve registration "
+                        f"failed ({e}), falling back to star-based "
+                        "registration.", LogColor.SALMON)
+            if not registered:
+                try:
+                    siril.cmd("register", "combined_")
+                    registered = True
+                except (s.DataError, s.CommandError, s.SirilError) as e:
+                    siril.log(
+                        f"{log_prefix}Combine: star-based registration "
+                        f"also failed ({e}). Stacking without "
+                        "registration — check the combined result "
+                        "carefully for misalignment.", LogColor.SALMON)
+
+            seq_for_stack = "combined_"
+            if registered:
+                try:
+                    siril.cmd("seqapplyreg", "combined_", "-kernel=square",
+                              "-framing=max")
+                    seq_for_stack = "r_combined_"
+                except (s.DataError, s.CommandError, s.SirilError) as e:
+                    siril.log(
+                        f"{log_prefix}Combine: couldn't apply a "
+                        f"registration transform ({e}) — stacking "
+                        "without re-aligning; check the combined result "
+                        "carefully for misalignment ghosting.",
+                        LogColor.SALMON)
+
+            siril.cmd("stack", seq_for_stack, " rej 3 3", "-norm=addscale",
+                      "-output_norm", "-rgb_equal", "-weight=nbstack",
+                      "-32b", "-out=combined_result")
+
+            result_path = os.path.join(
+                work_dir, f"combined_result{self.fits_extension}")
+            if (total_time > 0 or total_subs > 0) and os.path.isfile(result_path):
+                try:
+                    with fits.open(result_path, mode="update") as hdul:
+                        idx = 1 if len(hdul) > 1 and hdul[0].data is None else 0
+                        hdr = hdul[idx].header
+                        if total_time > 0:
+                            hdr["LIVETIME"] = total_time
+                        if total_subs > 0:
+                            hdr["STACKCNT"] = total_subs
+                        hdul.flush()
+                except Exception as e:
+                    siril.log(
+                        f"{log_prefix}Combine: couldn't write the "
+                        f"combined total integration time into the "
+                        f"result's header ({e}).", LogColor.SALMON)
+        finally:
+            siril.cmd("cd", f'"{self.cwd}"')
+
+        return result_path
 
     # ------------------------------------------------------- Comet Stack
 

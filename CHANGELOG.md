@@ -1,5 +1,33 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.5.0
+
+* **Added Batch stacking to the Preprocess stage**, for sessions with
+  too many light frames to register/stack all at once (memory or disk
+  pressure). New collapsible "Batch stacking" section with a "Subs per
+  batch" size (default 100): when enabled, splits `lights` into groups
+  of that size, runs each group through the exact same calibrate/
+  register/stack pipeline as a normal run, then folds each group's
+  freshly-stacked master into a running combined master — weighted by
+  sub count (Siril's `-weight=nbstack`), the same approach "Combine
+  with existing master" already uses for merging two whole sessions,
+  just applied incrementally, one batch at a time. Only one batch's
+  worth of subs is ever registered/stacked at once, which is the
+  actual point: peak memory/disk stays bounded to one batch plus the
+  (much smaller) running master, instead of the whole session.
+  Calibration masters (darks/flats/biases) are still built once and
+  reused by every batch. "Combine with existing master" and SPCC still
+  run once, on the final assembled result, not once per batch — same
+  order the existing single-pass path already uses. Not compatible
+  with Comet Stack mode (its guided-pause manual steps don't make
+  sense repeated per batch — turn one of the two off).
+  Internally, `_exec_stage1` was refactored to share its convert/
+  calibrate/seqsubsky, register/stack, and plate-solve/SPCC logic
+  (now `_convert_calibrate_seqsubsky`, `_register_and_stack`,
+  `_platesolve_and_spcc`) between the normal single-pass run and every
+  batch, rather than duplicating that logic — the single-pass path's
+  own behavior/command sequence is unchanged.
+
 ## 2.4.1
 
 * **Removed the "Use Siril's image" button from the Preprocess stage.**

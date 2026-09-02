@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.4.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.5.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -52,7 +52,7 @@ progressively cleaning the result. Here is the whole journey, in order:
 
 | # | Stage | What it does | Why you need it |
 |---|-------|--------------|-----------------|
-| 1 | **Preprocess** | Aligns and averages hundreds of subs into one deep image ("stacking"), then calibrates the colors against star catalogs (SPCC). Stacking method can be Average / Median (Milky Way Mode) / Sum, or **Comet Stack** for moving objects — see below. Optionally combines the result with an already-stacked master from an earlier session (no raw subs needed), weighted by sub count | One 10-second exposure is faint and noisy. Averaging 300 of them is like exposing for 50 minutes — the signal adds up, the random noise cancels out |
+| 1 | **Preprocess** | Aligns and averages hundreds of subs into one deep image ("stacking"), then calibrates the colors against star catalogs (SPCC). Stacking method can be Average / Median (Milky Way Mode) / Sum, or **Comet Stack** for moving objects — see below. Optionally combines the result with an already-stacked master from an earlier session (no raw subs needed), weighted by sub count. **Batch stacking** splits very large sessions into groups and folds them together the same weighted way, so peak memory/disk stays bounded to one group instead of the whole session | One 10-second exposure is faint and noisy. Averaging 300 of them is like exposing for 50 minutes — the signal adds up, the random noise cancels out |
 | 2 | **Crop** | Trims the messy edges — with an optional rotate (slider + degree number) applied first | Because the telescope drifts slightly between shots, the stacked edges are ragged. Rotating first lets you square up the frame before trimming |
 | 3 | **Remove Green (SCNR)** | Removes the green color cast | Color cameras tend to produce a greenish sky that isn't really there |
 | 4 | **Auto Gradient Removal** | A second, tunable gradient-flattening pass (scale, smoothness, structure protection, optional simplified polynomial model) — same engine as the standalone AutoGradientRemoval script, now built in | Useful either on its own or as a milder pre-pass before stage 5's heavier background removal, especially for wide, uneven sky glow |
@@ -322,6 +322,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.5.0 | Added Batch stacking to Preprocess — splits large sessions' lights into groups, stacks each, and folds the results into a running master weighted by sub count, so peak memory/disk stays bounded to one batch instead of the whole session. |
 | 2.4.1 | Removed the "Use Siril's image" button from the Preprocess stage — it reads raw light frames from disk and never starts from Siril's currently-loaded image, so the button had nothing to do there. |
 | 2.4.0 | Added a "Save annotation details..." button in the Annotate stage — writes the current in-memory object list (including per-object 🎨 style edits) to JSON on demand, since a Run always rebuilds from scratch and previously discarded edits. |
 | 2.3.0 | Added: live preview while dragging Crop's Rotate slider — a quick on-screen approximation, not a re-run of Siril's `rotate` command per tick. |

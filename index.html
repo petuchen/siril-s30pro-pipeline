@@ -367,7 +367,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     </ol>
     <div class="why"><b>Why these 7:</b> stack → crop → de-green → (de-gradient) → remove background → denoise → stretch is the shortest path from raw subs to a clean, presentable image — every other stage is a specialized refinement (star removal for palette work, an alternate color recipe, extra per-channel polish, labeling, a watermark) that most first results don't need. Read the full 1–13 breakdown below whenever you're ready to explore those.</div>
     <h3>What each stage does — and why it exists</h3>
-    <p><b>1 · Preprocess (stacking).</b> Aligns and averages hundreds of subs into one deep image, then calibrates colors against real star measurements (SPCC). A collapsible "Combine with an existing master" section can also merge this run's fresh stack with an already-stacked FITS from an earlier session that has no raw subs — registered against it and combined with Siril's <code>-weight=nbstack</code>, weighted by each session's <code>STACKCNT</code> header (with a manual override for masters that don't have one) instead of averaging two very different amounts of integration time 50/50. The combined result's total integration time (and the auto-saved "..._combined" filename) reflects the true sum of both sessions' subs, not just what Siril's own 2-frame stack would otherwise report.
+    <p><b>1 · Preprocess (stacking).</b> Aligns and averages hundreds of subs into one deep image, then calibrates colors against real star measurements (SPCC). A collapsible "Combine with an existing master" section can also merge this run's fresh stack with an already-stacked FITS from an earlier session that has no raw subs — registered against it and combined with Siril's <code>-weight=nbstack</code>, weighted by each session's <code>STACKCNT</code> header (with a manual override for masters that don't have one) instead of averaging two very different amounts of integration time 50/50. The combined result's total integration time (and the auto-saved "..._combined" filename) reflects the true sum of both sessions' subs, not just what Siril's own 2-frame stack would otherwise report. A second collapsible "Batch stacking" section handles sessions with too many subs to register/stack all at once: it splits 'lights' into groups (size configurable, default 100), runs each group through the same calibrate/register/stack pipeline, then folds each group's result into a running master using that same weighted-combine approach — one group at a time, so only one group's subs are ever in memory/on disk together, instead of the whole session. Calibration masters are still built once and shared by every group; SPCC and "Combine with an existing master" still run once, on the final assembled result. Not compatible with Comet Stack mode.
     <div class="why"><b>Why:</b> one 10-second exposure is faint and grainy. Averaging 300 of them behaves like a 50-minute exposure: the signal adds up while random noise cancels out. Options: calibration frames, drizzle (finer sampling), feathering for mosaics, quality-weighted stacking, FITS compression.</div></p>
     <p><b>2 · Crop.</b> Optionally rotates the image first (slider + degree number input, -180° to 180°), then trims 5% (or custom margins) off each edge.
     <div class="why"><b>Why:</b> the telescope drifts slightly between shots, so stacked edges are ragged. Rotating lets you square the frame up before trimming it.</div></p>
@@ -413,7 +413,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     </ol>
     <div class="why"><b>為什麼是這 7 步：</b>疊圖 → 裁切 → 去綠 →（去梯度）→ 移除背景 → 降噪 → 拉伸，是從原始子畫幅到乾淨、可分享成品最短的路徑；其餘每個步驟都是特殊用途的進階調整（移星是為了色盤重新上色、另一種配色配方、逐通道的額外潤飾、標示天體、加上浮水印），大多數第一次的成品並不需要它們。準備好深入了解時，可以往下閱讀完整的 1–13 步詳細說明。</div>
     <h3>每個步驟做什麼——以及為什麼需要它</h3>
-    <p><b>1 · 前置處理（疊圖）。</b>將數百張子畫幅對齊並平均成一張深度影像，再以真實恆星測量值校正色彩（SPCC）。另有可收合的「與現有主影像合併」區塊，可將本次疊圖結果與先前工作階段中已疊好、但未保留原始子畫幅的 FITS 檔案合併——會先與該檔案對齊，再以 Siril 的 <code>-weight=nbstack</code> 依各工作階段的 <code>STACKCNT</code> 標頭加權合併（若該檔案沒有此標頭，可手動輸入子畫幅張數覆寫），而不是把兩個累積曝光時間差異懸殊的資料簡單地各半平均。合併結果的總曝光時間（以及自動儲存時使用的「..._combined」檔名）會反映兩個工作階段子畫幅的真實總和，而非 Siril 兩張影像疊圖時本身會回報的數字。
+    <p><b>1 · 前置處理（疊圖）。</b>將數百張子畫幅對齊並平均成一張深度影像，再以真實恆星測量值校正色彩（SPCC）。另有可收合的「與現有主影像合併」區塊，可將本次疊圖結果與先前工作階段中已疊好、但未保留原始子畫幅的 FITS 檔案合併——會先與該檔案對齊，再以 Siril 的 <code>-weight=nbstack</code> 依各工作階段的 <code>STACKCNT</code> 標頭加權合併（若該檔案沒有此標頭，可手動輸入子畫幅張數覆寫），而不是把兩個累積曝光時間差異懸殊的資料簡單地各半平均。合併結果的總曝光時間（以及自動儲存時使用的「..._combined」檔名）會反映兩個工作階段子畫幅的真實總和，而非 Siril 兩張影像疊圖時本身會回報的數字。另一個可收合的「批次疊圖」區塊則處理子畫幅數量多到無法一次全部對齊／疊圖的情況：把 lights 資料夾切成數個批次（大小可調，預設 100 張），每一批都跑一次相同的校正／對齊／疊圖流程，再用同一套加權合併方式，把每一批的結果逐批併入一個持續累積的主影像——同一時間只有一批的子畫幅會被載入記憶體／寫入磁碟，而不是整個工作階段的全部子畫幅。校正主檔（darks/flats/biases）仍然只建立一次、供所有批次共用；SPCC 與「與現有主影像合併」也只在最終合併完成的結果上執行一次。此功能與 Comet Stack（彗星疊圖）模式不相容。
     <div class="why"><b>原因：</b>單張 10 秒曝光既暗又粗糙。把 300 張平均起來，效果如同曝光 50 分鐘：訊號累加、隨機雜訊互相抵消。選項包括：校正幀、drizzle（更細取樣）、馬賽克羽化、品質加權疊圖、FITS 壓縮。</div></p>
     <p><b>2 · 裁切。</b>可先用滑桿＋角度數字輸入（-180° 至 180°）旋轉影像，再裁掉四邊各 5%（或自訂邊距）。
     <div class="why"><b>原因：</b>望遠鏡在拍攝間會些微漂移，疊出的邊緣參差不齊。先旋轉可在裁切前把畫面擺正。</div></p>
@@ -504,6 +504,21 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.5.0</td><td><b>Added Batch stacking to the Preprocess
+        stage.</b> For sessions with too many light frames to
+        register/stack all at once (memory or disk pressure). New
+        collapsible "Batch stacking" section with a "Subs per batch"
+        size (default 100): splits 'lights' into groups of that size,
+        runs each through the same calibrate/register/stack pipeline
+        as a normal run, then folds each group's result into a
+        running master weighted by sub count — the same approach
+        "Combine with existing master" uses, applied incrementally.
+        Only one group's subs are ever registered/stacked at once, so
+        peak memory/disk stays bounded to one group instead of the
+        whole session. Calibration masters are still built once and
+        shared by every group; SPCC and "Combine with existing
+        master" still run once, on the final assembled result. Not
+        compatible with Comet Stack mode.</td></tr>
       <tr><td>2.4.1</td><td><b>Removed the "Use Siril's image" button
         from the Preprocess stage.</b> It never made sense there:
         Preprocess reads raw light frames straight from disk and closes
@@ -1206,6 +1221,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.5.0</td><td><b>為「預處理」步驟新增「批次疊圖」功能。</b>適用於子畫幅數量太多、無法一次全部對齊／疊圖的情況（記憶體或磁碟壓力）。新增可收合的「批次疊圖」區塊，可設定「每批子畫幅數」（預設 100）：把 lights 資料夾切成該大小的批次，每批都跑一次與一般執行相同的校正／對齊／疊圖流程，再把每批結果併入一個持續累積的主影像——採用與「與現有主影像合併」相同的加權合併方式，只是逐批套用。同一時間只有一批的子畫幅會被對齊／疊圖，因此尖峰記憶體／磁碟用量只需容納一批，而非整個工作階段。校正主檔仍只建立一次、供所有批次共用；SPCC 與「與現有主影像合併」也只在最終合併完成的結果上執行一次。此功能與 Comet Stack 模式不相容。</td></tr>
       <tr><td>2.4.1</td><td><b>移除「預處理」步驟的「使用 Siril 目前影像」按鈕。</b>這個按鈕在該步驟上本來就沒有意義：預處理一律直接從硬碟上的原始 light frame 開始處理，並且一開始就會關閉 Siril 目前載入的任何影像，從來不會以「Siril 目前載入的影像」作為起點。其他所有步驟的按鈕維持不變。</td></tr>
       <tr><td>2.4.0</td><td><b>在 Annotate 步驟新增「Save annotation details...」按鈕。</b>單一物件的 🎨 樣式編輯（透過「Select objects...」）過去只存在記憶體裡——自動儲存的 <code>annotated_*.json</code> 只會在每次「Run」結束時寫入一次，而每次 Run 都會從目錄重新建立整份物件清單，因此會捨棄先前的編輯。新按鈕會把目前記憶體中的物件清單（含所有編輯）直接寫成 JSON，不需要重新執行整個步驟。</td></tr>
       <tr><td>2.3.0</td><td><b>新增：拖動 Crop 步驟的「Rotate」滑桿時，預覽會即時旋轉。</b>分割預覽現在會隨著角度調整即時旋轉，而不是要等實際執行步驟才看得到旋轉結果。這只是螢幕上的快速近似效果（用 Qt 直接旋轉已經算好的預覽影像），並不是每次拖動都重新呼叫 Siril 的 <code>rotate</code> 指令——請把它當作抓角度／構圖用的參考，不是逐像素精確的結果；實際裁切時仍然是用 Siril 自己的 <code>rotate</code>。</td></tr>
