@@ -243,7 +243,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.7.1"
+VERSION = "2.7.2"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -555,6 +555,51 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         toggle_btn.toggled.connect(_on_toggle)
 
         return box, cv, toggle_btn
+
+    def _info_row(self, summary, title, full_text):
+        """A compact one-line SubHeader caption plus a small "ⓘ
+        Details" button that pops the full explanation up in a
+        separate, much larger-font dialog (see _show_info_popup).
+
+        Several sections (Batch stacking, Combine with existing
+        master) used to put their whole multi-sentence explanation
+        directly in a collapsible section as an inline SubHeader
+        QLabel — that style is deliberately small (9pt, meant for
+        one-line captions and row meta, see theme.py's PT_SMALL) and
+        reads poorly for a paragraph of real prose. This keeps the
+        section itself compact and skimmable while still making the
+        full explanation available on demand, at a size that's
+        actually comfortable to read. Returns the QHBoxLayout so the
+        caller can add it to their own layout."""
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        label = QLabel(summary)
+        label.setObjectName("SubHeader")
+        label.setWordWrap(True)
+        row.addWidget(label, 1)
+        info_btn = QPushButton("ⓘ Details")
+        info_btn.setObjectName("Link")
+        info_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        info_btn.setFlat(True)
+        info_btn.clicked.connect(
+            lambda: self._show_info_popup(title, full_text))
+        row.addWidget(info_btn, 0)
+        return row
+
+    def _show_info_popup(self, title, text):
+        """Shows a longer explanation in a plain popup dialog at a
+        much larger, comfortable-to-read font size than the compact
+        inline SubHeader captions use elsewhere in the UI (see
+        _info_row) — the small caption style is meant for one-liners,
+        not multi-sentence prose."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.NoIcon)
+        box.setWindowTitle(title)
+        box.setText(text)
+        box.setTextFormat(Qt.TextFormat.PlainText)
+        box.setStyleSheet(
+            "QLabel { font-size: 13pt; min-width: 440px; }")
+        box.exec()
 
     def _run_row(self, slot, undo_stage=None):
         """Bottom row of a stage card: optional Undo + Run buttons."""

@@ -328,19 +328,20 @@ class Stage1Mixin:
 
         combine_box, combine_v, self.combine_toggle_btn = self._collapsible_section(
             "Combine with existing master")
-        combine_info = QLabel(
+        combine_v.addLayout(self._info_row(
+            "For merging in an already-stacked FITS from an earlier "
+            "session that kept no raw subs.",
+            "Combine with existing master",
             "For when you already have a stacked FITS from an earlier "
-            "session but the raw subs weren't kept. After stacking the "
-            "lights above into a new master, this registers it against "
-            "the file you pick here and combines the two with Siril's "
-            "-weight=nbstack, so a master built from more subs "
-            "correctly outweighs one built from fewer — needs the "
-            "STACKCNT header Siril writes into every master it produces "
-            "(use the override below if that file is missing it). Your "
-            "original file is never modified.")
-        combine_info.setObjectName("SubHeader")
-        combine_info.setWordWrap(True)
-        combine_v.addWidget(combine_info)
+            "session but the raw subs weren't kept.\n\n"
+            "After stacking the lights above into a new master, this "
+            "registers it against the file you pick here and combines "
+            "the two with Siril's -weight=nbstack, so a master built "
+            "from more subs correctly outweighs one built from fewer "
+            "— needs the STACKCNT header Siril writes into every "
+            "master it produces (use the override below if that file "
+            "is missing it).\n\n"
+            "Your original file is never modified."))
 
         self.combine_master_checkbox = QCheckBox("Combine with existing master")
         combine_v.addWidget(self.combine_master_checkbox)
@@ -378,23 +379,29 @@ class Stage1Mixin:
 
         batch_box, batch_v, self.batch_toggle_btn = self._collapsible_section(
             "Batch stacking")
-        batch_info = QLabel(
-            "For sessions with too many subs to register/stack all at "
-            "once (memory or disk pressure). Splits 'lights' into "
-            "groups of the size below, runs each group through the "
-            "same calibrate/register/stack pipeline as a normal run, "
-            "then folds each group's result into a running master "
-            "using the same weighted combine as \"Combine with "
-            "existing master\" above (more subs in a group correctly "
-            "outweighs fewer). Only one group's subs are ever "
-            "registered/stacked at a time, so peak memory/disk stays "
-            "bounded to one group instead of the whole session. SPCC "
-            "and \"Combine with existing master\" still run once, on "
-            "the final assembled result, not once per group. Not "
-            "compatible with Comet Stack mode.")
-        batch_info.setObjectName("SubHeader")
-        batch_info.setWordWrap(True)
-        batch_v.addWidget(batch_info)
+        batch_v.addLayout(self._info_row(
+            "For sessions with too many subs to stack all at once "
+            "(memory or disk pressure).",
+            "Batch stacking",
+            "For sessions with too many subs to stack all at once "
+            "(memory or disk pressure).\n\n"
+            "Every sub in the session is still registered together "
+            "in one pass, exactly like a normal run — that part was "
+            "never actually the problem. Only the memory-heavy "
+            "rejection-stacking step is split into groups of the "
+            "size below, each group stacking its own frame range out "
+            "of that one shared, already-registered sequence.\n\n"
+            "Because every group's master comes from the same "
+            "registration pass and canvas framing, they're already "
+            "pixel-aligned with each other, so the final combine is "
+            "a plain weighted stack (Siril's -weight=nbstack, so a "
+            "group built from more subs correctly outweighs one "
+            "built from fewer) with no re-registration step needed "
+            "at all.\n\n"
+            "Calibration masters are still built once and shared by "
+            "every group; SPCC and \"Combine with existing master\" "
+            "still run once, on the final assembled result. Not "
+            "compatible with Comet Stack mode."))
 
         self.batch_stacking_checkbox = QCheckBox("Batch stacking")
         batch_v.addWidget(self.batch_stacking_checkbox)

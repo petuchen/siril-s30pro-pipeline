@@ -1,5 +1,22 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.7.2
+
+* **"Combine with existing master" and "Batch stacking" explanations
+  moved out of tiny inline captions into a popup with a much larger
+  font.** Both sections' full multi-sentence explanation used to sit
+  directly in the collapsible section as a `SubHeader`-styled QLabel
+  — a style meant for one-line captions (9pt, see `theme.py`'s
+  `PT_SMALL`), not paragraphs of prose, and genuinely hard to read at
+  that size. Each section now shows a short one-line summary plus a
+  "ⓘ Details" link that opens the full explanation in a plain popup
+  dialog at 13pt. New reusable `_info_row`/`_show_info_popup` helpers
+  in `S30Pro_Pipeline.py` (next to `_collapsible_section`) so other
+  stages can use the same pattern. Also refreshed Batch stacking's
+  full explanation text, which still described the pre-2.7.0
+  per-batch-registration design — it now matches the current
+  register-once architecture.
+
 ## 2.7.1
 
 * **Fixed a crash in 2.7.0's Batch stacking right at the first batch:
