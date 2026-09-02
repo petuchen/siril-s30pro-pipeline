@@ -1,5 +1,44 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.7.0
+
+* **Redesigned Batch stacking's core architecture: register the whole
+  session once, up front; only split the stacking step into
+  batches.** Real-world testing of 2.5.0-2.6.0's approach — each
+  batch registered independently, then combined by re-registering the
+  resulting already-stacked masters against each other — surfaced two
+  separate problems: it kept crashing (even 2.6.0's single N-way
+  combine crashed on a confirmed fresh session), and, critically, even
+  when the *older*, non-crashing pairwise version completed
+  successfully, its output looked like "an overlap and not really
+  integration" — visible ghosting from the imprecision of matching two
+  full, already-integrated master images by their stars alone. The
+  root cause was that each batch picked its own reference frame and
+  canvas framing, so batch masters were never actually pixel-aligned
+  with each other in the first place, forcing every combine attempt
+  into a fundamentally harder and less precise re-registration.
+
+  This version registers every sub in the session exactly once
+  (`_convert_calibrate_seqsubsky` + the new `_register_sequence`,
+  split out of the old `_register_and_stack`) — exactly what a normal,
+  non-batched Preprocess run already does successfully for hundreds of
+  subs in one pass, so this isn't a new risk. Only the actual
+  memory-heavy step, rejection-stacking, is then split into batches:
+  each batch narrows the one shared registered sequence down to its
+  own frame-index range with Siril's `select`/`unselect` commands and
+  stacks just that range (`-filter-included`, via the new
+  `_stack_sequence`). Because every batch master now comes from the
+  same registration pass and canvas framing, they're already
+  pixel-aligned — so the final combine (`_combine_registered_masters`,
+  replacing `_combine_all_masters`) is a plain weighted stack
+  (`-weight=nbstack`) with **no register or plate-solve step at all**,
+  eliminating the whole class of crashes, hangs, and misalignment bugs
+  the 2.5.0-2.6.0 line kept running into.
+
+  Not verified against a live Siril instance (no Siril/PyQt6 available
+  in this environment) — needs real-machine testing, ideally on the
+  same large session that surfaced the original issues.
+
 ## 2.6.0
 
 * **Redesigned Batch stacking's combine step: one N-way combine at

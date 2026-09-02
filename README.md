@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.6.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.7.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -322,6 +322,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.7.0 | Redesigned Batch stacking's core architecture: register the whole session once, up front, then only split the stacking step into batches — batch masters come out already pixel-aligned, so the final combine needs no re-registration at all, fixing both the repeated crashes and a "looks like an overlap, not real integration" result reported with the earlier per-batch-registration design. |
 | 2.6.0 | Redesigned Batch stacking's combine step: one N-way combine of all batch masters at the end instead of N-1 pairwise combines along the way — fewer risky register/platesolve operations and meaningfully less memory. |
 | 2.5.5 | Reduced Batch stacking's combine-step memory/CPU pressure (star-based registration tried before plate-solve, plus releasing the previous image before combining) — targeting a crash with no crash report, most consistent with an OS memory kill. |
 | 2.5.4 | Fixed a second SIGABRT crash (`_on_failed`'s own unguarded logging call) and added a global crash guard (`sys.excepthook`) so any future uncaught exception in a Qt slot fails gracefully instead of aborting the whole app. |

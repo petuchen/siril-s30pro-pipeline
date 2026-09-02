@@ -719,24 +719,26 @@ class Stage1Mixin:
                          f"without it): {e}", LogColor.SALMON)
         return seq_name
 
-    def _register_and_stack(self, progress, seq_name, progress_base=0.4,
-                            progress_span=0.35, log_prefix=""):
+    def _register_sequence(self, progress, seq_name, progress_base=0.4,
+                           progress_span=0.2, log_prefix=""):
         """Registers `seq_name` (plate-solve if local Gaia astrometry is
-        available, falling back to star-based registration), applies
-        the registration, then stacks with whichever method/options
-        the Preprocess panel has selected — leaving the result at
-        self.cwd/process/result<ext> and loaded as Siril's current
-        image. Shared by the normal single-pass run (after its own
-        _convert_calibrate_seqsubsky) and every batch of Batch
-        stacking. Does not `cd` back out of process/ afterward — same
-        as before this was factored out, the caller does that."""
+        available, falling back to star-based registration) and
+        applies the registration (seqapplyreg), leaving every frame
+        written out pixel-aligned to a common canvas. Returns the
+        resulting sequence name prefix, ready to `stack`. Split out of
+        the old _register_and_stack (which now just chains this with
+        _stack_sequence) so Batch stacking can register the WHOLE
+        session exactly once — see _exec_stage1_batched for why that
+        matters: batch masters built from frame-range subsets of ONE
+        shared registration pass are already pixel-aligned with each
+        other, so combining them afterward needs no re-registration at
+        all, unlike the earlier per-batch-independent-registration
+        design."""
         siril = self.siril
         cleanup = self.cleanup_checkbox.isChecked()
         drizzle = self.drizzle_checkbox.isChecked()
         drizzle_amount = round(self.drizzle_amount.value(), 2)
         pixfrac = round(self.pixel_fraction.value(), 2)
-        feather = self.feather_checkbox.isChecked()
-        feather_amount = self.feather_amount.value()
         stack_method = self.stack_method_combo.currentText()
 
         # ---- registration (plate solve for mosaics if Gaia is
@@ -783,7 +785,7 @@ class Stage1Mixin:
         apply_framing = "max" if stack_method == "Average (rejection)" else "min"
 
         progress(f"{log_prefix}Preprocess: applying registration...",
-                 progress_base + progress_span * 0.4)
+                 progress_base + progress_span * 0.5)
         apply_cmd = ["seqapplyreg", seq_name, "-kernel=square",
                      f"-framing={apply_framing}"]
         if drizzle:
@@ -792,28 +794,48 @@ class Stage1Mixin:
         siril.cmd(*apply_cmd)
         if cleanup:
             self._clean_process(seq_name)
-        seq_name = "r_" + seq_name
+        return "r_" + seq_name
+
+    def _stack_sequence(self, progress, seq_name, progress_base=0.75,
+                        progress_span=0.15, log_prefix="", out_name="result"):
+        """Stacks the already-registered `seq_name` (see
+        _register_sequence) with whichever method/options the
+        Preprocess panel has selected, writing
+        self.cwd/process/<out_name><ext> and loading it as Siril's
+        current image. `-filter-included` is always passed, so a
+        caller can narrow which frames actually get stacked by issuing
+        `select`/`unselect` on `seq_name` first — this is exactly how
+        Batch stacking stacks one frame-range subset of the one shared
+        registered sequence per batch, without needing to re-register
+        anything (see _exec_stage1_batched). Does not clean up
+        `seq_name`'s intermediate files itself — the caller decides
+        when that registered sequence is no longer needed by anyone
+        (a single-pass run does it right away; Batch stacking waits
+        until every batch is done with it)."""
+        siril = self.siril
+        feather = self.feather_checkbox.isChecked()
+        feather_amount = self.feather_amount.value()
+        stack_method = self.stack_method_combo.currentText()
 
         # ---- stacking (compression is always off for the final stack)
-        progress(f"{log_prefix}Preprocess: stacking...",
-                 progress_base + progress_span * 0.7)
+        progress(f"{log_prefix}Preprocess: stacking...", progress_base)
         siril.cmd("setcompress", "0")
         if stack_method == "Sum":
             # Sum has no normalization/rejection/weighting (matches Siril's
             # own restriction — meant for planetary/lucky imaging stacks).
             stack_cmd = ["stack", seq_name, "sum", "-filter-included",
-                         "-out=result"]
+                         f"-out={out_name}"]
         elif stack_method == "Median (Milky Way Mode)":
             # No -maximize (unsupported here — frames are already
             # uniform size via -framing=min above), no weighting, and no
             # -feather/-overlap_norm (both require -maximize per Siril).
             stack_cmd = ["stack", seq_name, "med", "-norm=addscale",
                          "-output_norm", "-rgb_equal",
-                         "-filter-included", "-32b", "-out=result"]
+                         "-filter-included", "-32b", f"-out={out_name}"]
         else:  # Average (rejection) — the default
             stack_cmd = ["stack", seq_name, " rej 3 3", "-norm=addscale",
                          "-output_norm", "-rgb_equal", "-maximize",
-                         "-filter-included", "-32b", "-out=result"]
+                         "-filter-included", "-32b", f"-out={out_name}"]
             if self.weighting_checkbox.isChecked():
                 wmap = {"Number of Stars": "nbstars",
                         "Weighted FWHM": "wfwhm", "Noise": "noise"}
@@ -825,10 +847,29 @@ class Stage1Mixin:
             if self.overlap_norm_checkbox.isChecked():
                 stack_cmd.append("-overlap_norm")
         siril.cmd(*stack_cmd)
-        if cleanup:
-            self._clean_process(seq_name)
+        siril.cmd("load", out_name)
 
-        siril.cmd("load", "result")
+    def _register_and_stack(self, progress, seq_name, progress_base=0.4,
+                            progress_span=0.35, log_prefix=""):
+        """Registers `seq_name`, applies the registration, then stacks
+        it — leaving the result at self.cwd/process/result<ext> and
+        loaded as Siril's current image. Just chains _register_sequence
+        + _stack_sequence for the normal single-pass Preprocess run
+        (and Comet Stack's star-registration half). Batch stacking
+        calls each of those separately instead, since it only wants
+        registration to happen ONCE for the whole session — see
+        _exec_stage1_batched. Does not `cd` back out of process/
+        afterward — same as before this was factored out, the caller
+        does that."""
+        cleanup = self.cleanup_checkbox.isChecked()
+        reg_seq_name = self._register_sequence(
+            progress, seq_name, progress_base, progress_span * 0.6,
+            log_prefix)
+        self._stack_sequence(
+            progress, reg_seq_name, progress_base + progress_span * 0.7,
+            progress_span * 0.3, log_prefix=log_prefix, out_name="result")
+        if cleanup:
+            self._clean_process(reg_seq_name)
 
     def _platesolve_and_spcc(self, progress):
         """Plate-solves the current Siril image (Siril's own solver,
@@ -919,46 +960,46 @@ class Stage1Mixin:
     # ------------------------------------------------------- Batch stacking
 
     def _exec_stage1_batched(self, progress, lights_dir):
-        """Splits self.cwd's 'lights' folder into groups of up to
-        self.batch_size_spin.value() subs, runs each group through the
-        exact same convert/calibrate/(seqsubsky)/register/stack
-        pipeline as a normal Preprocess run (_convert_calibrate_seqsubsky
-        + _register_and_stack) — this is where the actual memory/disk
-        win comes from: only one group's worth of raw subs is ever
-        registered/stacked at once, instead of the whole session, and
-        each group's own working files are torn down before the next
-        one starts.
+        """Registers the WHOLE session's lights ONCE, then only splits
+        the actual stacking step into groups of up to
+        self.batch_size_spin.value() subs.
 
-        Every group's freshly-stacked master is kept (not folded in
-        immediately), and once every group is done, all of them are
-        combined together in a SINGLE pass via _combine_all_masters
-        (Siril's -weight=nbstack, so a group built from more subs
-        correctly outweighs one built from fewer) — deliberately not
-        N-1 pairwise combines done incrementally after each group (an
-        earlier version of this method). Siril's own stack/register
-        commands scale with the NUMBER of frames given to them (they
-        process in row-strips across all of them at once), not total
-        pixel volume, so combining, say, 9 group-masters together in
-        one pass costs meaningfully less memory and — just as
-        importantly — far fewer risky register+platesolve round trips
-        than repeating a full two-image combine 8 separate times. It's
-        also just what a single normal Preprocess run's own `stack`
-        already does for hundreds of raw subs in one pass — this is
-        the same idea, applied to a handful of much larger per-group
-        masters instead of hundreds of small raw ones.
+        This is a deliberate redesign (v2.7.0) from the original
+        approach, which registered each batch independently (its own
+        reference frame, its own canvas framing) and then had to
+        re-register the resulting already-stacked master images
+        against each other to combine them. That re-registration step
+        — plain star-matching (or plate-solving) two or more full,
+        already-integrated master images — turned out to be both
+        fragile (repeated crashes/hangs even after several rounds of
+        hardening) and imprecise: real-world testing showed its output
+        could look like an overlap/ghost rather than a clean
+        integration, because two independently-framed masters are
+        genuinely harder to align precisely than raw subs are.
+
+        Registering raw subs, even hundreds of them in one pass, was
+        never the actual problem (that's exactly what an ordinary,
+        non-batched Preprocess run already does successfully) — so
+        this version does that part exactly like a normal run,
+        once, for every sub in the session (_convert_calibrate_seqsubsky
+        + _register_sequence). Only the memory-heavy rejection-stacking
+        step is then split: each batch selects its own frame-index
+        range out of that ONE shared, already-registered sequence
+        (Siril's `select`/`unselect` + `stack ... -filter-included`)
+        and stacks just that range. Since every batch master comes
+        from the same registration pass and the same canvas framing,
+        they're already pixel-aligned with each other — so the final
+        combine (_combine_registered_masters) is a plain weighted
+        stack with NO register or plate-solve step needed at all,
+        eliminating the whole class of bugs the old design kept
+        running into.
 
         Calibration masters (darks/flats/biases) are still built once
-        against the full calibration-frame folders — those aren't
-        lights, splitting them wouldn't make sense — and
-        hardlinked/copied into each batch's own process/ folder so
-        `calibrate` can find them there.
+        against the full calibration-frame folders, same as before.
 
         Combine-with-existing-master, SPCC, and the final save all
-        still happen once, after every batch has been folded in — the
-        same order the single-pass path already uses for "Combine with
-        existing master" (combine first, SPCC after), and there's no
-        benefit to repeating a full-image operation like SPCC once per
-        batch when it can just run once on the final assembled result.
+        still happen once, after every batch has been folded in — same
+        order as the single-pass path.
 
         Comet Stack mode is not supported here (see the check below) —
         its guided-pause manual steps don't make sense repeated per
@@ -980,12 +1021,14 @@ class Stage1Mixin:
                 (".fit", ".fits", ".fit.fz", ".fits.fz")))
         if not light_files:
             raise RuntimeError("No FITS light frames found in 'lights'.")
+        n_frames = len(light_files)
         batches = [light_files[i:i + batch_size]
-                  for i in range(0, len(light_files), batch_size)]
+                  for i in range(0, n_frames, batch_size)]
         n_batches = len(batches)
         self._log_safe(
-            f"Batch stacking: {len(light_files)} lights split into "
-            f"{n_batches} batch(es) of up to {batch_size}.", LogColor.BLUE)
+            f"Batch stacking: {n_frames} lights, registered once, "
+            f"stacked in {n_batches} batch(es) of up to {batch_size}.",
+            LogColor.BLUE)
 
         progress("Preprocess: starting batch stacking...", 0.01)
         before_arr = self._load_raw_light_preview(lights_dir)
@@ -1018,86 +1061,89 @@ class Stage1Mixin:
         else:
             siril.cmd("setcompress", "0")
 
+        cleanup = self.cleanup_checkbox.isChecked()
+
+        # ---- calibration masters (built once, same as a normal run)
         self._build_calibration_masters(progress)
+
+        # ---- convert / calibrate / (seqsubsky) the WHOLE session's
+        # lights in one pass, then register + apply registration ONCE
+        # for every sub — this is the architectural fix: every batch
+        # below stacks a subset of this one shared, identically
+        # registered/framed sequence instead of registering its own
+        # independent subset.
+        seq_name = self._convert_calibrate_seqsubsky(
+            progress, 0.05, 0.13)
+        reg_seq_name = self._register_sequence(
+            progress, seq_name, 0.19, 0.14)
 
         batch_root = os.path.join(proc_dir, "_batches")
         os.makedirs(batch_root, exist_ok=True)
-        combine_scratch = os.path.join(proc_dir, "_batch_combine_scratch")
-        cleanup = self.cleanup_checkbox.isChecked()
-        real_cwd = cwd
-        batch_results = []  # stable per-batch result.fits paths, kept
+        batch_results = []  # stable per-batch result FITS paths, kept
                             # until the single final combine below
 
         for bi, files in enumerate(batches, start=1):
-            frac_base = 0.05 + (bi - 1) / n_batches * 0.65
-            frac_span = 0.65 / n_batches
+            start_idx = (bi - 1) * batch_size
+            end_idx = min(bi * batch_size, n_frames) - 1
+            frac_base = 0.35 + (bi - 1) / n_batches * 0.45
+            frac_span = 0.45 / n_batches
             prefix = f"Batch {bi}/{n_batches}: "
-            progress(f"{prefix}preparing {len(files)} sub(s)...", frac_base)
+            progress(
+                f"{prefix}stacking frames {start_idx}-{end_idx} "
+                f"({len(files)} subs)...", frac_base)
 
-            batch_dir = os.path.join(batch_root, f"batch_{bi:03d}")
-            batch_lights = os.path.join(batch_dir, "lights")
-            batch_process = os.path.join(batch_dir, "process")
-            os.makedirs(batch_lights, exist_ok=True)
-            os.makedirs(batch_process, exist_ok=True)
-            for fname in files:
-                src = os.path.join(lights_dir, fname)
-                dst = os.path.join(batch_lights, fname)
-                try:
-                    os.symlink(src, dst)
-                except (OSError, NotImplementedError, AttributeError):
-                    shutil.copy2(src, dst)
-            for master_name in ("darks_stacked", "flats_stacked",
-                                "biases_stacked"):
-                msrc = os.path.join(
-                    proc_dir, f"{master_name}{self.fits_extension}")
-                if os.path.isfile(msrc):
-                    mdst = os.path.join(
-                        batch_process, f"{master_name}{self.fits_extension}")
-                    try:
-                        os.link(msrc, mdst)
-                    except (OSError, NotImplementedError, AttributeError):
-                        shutil.copy2(msrc, mdst)
+            # Narrow the shared registered sequence down to just this
+            # batch's frame-index range before stacking — unselect
+            # everything first so leftover selection state from the
+            # previous batch can't bleed into this one, then select
+            # only this batch's range. -filter-included on the stack
+            # call (always on, see _stack_sequence) then processes
+            # only these frames.
+            siril.cmd("unselect", reg_seq_name, "0", str(n_frames - 1))
+            siril.cmd("select", reg_seq_name, str(start_idx), str(end_idx))
 
-            self.cwd = batch_dir
-            siril.cmd("cd", f'"{batch_dir}"')
-            try:
-                seq_name = self._convert_calibrate_seqsubsky(
-                    progress, frac_base, frac_span * 0.4, log_prefix=prefix)
-                self._register_and_stack(
-                    progress, seq_name,
-                    frac_base + frac_span * 0.4, frac_span * 0.6,
-                    log_prefix=prefix)
-                siril.cmd("cd", "../")
-            finally:
-                self.cwd = real_cwd
-                siril.cmd("cd", f'"{real_cwd}"')
+            out_name = f"batch_{bi:03d}_result"
+            self._stack_sequence(
+                progress, reg_seq_name, frac_base + frac_span * 0.2,
+                frac_span * 0.8, log_prefix=prefix, out_name=out_name)
 
             batch_result = os.path.join(
-                batch_process, f"result{self.fits_extension}")
+                proc_dir, f"{out_name}{self.fits_extension}")
             if not os.path.isfile(batch_result):
                 raise RuntimeError(
                     f"{prefix}stacking didn't produce a result file.")
-            batch_results.append(batch_result)
+            stable_path = os.path.join(
+                batch_root, f"{out_name}{self.fits_extension}")
+            shutil.move(batch_result, stable_path)
+            batch_results.append(stable_path)
             self._log_safe(
                 f"{prefix}stacked ({len(files)} subs).", LogColor.BLUE)
 
-            # The raw-sub copies/symlinks are no longer needed once this
-            # batch's own master exists — free that disk space now
-            # rather than waiting for the final cleanup, but keep
-            # batch_process/result.fits itself: the final combine below
-            # still needs every batch's result, all at once.
-            if cleanup:
-                shutil.rmtree(batch_lights, ignore_errors=True)
+        # Restore full selection so the registered sequence is left in
+        # a sane state for anything that might inspect it afterward.
+        try:
+            siril.cmd("select", reg_seq_name, "0", str(n_frames - 1))
+        except Exception:
+            pass
+
+        # Every batch is done with the registered sequence now — free
+        # its per-frame files (mirrors what a single-pass run does
+        # right after its own one-and-only stack call).
+        if cleanup:
+            self._clean_process(reg_seq_name)
 
         progress("Preprocess: combining all batches into one result...",
-                 0.72)
+                 0.82)
         if len(batch_results) == 1:
             final_master = batch_results[0]
         else:
+            combine_scratch = os.path.join(
+                proc_dir, "_batch_combine_scratch")
             self._log_safe(
                 f"Combining all {len(batch_results)} batch masters "
-                "together in a single pass...", LogColor.BLUE)
-            final_master = self._combine_all_masters(
+                "(already pixel-aligned from the shared registration "
+                "pass — no re-registration needed)...", LogColor.BLUE)
+            final_master = self._combine_registered_masters(
                 progress, batch_results, combine_scratch)
 
         final_dst = os.path.join(proc_dir, f"result{self.fits_extension}")
@@ -1122,29 +1168,33 @@ class Stage1Mixin:
                              before_linear=True, after_linear=True)
         self._log_safe(
             f"Preprocess complete ({n_batches} batches, "
-            f"{len(light_files)} subs total): {file_name}", LogColor.GREEN)
+            f"{n_frames} subs total): {file_name}", LogColor.GREEN)
 
         if cleanup and os.path.isdir(batch_root):
             shutil.rmtree(batch_root, ignore_errors=True)
 
-    def _combine_all_masters(self, progress, master_paths, work_dir,
-                             log_prefix=""):
-        """Registers and stacks N already-stacked FITS masters
-        together in a SINGLE pass, weighted by each one's STACKCNT
-        header (Siril's `-weight=nbstack`) so a master built from more
-        subs correctly dominates one built from fewer, and patches the
-        combined result's LIVETIME/STACKCNT to the true sum across all
-        inputs. Used by Batch stacking to fold every batch's master
-        together at the end — the same weighted-combine approach
-        `_combine_with_existing_master` uses for merging two whole
-        sessions, generalized from exactly 2 files to a list of any
-        length. Deliberately ONE N-way combine rather than N-1
-        pairwise combines done incrementally (an earlier version of
-        this method): Siril's register/stack commands scale with the
-        NUMBER of frames given to them, not total pixel volume, so
-        this needs meaningfully less memory and far fewer risky
-        register+platesolve round trips than folding batches in one at
-        a time. Returns the path to the combined result; never
+    def _combine_registered_masters(self, progress, master_paths, work_dir,
+                                    log_prefix=""):
+        """Combines N batch masters that all came from ONE shared
+        registration pass (see _exec_stage1_batched) into a single
+        result, weighted by each one's STACKCNT header (Siril's
+        `-weight=nbstack`) so a batch built from more subs correctly
+        dominates one built from fewer, and patches the combined
+        result's LIVETIME/STACKCNT to the true sum across all inputs.
+
+        Unlike the retired _combine_all_masters, this does NOT
+        register or plate-solve the masters against each other at
+        all — since every batch was stacked from a frame-range subset
+        of the same already-registered sequence with the same canvas
+        framing, they're already pixel-aligned. Real-world testing of
+        the old re-register-then-combine approach showed it could both
+        crash/hang (registering already-stacked full masters is a
+        much less mature Siril code path than registering raw subs)
+        and, even when it succeeded, produce a visibly wrong result —
+        ghosting/overlap rather than clean integration — from the
+        imprecision of matching two full processed images by their
+        stars alone. Skipping that step entirely fixes both problems
+        at once. Returns the path to the combined result; never
         modifies any of master_paths themselves (each is only ever
         copied)."""
         siril = self.siril
@@ -1164,17 +1214,16 @@ class Stage1Mixin:
                 self._ensure_float32_fits(dst)
             except Exception as e:
                 self._log_safe(
-                    f"{log_prefix}Combine: couldn't normalize master "
-                    f"{i} to 32-bit float ({e}) — stacking may fail if "
-                    "precision doesn't match across inputs.",
+                    f"{log_prefix}Combine: couldn't normalize batch "
+                    f"master {i} to 32-bit float ({e}) — stacking may "
+                    "fail if precision doesn't match across inputs.",
                     LogColor.SALMON)
             t, c, _ = self._read_integration_seconds(dst)
             total_time += t
             total_subs += c
 
         # Release whatever's currently loaded in Siril (the last batch
-        # that was stacked, via _register_and_stack's own "load
-        # result") before starting this register+stack, which already
+        # that was stacked) before starting this stack, which already
         # needs all N combine inputs in memory at once — no reason to
         # also keep a no-longer-needed large image loaded on top of
         # that for the duration.
@@ -1187,58 +1236,11 @@ class Stage1Mixin:
         try:
             siril.cmd("convert", "allmasters", "-out=./")
 
-            # Star-based `register` first here, deliberately the
-            # opposite priority from _register_and_stack's per-sub
-            # registration (which prefers plate-solve, since mosaics
-            # genuinely need it for correct wide-field framing). These
-            # inputs are already-stacked, already-processed full
-            # masters from the SAME batched, single-target session,
-            # not raw subs from possibly-different mosaic panels — for
-            # that, plain star matching is normally sufficient, and
-            # much lighter: no Gaia catalog fetch, no distortion-order
-            # solving, no multi-hundred-star WCS fit, on however many
-            # 40+ megapixel masters this session produced. seqplatesolve
-            # is still tried as a fallback for the harder case (e.g. a
-            # mosaic, or too few common stars for plain matching), just
-            # no longer the default first attempt for this step.
-            registered = False
-            try:
-                siril.cmd("register", "allmasters_")
-                registered = True
-            except (s.DataError, s.CommandError, s.SirilError) as e:
-                self._log_safe(
-                    f"{log_prefix}Combine: star-based registration "
-                    f"failed ({e}), falling back to plate-solve "
-                    "registration.", LogColor.SALMON)
-            if not registered and self.gaia_available:
-                try:
-                    siril.cmd("seqplatesolve", "allmasters_", "-nocache",
-                              "-force", "-disto=ps_distortion",
-                              f"-order={self.disto_order_spin.value()}",
-                              "-radius=25", *self._milkyway_solve_args())
-                    registered = True
-                except (s.DataError, s.CommandError, s.SirilError) as e:
-                    self._log_safe(
-                        f"{log_prefix}Combine: plate-solve registration "
-                        f"also failed ({e}). Stacking without "
-                        "registration — check the combined result "
-                        "carefully for misalignment.", LogColor.SALMON)
-
-            seq_for_stack = "allmasters_"
-            if registered:
-                try:
-                    siril.cmd("seqapplyreg", "allmasters_", "-kernel=square",
-                              "-framing=max")
-                    seq_for_stack = "r_allmasters_"
-                except (s.DataError, s.CommandError, s.SirilError) as e:
-                    self._log_safe(
-                        f"{log_prefix}Combine: couldn't apply a "
-                        f"registration transform ({e}) — stacking "
-                        "without re-aligning; check the combined result "
-                        "carefully for misalignment ghosting.",
-                        LogColor.SALMON)
-
-            siril.cmd("stack", seq_for_stack, " rej 3 3", "-norm=addscale",
+            # No register/seqapplyreg here at all — see the docstring.
+            # The batch masters already share identical pixel
+            # alignment and canvas size, so this is a plain weighted
+            # stack.
+            siril.cmd("stack", "allmasters_", " rej 3 3", "-norm=addscale",
                       "-output_norm", "-rgb_equal", "-weight=nbstack",
                       "-32b", "-out=combined_result")
 
