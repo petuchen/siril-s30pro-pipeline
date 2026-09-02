@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.5.5-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.6.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -52,7 +52,7 @@ progressively cleaning the result. Here is the whole journey, in order:
 
 | # | Stage | What it does | Why you need it |
 |---|-------|--------------|-----------------|
-| 1 | **Preprocess** | Aligns and averages hundreds of subs into one deep image ("stacking"), then calibrates the colors against star catalogs (SPCC). Stacking method can be Average / Median (Milky Way Mode) / Sum, or **Comet Stack** for moving objects — see below. Optionally combines the result with an already-stacked master from an earlier session (no raw subs needed), weighted by sub count. **Batch stacking** splits very large sessions into groups and folds them together the same weighted way, so peak memory/disk stays bounded to one group instead of the whole session | One 10-second exposure is faint and noisy. Averaging 300 of them is like exposing for 50 minutes — the signal adds up, the random noise cancels out |
+| 1 | **Preprocess** | Aligns and averages hundreds of subs into one deep image ("stacking"), then calibrates the colors against star catalogs (SPCC). Stacking method can be Average / Median (Milky Way Mode) / Sum, or **Comet Stack** for moving objects — see below. Optionally combines the result with an already-stacked master from an earlier session (no raw subs needed), weighted by sub count. **Batch stacking** splits very large sessions into groups, stacks each group separately, then combines all the group masters together in one weighted pass at the end, so peak memory/disk stays bounded to one group at a time instead of the whole session | One 10-second exposure is faint and noisy. Averaging 300 of them is like exposing for 50 minutes — the signal adds up, the random noise cancels out |
 | 2 | **Crop** | Trims the messy edges — with an optional rotate (slider + degree number) applied first | Because the telescope drifts slightly between shots, the stacked edges are ragged. Rotating first lets you square up the frame before trimming |
 | 3 | **Remove Green (SCNR)** | Removes the green color cast | Color cameras tend to produce a greenish sky that isn't really there |
 | 4 | **Auto Gradient Removal** | A second, tunable gradient-flattening pass (scale, smoothness, structure protection, optional simplified polynomial model) — same engine as the standalone AutoGradientRemoval script, now built in | Useful either on its own or as a milder pre-pass before stage 5's heavier background removal, especially for wide, uneven sky glow |
@@ -322,6 +322,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.6.0 | Redesigned Batch stacking's combine step: one N-way combine of all batch masters at the end instead of N-1 pairwise combines along the way — fewer risky register/platesolve operations and meaningfully less memory. |
 | 2.5.5 | Reduced Batch stacking's combine-step memory/CPU pressure (star-based registration tried before plate-solve, plus releasing the previous image before combining) — targeting a crash with no crash report, most consistent with an OS memory kill. |
 | 2.5.4 | Fixed a second SIGABRT crash (`_on_failed`'s own unguarded logging call) and added a global crash guard (`sys.excepthook`) so any future uncaught exception in a Qt slot fails gracefully instead of aborting the whole app. |
 | 2.5.3 | Fixed a hard process crash (SIGABRT) that could hit on Batch stacking — an exception escaping the worker thread's `run()` uncaught made PyQt6 abort the whole app instead of failing gracefully; both worker threads are now fully guarded. |

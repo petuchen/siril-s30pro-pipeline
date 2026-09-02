@@ -1,5 +1,33 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.6.0
+
+* **Redesigned Batch stacking's combine step: one N-way combine at
+  the end, instead of N-1 pairwise combines along the way.** The
+  previous design (2.5.0-2.5.5) folded each new batch's master into a
+  running master immediately after that batch finished — meaning a
+  9-batch run did 8 separate "register two full-resolution masters
+  together" operations, each carrying real register/platesolve
+  failure risk (this is what caused the stuck-plate-solve report and
+  both crashes fixed in 2.5.3/2.5.4). Batch stacking now keeps every
+  batch's own master on disk and combines all of them together in a
+  *single* pass at the end (`_combine_all_masters`, replacing
+  `_combine_two_masters`), the same weighted-combine approach as
+  before (Siril's `-weight=nbstack`) just generalized from exactly 2
+  files to a list of any length. This isn't just fewer risky
+  operations — it's meaningfully lighter, too: Siril's register/stack
+  commands scale with the *number* of frames they're given (processed
+  in row-strips across all of them at once), not total pixel volume,
+  so combining, say, 9 batch-masters together in one pass costs less
+  memory than doing it in 8 separate two-image rounds. It's also
+  closer to what a normal, non-batched Preprocess run's own `stack`
+  already does reliably for hundreds of raw subs in one pass — this
+  applies the same idea to a handful of much larger per-batch masters
+  instead. Each batch's raw-sub copies are still deleted right after
+  that batch's own master is built (freeing disk progressively through
+  the run), just not its result file, which now survives until the
+  final combine consumes it.
+
 ## 2.5.5
 
 * **Reduced memory/CPU pressure in Batch stacking's combine step —

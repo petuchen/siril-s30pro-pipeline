@@ -367,7 +367,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     </ol>
     <div class="why"><b>Why these 7:</b> stack → crop → de-green → (de-gradient) → remove background → denoise → stretch is the shortest path from raw subs to a clean, presentable image — every other stage is a specialized refinement (star removal for palette work, an alternate color recipe, extra per-channel polish, labeling, a watermark) that most first results don't need. Read the full 1–13 breakdown below whenever you're ready to explore those.</div>
     <h3>What each stage does — and why it exists</h3>
-    <p><b>1 · Preprocess (stacking).</b> Aligns and averages hundreds of subs into one deep image, then calibrates colors against real star measurements (SPCC). A collapsible "Combine with an existing master" section can also merge this run's fresh stack with an already-stacked FITS from an earlier session that has no raw subs — registered against it and combined with Siril's <code>-weight=nbstack</code>, weighted by each session's <code>STACKCNT</code> header (with a manual override for masters that don't have one) instead of averaging two very different amounts of integration time 50/50. The combined result's total integration time (and the auto-saved "..._combined" filename) reflects the true sum of both sessions' subs, not just what Siril's own 2-frame stack would otherwise report. A second collapsible "Batch stacking" section handles sessions with too many subs to register/stack all at once: it splits 'lights' into groups (size configurable, default 100), runs each group through the same calibrate/register/stack pipeline, then folds each group's result into a running master using that same weighted-combine approach — one group at a time, so only one group's subs are ever in memory/on disk together, instead of the whole session. Calibration masters are still built once and shared by every group; SPCC and "Combine with an existing master" still run once, on the final assembled result. Not compatible with Comet Stack mode.
+    <p><b>1 · Preprocess (stacking).</b> Aligns and averages hundreds of subs into one deep image, then calibrates colors against real star measurements (SPCC). A collapsible "Combine with an existing master" section can also merge this run's fresh stack with an already-stacked FITS from an earlier session that has no raw subs — registered against it and combined with Siril's <code>-weight=nbstack</code>, weighted by each session's <code>STACKCNT</code> header (with a manual override for masters that don't have one) instead of averaging two very different amounts of integration time 50/50. The combined result's total integration time (and the auto-saved "..._combined" filename) reflects the true sum of both sessions' subs, not just what Siril's own 2-frame stack would otherwise report. A second collapsible "Batch stacking" section handles sessions with too many subs to register/stack all at once: it splits 'lights' into groups (size configurable, default 100), runs each group through the same calibrate/register/stack pipeline, keeping every group's own master — only one group's subs are ever in memory/on disk together, instead of the whole session — then combines all the group masters together in a single weighted pass at the end using that same <code>-weight=nbstack</code> approach, rather than folding them in one at a time. Calibration masters are still built once and shared by every group; SPCC and "Combine with an existing master" still run once, on the final assembled result. Not compatible with Comet Stack mode.
     <div class="why"><b>Why:</b> one 10-second exposure is faint and grainy. Averaging 300 of them behaves like a 50-minute exposure: the signal adds up while random noise cancels out. Options: calibration frames, drizzle (finer sampling), feathering for mosaics, quality-weighted stacking, FITS compression.</div></p>
     <p><b>2 · Crop.</b> Optionally rotates the image first (slider + degree number input, -180° to 180°), then trims 5% (or custom margins) off each edge.
     <div class="why"><b>Why:</b> the telescope drifts slightly between shots, so stacked edges are ragged. Rotating lets you square the frame up before trimming it.</div></p>
@@ -413,7 +413,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     </ol>
     <div class="why"><b>為什麼是這 7 步：</b>疊圖 → 裁切 → 去綠 →（去梯度）→ 移除背景 → 降噪 → 拉伸，是從原始子畫幅到乾淨、可分享成品最短的路徑；其餘每個步驟都是特殊用途的進階調整（移星是為了色盤重新上色、另一種配色配方、逐通道的額外潤飾、標示天體、加上浮水印），大多數第一次的成品並不需要它們。準備好深入了解時，可以往下閱讀完整的 1–13 步詳細說明。</div>
     <h3>每個步驟做什麼——以及為什麼需要它</h3>
-    <p><b>1 · 前置處理（疊圖）。</b>將數百張子畫幅對齊並平均成一張深度影像，再以真實恆星測量值校正色彩（SPCC）。另有可收合的「與現有主影像合併」區塊，可將本次疊圖結果與先前工作階段中已疊好、但未保留原始子畫幅的 FITS 檔案合併——會先與該檔案對齊，再以 Siril 的 <code>-weight=nbstack</code> 依各工作階段的 <code>STACKCNT</code> 標頭加權合併（若該檔案沒有此標頭，可手動輸入子畫幅張數覆寫），而不是把兩個累積曝光時間差異懸殊的資料簡單地各半平均。合併結果的總曝光時間（以及自動儲存時使用的「..._combined」檔名）會反映兩個工作階段子畫幅的真實總和，而非 Siril 兩張影像疊圖時本身會回報的數字。另一個可收合的「批次疊圖」區塊則處理子畫幅數量多到無法一次全部對齊／疊圖的情況：把 lights 資料夾切成數個批次（大小可調，預設 100 張），每一批都跑一次相同的校正／對齊／疊圖流程，再用同一套加權合併方式，把每一批的結果逐批併入一個持續累積的主影像——同一時間只有一批的子畫幅會被載入記憶體／寫入磁碟，而不是整個工作階段的全部子畫幅。校正主檔（darks/flats/biases）仍然只建立一次、供所有批次共用；SPCC 與「與現有主影像合併」也只在最終合併完成的結果上執行一次。此功能與 Comet Stack（彗星疊圖）模式不相容。
+    <p><b>1 · 前置處理（疊圖）。</b>將數百張子畫幅對齊並平均成一張深度影像，再以真實恆星測量值校正色彩（SPCC）。另有可收合的「與現有主影像合併」區塊，可將本次疊圖結果與先前工作階段中已疊好、但未保留原始子畫幅的 FITS 檔案合併——會先與該檔案對齊，再以 Siril 的 <code>-weight=nbstack</code> 依各工作階段的 <code>STACKCNT</code> 標頭加權合併（若該檔案沒有此標頭，可手動輸入子畫幅張數覆寫），而不是把兩個累積曝光時間差異懸殊的資料簡單地各半平均。合併結果的總曝光時間（以及自動儲存時使用的「..._combined」檔名）會反映兩個工作階段子畫幅的真實總和，而非 Siril 兩張影像疊圖時本身會回報的數字。另一個可收合的「批次疊圖」區塊則處理子畫幅數量多到無法一次全部對齊／疊圖的情況：把 lights 資料夾切成數個批次（大小可調，預設 100 張），每一批都跑一次相同的校正／對齊／疊圖流程，並保留每一批自己疊好的主影像——同一時間只有一批的子畫幅會被載入記憶體／寫入磁碟，而不是整個工作階段的全部子畫幅——最後才用同一套 <code>-weight=nbstack</code> 加權方式，把所有批次的主影像一次性合併，而不是逐批合併。校正主檔（darks/flats/biases）仍然只建立一次、供所有批次共用；SPCC 與「與現有主影像合併」也只在最終合併完成的結果上執行一次。此功能與 Comet Stack（彗星疊圖）模式不相容。
     <div class="why"><b>原因：</b>單張 10 秒曝光既暗又粗糙。把 300 張平均起來，效果如同曝光 50 分鐘：訊號累加、隨機雜訊互相抵消。選項包括：校正幀、drizzle（更細取樣）、馬賽克羽化、品質加權疊圖、FITS 壓縮。</div></p>
     <p><b>2 · 裁切。</b>可先用滑桿＋角度數字輸入（-180° 至 180°）旋轉影像，再裁掉四邊各 5%（或自訂邊距）。
     <div class="why"><b>原因：</b>望遠鏡在拍攝間會些微漂移，疊出的邊緣參差不齊。先旋轉可在裁切前把畫面擺正。</div></p>
@@ -504,6 +504,29 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.6.0</td><td><b>Redesigned Batch stacking's combine
+        step: one N-way combine at the end, instead of N-1 pairwise
+        combines along the way.</b> The previous design (2.5.0-2.5.5)
+        folded each new batch's master into a running master
+        immediately after that batch finished — meaning a 9-batch run
+        did 8 separate "register two full-resolution masters together"
+        operations, each carrying real register/platesolve failure
+        risk (this is what caused the stuck-plate-solve report and
+        both crashes fixed in 2.5.3/2.5.4). Batch stacking now keeps
+        every batch's own master on disk and combines all of them
+        together in a single pass at the end, the same weighted-combine
+        approach as before (Siril's <code>-weight=nbstack</code>) just
+        generalized from exactly 2 files to a list of any length. This
+        isn't just fewer risky operations — it's meaningfully lighter,
+        too: Siril's register/stack commands scale with the number of
+        frames they're given (processed in row-strips across all of
+        them at once), not total pixel volume, so combining, say, 9
+        batch-masters together in one pass costs less memory than
+        doing it in 8 separate two-image rounds. It's also closer to
+        what a normal, non-batched Preprocess run's own stacking
+        already does reliably for hundreds of raw subs in one pass —
+        this applies the same idea to a handful of much larger
+        per-batch masters instead.</td></tr>
       <tr><td>2.5.5</td><td><b>Reduced memory/CPU pressure in Batch
         stacking's combine step</b> — addressing a crash reported with
         no crash report at all this time (most consistent with an OS
@@ -1308,6 +1331,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.6.0</td><td><b>重新設計批次疊圖的合併步驟：最後一次性完成所有批次的合併，而不是沿路逐批兩兩合併。</b>先前的設計（2.5.0–2.5.5）會在每一批疊完之後，立刻把它併入一個持續累積的主影像——也就是說，9 個批次的執行會做 8 次各自獨立的「把兩張全解析度主影像互相對齊」動作，而每一次都帶有真正的對齊／板解算失敗風險（這正是先前那次板解算卡住的回報，以及 2.5.3／2.5.4 修正的兩次當機的根本原因）。批次疊圖現在會把每一批自己疊好的主影像先保留在硬碟上，最後才把所有主影像一次性合併在一起，採用和先前相同的加權合併方式（Siril 的 <code>-weight=nbstack</code>），只是從原本固定處理兩個檔案，改為可以處理任意數量的檔案清單。這不只是減少了有風險的操作次數，負擔本身也確實變輕了：Siril 的對齊／疊圖指令的運算量是隨著「影像張數」而增加（會以逐列／逐段的方式同時處理所有影像），而不是隨著總像素量增加，因此把（例如）9 張批次主影像一次合併，會比分成 8 次兩兩合併消耗更少的記憶體。這也更接近一般（未使用批次功能）的前置處理本身在單一次疊圖中，穩定處理數百張原始子畫幅的做法——只是把同樣的概念，套用在數量少得多、但每張都大很多的批次主影像上而已。</td></tr>
       <tr><td>2.5.5</td><td><b>降低批次疊圖「合併」步驟的記憶體／CPU 負擔。</b>這次要處理的是一個完全沒有留下當機記錄的當機（比起 2.5.3／2.5.4 修正的那種 qFatal 硬性中止，這種情況更像是作業系統因記憶體不足而強制關閉程式），發生的位置和先前那次卡住的情況相同：把兩個已經疊好的批次主影像互相對齊時。這個步驟原本會先嘗試板解算（會去查詢 Gaia 星表、並進行含扭曲階數的 WCS 解算），只有在失敗時才退回使用單純的星點比對對齊——這和替原始子畫幅做對齊時採用的優先順序一樣，但那是因為馬賽克真的需要板解算才能正確處理超廣角的取景範圍。然而，把同一個單一目標、同一次批次疊圖工作階段中已經疊好的主影像互相合併時，並不需要這麼複雜：單純的星點比對通常就已足夠，而且在記憶體／CPU 負擔上輕得多——不需要查詢星表、不需要做扭曲階數解算、也不需要對上百顆星做 WCS 擬合，而這些動作原本會在一張 40 百萬畫素以上的影像上，於每一輪合併時重複執行。現在已把優先順序反過來（先嘗試星點比對，板解算只在較困難的情況下作為備援），並且在合併前先釋放剛疊完那一批次仍留在記憶體中的影像，而不是讓它跟兩張新的合併輸入影像一起白白佔用記憶體。</td></tr>
       <tr><td>2.5.4</td><td><b>修正第二個硬性當機（SIGABRT），這次發生在主要 GUI 執行緒。</b>在 2.5.3 修正之後，有位使用者又遇到另一次當機，錯誤特徵相同（<code>abort()</code> ← <code>QMessageLogger::fatal</code> ← <code>pyqt6_err_print()</code>），但這次是發生在主執行緒、處理排入佇列的訊號傳遞時。根本原因：<code>_on_failed</code>（每次步驟失敗時的處理函式）直接呼叫 Siril 的記錄函式，而不是透過安全包裝函式呼叫——而一個步驟之所以失敗，往往正是因為 Siril 連線已經不健康，這時這個處理函式自己的記錄呼叫也最容易跟著失敗。這第二個沒有受到保護的例外，就這樣從 Qt 的 slot 中逃逸出去，觸發了同一種硬性中止行為。已修正這個問題，並且新增一個在程式啟動時安裝的全域當機防護（<code>sys.excepthook</code>），讓這整個類型的當機問題一次性地被堵住，而不只是修好目前找到的幾個地方——當應用程式自行安裝了例外處理鉤子後，PyQt6 會改用該鉤子，而不會再套用它預設的「例外未被攔截就直接中止程式」行為。</td></tr>
       <tr><td>2.5.3</td><td><b>修正批次疊圖可能出現的程式硬性當機（SIGABRT）。</b>這次使用者提供的當機記錄中出現了真正發生錯誤的執行緒——<code>Thread 2 Crashed:: Worker</code>：<code>abort()</code> ← <code>QMessageLogger::fatal</code> ← <code>pyqt6_err_print()</code> ← <code>sipQThread::run()</code>。這是 PyQt6／sip 的行為：當一個 Python 例外完全沒有被攔截、直接從被覆寫的 Qt 虛擬方法（例如 <code>QThread.run()</code>）中逃逸出去時，它就不再是 Python 端可以攔截處理的失敗，而是會讓整個程式直接中止。背景工作執行緒原本就有用一層例外處理包住整個工作流程，但處理例外的程式碼本身並沒有受到保護：組合錯誤訊息文字這個動作本身也可能拋出例外（例如 Siril IPC 逾時後，socket 連線出現錯位或損毀，導致例外參數格式異常），而這第二層例外沒有任何東西可以攔截，於是就這樣逃出了 <code>run()</code>。現在已強化兩個背景工作執行緒，讓每一個步驟——列印堆疊追蹤、組合錯誤訊息，以及發送訊號本身——都個別受到保護，兩者都不會再讓例外逃逸。之後不論是批次疊圖或其他任何地方發生例外，都會正常顯示成「Pipeline error: ...」訊息，而不會再讓整個應用程式當掉。</td></tr>

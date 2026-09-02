@@ -923,13 +923,29 @@ class Stage1Mixin:
         self.batch_size_spin.value() subs, runs each group through the
         exact same convert/calibrate/(seqsubsky)/register/stack
         pipeline as a normal Preprocess run (_convert_calibrate_seqsubsky
-        + _register_and_stack), then folds each group's freshly-stacked
-        master into a running combined master via _combine_two_masters
+        + _register_and_stack) — this is where the actual memory/disk
+        win comes from: only one group's worth of raw subs is ever
+        registered/stacked at once, instead of the whole session, and
+        each group's own working files are torn down before the next
+        one starts.
+
+        Every group's freshly-stacked master is kept (not folded in
+        immediately), and once every group is done, all of them are
+        combined together in a SINGLE pass via _combine_all_masters
         (Siril's -weight=nbstack, so a group built from more subs
-        correctly outweighs one built from fewer). Only one group's
-        worth of subs is ever registered/stacked at once — that's the
-        actual point, it bounds peak memory/disk to one group plus the
-        (much smaller) running master, instead of the whole session.
+        correctly outweighs one built from fewer) — deliberately not
+        N-1 pairwise combines done incrementally after each group (an
+        earlier version of this method). Siril's own stack/register
+        commands scale with the NUMBER of frames given to them (they
+        process in row-strips across all of them at once), not total
+        pixel volume, so combining, say, 9 group-masters together in
+        one pass costs meaningfully less memory and — just as
+        importantly — far fewer risky register+platesolve round trips
+        than repeating a full two-image combine 8 separate times. It's
+        also just what a single normal Preprocess run's own `stack`
+        already does for hundreds of raw subs in one pass — this is
+        the same idea, applied to a handful of much larger per-group
+        masters instead of hundreds of small raw ones.
 
         Calibration masters (darks/flats/biases) are still built once
         against the full calibration-frame folders — those aren't
@@ -1006,21 +1022,15 @@ class Stage1Mixin:
 
         batch_root = os.path.join(proc_dir, "_batches")
         os.makedirs(batch_root, exist_ok=True)
-        # Stable location for the running master, kept deliberately
-        # separate from combine_scratch below — _combine_two_masters
-        # wipes its work_dir at the start of every call, and the
-        # running master has to survive that (it's one of that call's
-        # own inputs, read back out as path_a).
-        running_master_path = os.path.join(
-            proc_dir, f"running_master{self.fits_extension}")
         combine_scratch = os.path.join(proc_dir, "_batch_combine_scratch")
         cleanup = self.cleanup_checkbox.isChecked()
         real_cwd = cwd
-        running_master = None
+        batch_results = []  # stable per-batch result.fits paths, kept
+                            # until the single final combine below
 
         for bi, files in enumerate(batches, start=1):
-            frac_base = 0.05 + (bi - 1) / n_batches * 0.75
-            frac_span = 0.75 / n_batches
+            frac_base = 0.05 + (bi - 1) / n_batches * 0.65
+            frac_span = 0.65 / n_batches
             prefix = f"Batch {bi}/{n_batches}: "
             progress(f"{prefix}preparing {len(files)} sub(s)...", frac_base)
 
@@ -1055,7 +1065,7 @@ class Stage1Mixin:
                     progress, frac_base, frac_span * 0.4, log_prefix=prefix)
                 self._register_and_stack(
                     progress, seq_name,
-                    frac_base + frac_span * 0.4, frac_span * 0.5,
+                    frac_base + frac_span * 0.4, frac_span * 0.6,
                     log_prefix=prefix)
                 siril.cmd("cd", "../")
             finally:
@@ -1067,32 +1077,31 @@ class Stage1Mixin:
             if not os.path.isfile(batch_result):
                 raise RuntimeError(
                     f"{prefix}stacking didn't produce a result file.")
+            batch_results.append(batch_result)
+            self._log_safe(
+                f"{prefix}stacked ({len(files)} subs).", LogColor.BLUE)
 
-            if running_master is None:
-                shutil.copy2(batch_result, running_master_path)
-                running_master = running_master_path
-                self._log_safe(
-                    f"{prefix}stacked ({len(files)} subs) — seeded the "
-                    "running master.", LogColor.BLUE)
-            else:
-                progress(f"{prefix}combining into the running master...",
-                         frac_base + frac_span * 0.95)
-                combined_path = self._combine_two_masters(
-                    progress, running_master, batch_result, combine_scratch,
-                    log_prefix=prefix)
-                # Copy the freshly combined result back into the stable
-                # running-master location (combine_scratch itself gets
-                # wiped at the start of the next call).
-                shutil.copy2(combined_path, running_master_path)
-                self._log_safe(
-                    f"{prefix}folded into the running master "
-                    f"(+{len(files)} subs).", LogColor.BLUE)
-
+            # The raw-sub copies/symlinks are no longer needed once this
+            # batch's own master exists — free that disk space now
+            # rather than waiting for the final cleanup, but keep
+            # batch_process/result.fits itself: the final combine below
+            # still needs every batch's result, all at once.
             if cleanup:
-                shutil.rmtree(batch_dir, ignore_errors=True)
+                shutil.rmtree(batch_lights, ignore_errors=True)
+
+        progress("Preprocess: combining all batches into one result...",
+                 0.72)
+        if len(batch_results) == 1:
+            final_master = batch_results[0]
+        else:
+            self._log_safe(
+                f"Combining all {len(batch_results)} batch masters "
+                "together in a single pass...", LogColor.BLUE)
+            final_master = self._combine_all_masters(
+                progress, batch_results, combine_scratch)
 
         final_dst = os.path.join(proc_dir, f"result{self.fits_extension}")
-        shutil.copy2(running_master, final_dst)
+        shutil.copy2(final_master, final_dst)
         siril.cmd("cd", f'"{cwd}"')
         siril.cmd("cd", "process")
         siril.cmd("load", "result")
@@ -1118,50 +1127,57 @@ class Stage1Mixin:
         if cleanup and os.path.isdir(batch_root):
             shutil.rmtree(batch_root, ignore_errors=True)
 
-    def _combine_two_masters(self, progress, path_a, path_b, work_dir,
+    def _combine_all_masters(self, progress, master_paths, work_dir,
                              log_prefix=""):
-        """Registers and stacks two already-stacked FITS masters
-        together, weighted by each one's STACKCNT header (Siril's
-        `-weight=nbstack`) so the one built from more subs correctly
-        dominates, and patches the combined result's
-        LIVETIME/STACKCNT to the true sum of both inputs. Used by
-        Batch stacking to fold each new batch's master into the
-        running combined master, one batch at a time — the same
-        weighted-combine approach `_combine_with_existing_master` uses
-        for merging two whole sessions, just parameterized over two
-        arbitrary file paths instead of "this run's result" + "a
-        user-picked file". Returns the path to the new combined
-        result; never modifies path_a or path_b themselves (both are
-        only ever copied)."""
+        """Registers and stacks N already-stacked FITS masters
+        together in a SINGLE pass, weighted by each one's STACKCNT
+        header (Siril's `-weight=nbstack`) so a master built from more
+        subs correctly dominates one built from fewer, and patches the
+        combined result's LIVETIME/STACKCNT to the true sum across all
+        inputs. Used by Batch stacking to fold every batch's master
+        together at the end — the same weighted-combine approach
+        `_combine_with_existing_master` uses for merging two whole
+        sessions, generalized from exactly 2 files to a list of any
+        length. Deliberately ONE N-way combine rather than N-1
+        pairwise combines done incrementally (an earlier version of
+        this method): Siril's register/stack commands scale with the
+        NUMBER of frames given to them, not total pixel volume, so
+        this needs meaningfully less memory and far fewer risky
+        register+platesolve round trips than folding batches in one at
+        a time. Returns the path to the combined result; never
+        modifies any of master_paths themselves (each is only ever
+        copied)."""
         siril = self.siril
+        if len(master_paths) == 1:
+            return master_paths[0]
+
         if os.path.isdir(work_dir):
             shutil.rmtree(work_dir, ignore_errors=True)
         os.makedirs(work_dir, exist_ok=True)
 
-        a_dst = os.path.join(work_dir, f"a{self.fits_extension}")
-        b_dst = os.path.join(work_dir, f"b{self.fits_extension}")
-        shutil.copy2(path_a, a_dst)
-        shutil.copy2(path_b, b_dst)
-        try:
-            self._ensure_float32_fits(a_dst)
-            self._ensure_float32_fits(b_dst)
-        except Exception as e:
-            self._log_safe(
-                f"{log_prefix}Combine: couldn't normalize both frames to "
-                f"32-bit float ({e}) — stacking may fail if their "
-                "precision still doesn't match.", LogColor.SALMON)
+        total_time = 0.0
+        total_subs = 0
+        for i, src in enumerate(master_paths, start=1):
+            dst = os.path.join(work_dir, f"m{i:03d}{self.fits_extension}")
+            shutil.copy2(src, dst)
+            try:
+                self._ensure_float32_fits(dst)
+            except Exception as e:
+                self._log_safe(
+                    f"{log_prefix}Combine: couldn't normalize master "
+                    f"{i} to 32-bit float ({e}) — stacking may fail if "
+                    "precision doesn't match across inputs.",
+                    LogColor.SALMON)
+            t, c, _ = self._read_integration_seconds(dst)
+            total_time += t
+            total_subs += c
 
-        a_time, a_cnt, _ = self._read_integration_seconds(a_dst)
-        b_time, b_cnt, _ = self._read_integration_seconds(b_dst)
-        total_time = a_time + b_time
-        total_subs = a_cnt + b_cnt
-
-        # Release whatever's currently loaded in Siril (typically the
-        # batch that was just stacked, via _register_and_stack's own
-        # "load result") before starting this register+stack, which
-        # already needs both combine inputs in memory at once — no
-        # reason to also keep a third, no-longer-needed large image
-        # loaded on top of that for the duration.
+        # Release whatever's currently loaded in Siril (the last batch
+        # that was stacked, via _register_and_stack's own "load
+        # result") before starting this register+stack, which already
+        # needs all N combine inputs in memory at once — no reason to
+        # also keep a no-longer-needed large image loaded on top of
+        # that for the duration.
         try:
             siril.cmd("close")
         except Exception:
@@ -1169,26 +1185,25 @@ class Stage1Mixin:
 
         siril.cmd("cd", f'"{work_dir}"')
         try:
-            siril.cmd("convert", "combined", "-out=./")
+            siril.cmd("convert", "allmasters", "-out=./")
 
             # Star-based `register` first here, deliberately the
             # opposite priority from _register_and_stack's per-sub
             # registration (which prefers plate-solve, since mosaics
             # genuinely need it for correct wide-field framing). These
-            # two inputs are already-stacked, already-processed full
-            # masters from the SAME batched session, not raw subs from
-            # possibly-different mosaic panels — for that, plain star
-            # matching is normally sufficient, and much lighter: no
-            # Gaia catalog fetch, no distortion-order solving, no
-            # multi-hundred-star WCS fit — on a 40+ megapixel image,
-            # that's real memory/CPU pressure repeated on every combine
-            # round of a long batch run. seqplatesolve is still tried
-            # as a fallback for the harder case (e.g. a mosaic, or too
-            # few common stars for plain matching), just no longer the
-            # default first attempt for this specific step.
+            # inputs are already-stacked, already-processed full
+            # masters from the SAME batched, single-target session,
+            # not raw subs from possibly-different mosaic panels — for
+            # that, plain star matching is normally sufficient, and
+            # much lighter: no Gaia catalog fetch, no distortion-order
+            # solving, no multi-hundred-star WCS fit, on however many
+            # 40+ megapixel masters this session produced. seqplatesolve
+            # is still tried as a fallback for the harder case (e.g. a
+            # mosaic, or too few common stars for plain matching), just
+            # no longer the default first attempt for this step.
             registered = False
             try:
-                siril.cmd("register", "combined_")
+                siril.cmd("register", "allmasters_")
                 registered = True
             except (s.DataError, s.CommandError, s.SirilError) as e:
                 self._log_safe(
@@ -1197,7 +1212,7 @@ class Stage1Mixin:
                     "registration.", LogColor.SALMON)
             if not registered and self.gaia_available:
                 try:
-                    siril.cmd("seqplatesolve", "combined_", "-nocache",
+                    siril.cmd("seqplatesolve", "allmasters_", "-nocache",
                               "-force", "-disto=ps_distortion",
                               f"-order={self.disto_order_spin.value()}",
                               "-radius=25", *self._milkyway_solve_args())
@@ -1209,12 +1224,12 @@ class Stage1Mixin:
                         "registration — check the combined result "
                         "carefully for misalignment.", LogColor.SALMON)
 
-            seq_for_stack = "combined_"
+            seq_for_stack = "allmasters_"
             if registered:
                 try:
-                    siril.cmd("seqapplyreg", "combined_", "-kernel=square",
+                    siril.cmd("seqapplyreg", "allmasters_", "-kernel=square",
                               "-framing=max")
-                    seq_for_stack = "r_combined_"
+                    seq_for_stack = "r_allmasters_"
                 except (s.DataError, s.CommandError, s.SirilError) as e:
                     self._log_safe(
                         f"{log_prefix}Combine: couldn't apply a "
