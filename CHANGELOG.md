@@ -1,5 +1,28 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.5.5
+
+* **Reduced memory/CPU pressure in Batch stacking's combine step —
+  addressing a crash with no crash report at all** (most consistent
+  with an OS out-of-memory kill rather than the qFatal aborts fixed in
+  2.5.3/2.5.4), reported happening at the same spot as an earlier
+  hang: registering two already-stacked batch masters together.
+  `_combine_two_masters` previously tried `seqplatesolve` first for
+  this step (Gaia catalog fetch + distortion-order WCS solving) with
+  plain star-based `register` only as a fallback — the same priority
+  used for registering raw subs, where mosaics genuinely need
+  plate-solving for correct wide-field framing. But combining two
+  already-stacked, already-processed masters from the *same*
+  single-target batched session doesn't need that: plain star matching
+  is normally sufficient, and far lighter on memory/CPU — no catalog
+  fetch, no distortion solving, no multi-hundred-star WCS fit, repeated
+  on a 40+ megapixel image every combine round of a long run. Flipped
+  the priority (star-based first, plate-solve as the fallback for
+  harder cases). Also added `siril.cmd("close")` at the start of the
+  combine step to release whatever image was still loaded from the
+  batch that was just stacked, rather than holding it in memory
+  alongside the two new combine inputs unnecessarily.
+
 ## 2.5.4
 
 * **Fixed a second hard crash (SIGABRT), this time on the main GUI

@@ -504,6 +504,28 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.5.5</td><td><b>Reduced memory/CPU pressure in Batch
+        stacking's combine step</b> — addressing a crash reported with
+        no crash report at all this time (most consistent with an OS
+        out-of-memory kill rather than the qFatal aborts fixed in
+        2.5.3/2.5.4), happening at the same spot as an earlier hang:
+        registering two already-stacked batch masters together. This
+        step previously tried plate-solving first (a Gaia catalog
+        fetch plus distortion-order WCS solving), with plain
+        star-based registration only as a fallback — the same
+        priority used for registering raw subs, where mosaics
+        genuinely need plate-solving for correct wide-field framing.
+        But combining two already-stacked masters from the same
+        single-target batched session doesn't need that: plain star
+        matching is normally sufficient, and far lighter on
+        memory/CPU — no catalog fetch, no distortion solving, no
+        multi-hundred-star WCS fit, repeated on a 40+ megapixel image
+        every combine round of a long run. Flipped the priority
+        (star-based first, plate-solve as the fallback for harder
+        cases), and now releases whatever image was still loaded from
+        the batch that was just stacked before combining, instead of
+        holding it in memory alongside the two new inputs
+        unnecessarily.</td></tr>
       <tr><td>2.5.4</td><td><b>Fixed a second hard crash (SIGABRT),
         this time on the main GUI thread.</b> After 2.5.3's fix, a
         user hit another abort with the same signature
@@ -1286,6 +1308,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.5.5</td><td><b>降低批次疊圖「合併」步驟的記憶體／CPU 負擔。</b>這次要處理的是一個完全沒有留下當機記錄的當機（比起 2.5.3／2.5.4 修正的那種 qFatal 硬性中止，這種情況更像是作業系統因記憶體不足而強制關閉程式），發生的位置和先前那次卡住的情況相同：把兩個已經疊好的批次主影像互相對齊時。這個步驟原本會先嘗試板解算（會去查詢 Gaia 星表、並進行含扭曲階數的 WCS 解算），只有在失敗時才退回使用單純的星點比對對齊——這和替原始子畫幅做對齊時採用的優先順序一樣，但那是因為馬賽克真的需要板解算才能正確處理超廣角的取景範圍。然而，把同一個單一目標、同一次批次疊圖工作階段中已經疊好的主影像互相合併時，並不需要這麼複雜：單純的星點比對通常就已足夠，而且在記憶體／CPU 負擔上輕得多——不需要查詢星表、不需要做扭曲階數解算、也不需要對上百顆星做 WCS 擬合，而這些動作原本會在一張 40 百萬畫素以上的影像上，於每一輪合併時重複執行。現在已把優先順序反過來（先嘗試星點比對，板解算只在較困難的情況下作為備援），並且在合併前先釋放剛疊完那一批次仍留在記憶體中的影像，而不是讓它跟兩張新的合併輸入影像一起白白佔用記憶體。</td></tr>
       <tr><td>2.5.4</td><td><b>修正第二個硬性當機（SIGABRT），這次發生在主要 GUI 執行緒。</b>在 2.5.3 修正之後，有位使用者又遇到另一次當機，錯誤特徵相同（<code>abort()</code> ← <code>QMessageLogger::fatal</code> ← <code>pyqt6_err_print()</code>），但這次是發生在主執行緒、處理排入佇列的訊號傳遞時。根本原因：<code>_on_failed</code>（每次步驟失敗時的處理函式）直接呼叫 Siril 的記錄函式，而不是透過安全包裝函式呼叫——而一個步驟之所以失敗，往往正是因為 Siril 連線已經不健康，這時這個處理函式自己的記錄呼叫也最容易跟著失敗。這第二個沒有受到保護的例外，就這樣從 Qt 的 slot 中逃逸出去，觸發了同一種硬性中止行為。已修正這個問題，並且新增一個在程式啟動時安裝的全域當機防護（<code>sys.excepthook</code>），讓這整個類型的當機問題一次性地被堵住，而不只是修好目前找到的幾個地方——當應用程式自行安裝了例外處理鉤子後，PyQt6 會改用該鉤子，而不會再套用它預設的「例外未被攔截就直接中止程式」行為。</td></tr>
       <tr><td>2.5.3</td><td><b>修正批次疊圖可能出現的程式硬性當機（SIGABRT）。</b>這次使用者提供的當機記錄中出現了真正發生錯誤的執行緒——<code>Thread 2 Crashed:: Worker</code>：<code>abort()</code> ← <code>QMessageLogger::fatal</code> ← <code>pyqt6_err_print()</code> ← <code>sipQThread::run()</code>。這是 PyQt6／sip 的行為：當一個 Python 例外完全沒有被攔截、直接從被覆寫的 Qt 虛擬方法（例如 <code>QThread.run()</code>）中逃逸出去時，它就不再是 Python 端可以攔截處理的失敗，而是會讓整個程式直接中止。背景工作執行緒原本就有用一層例外處理包住整個工作流程，但處理例外的程式碼本身並沒有受到保護：組合錯誤訊息文字這個動作本身也可能拋出例外（例如 Siril IPC 逾時後，socket 連線出現錯位或損毀，導致例外參數格式異常），而這第二層例外沒有任何東西可以攔截，於是就這樣逃出了 <code>run()</code>。現在已強化兩個背景工作執行緒，讓每一個步驟——列印堆疊追蹤、組合錯誤訊息，以及發送訊號本身——都個別受到保護，兩者都不會再讓例外逃逸。之後不論是批次疊圖或其他任何地方發生例外，都會正常顯示成「Pipeline error: ...」訊息，而不會再讓整個應用程式當掉。</td></tr>
       <tr><td>2.5.2</td><td><b>修正：批次疊圖可能因為單純的記錄訊息逾時而中止整個流程。</b>有位使用者在處理 438 張、切成 9 批的疊圖時，在第一則記錄訊息就遇到暫時性的 <code>SirilConnectionError: Timeout while receiving data</code>——這其實不是真正的錯誤，只是一次不穩定的 IPC 往返逾時，但因為沒有攔截，整個執行就被中止了。批次疊圖在一次可能長達數十分鐘的執行過程中，會呼叫 Siril 的次數遠多於一般的前置處理執行，讓單一次不穩定的記錄呼叫有更多機會出現、進而拖垮整個流程。現在批次迴圈內的每一次記錄呼叫都會安全失敗、不再拋出例外——單純一行記錄訊息失敗，不會再賠上先前已經完成的好幾批疊圖成果。這項修正不影響一般單次執行的流程，也不會掩蓋真正 Siril 指令本身逾時的情況（那類情況仍會照常拋出錯誤——遺失指令的回覆確認是真正的問題，不是單純的顯示訊息）。</td></tr>

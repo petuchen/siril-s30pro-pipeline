@@ -1156,12 +1156,46 @@ class Stage1Mixin:
         total_time = a_time + b_time
         total_subs = a_cnt + b_cnt
 
+        # Release whatever's currently loaded in Siril (typically the
+        # batch that was just stacked, via _register_and_stack's own
+        # "load result") before starting this register+stack, which
+        # already needs both combine inputs in memory at once — no
+        # reason to also keep a third, no-longer-needed large image
+        # loaded on top of that for the duration.
+        try:
+            siril.cmd("close")
+        except Exception:
+            pass
+
         siril.cmd("cd", f'"{work_dir}"')
         try:
             siril.cmd("convert", "combined", "-out=./")
 
+            # Star-based `register` first here, deliberately the
+            # opposite priority from _register_and_stack's per-sub
+            # registration (which prefers plate-solve, since mosaics
+            # genuinely need it for correct wide-field framing). These
+            # two inputs are already-stacked, already-processed full
+            # masters from the SAME batched session, not raw subs from
+            # possibly-different mosaic panels — for that, plain star
+            # matching is normally sufficient, and much lighter: no
+            # Gaia catalog fetch, no distortion-order solving, no
+            # multi-hundred-star WCS fit — on a 40+ megapixel image,
+            # that's real memory/CPU pressure repeated on every combine
+            # round of a long batch run. seqplatesolve is still tried
+            # as a fallback for the harder case (e.g. a mosaic, or too
+            # few common stars for plain matching), just no longer the
+            # default first attempt for this specific step.
             registered = False
-            if self.gaia_available:
+            try:
+                siril.cmd("register", "combined_")
+                registered = True
+            except (s.DataError, s.CommandError, s.SirilError) as e:
+                self._log_safe(
+                    f"{log_prefix}Combine: star-based registration "
+                    f"failed ({e}), falling back to plate-solve "
+                    "registration.", LogColor.SALMON)
+            if not registered and self.gaia_available:
                 try:
                     siril.cmd("seqplatesolve", "combined_", "-nocache",
                               "-force", "-disto=ps_distortion",
@@ -1171,15 +1205,6 @@ class Stage1Mixin:
                 except (s.DataError, s.CommandError, s.SirilError) as e:
                     self._log_safe(
                         f"{log_prefix}Combine: plate-solve registration "
-                        f"failed ({e}), falling back to star-based "
-                        "registration.", LogColor.SALMON)
-            if not registered:
-                try:
-                    siril.cmd("register", "combined_")
-                    registered = True
-                except (s.DataError, s.CommandError, s.SirilError) as e:
-                    self._log_safe(
-                        f"{log_prefix}Combine: star-based registration "
                         f"also failed ({e}). Stacking without "
                         "registration — check the combined result "
                         "carefully for misalignment.", LogColor.SALMON)
