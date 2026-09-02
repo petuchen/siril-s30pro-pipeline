@@ -1083,8 +1083,12 @@ class Stage1Mixin:
                             # until the single final combine below
 
         for bi, files in enumerate(batches, start=1):
-            start_idx = (bi - 1) * batch_size
-            end_idx = min(bi * batch_size, n_frames) - 1
+            # Siril's select/unselect take 1-indexed, inclusive frame
+            # numbers (confirmed against a live Siril instance — the
+            # command rejects anything outside [1, N], despite one of
+            # the docs' own examples suggesting 0-indexed).
+            start_idx = (bi - 1) * batch_size + 1
+            end_idx = min(bi * batch_size, n_frames)
             frac_base = 0.35 + (bi - 1) / n_batches * 0.45
             frac_span = 0.45 / n_batches
             prefix = f"Batch {bi}/{n_batches}: "
@@ -1099,7 +1103,7 @@ class Stage1Mixin:
             # only this batch's range. -filter-included on the stack
             # call (always on, see _stack_sequence) then processes
             # only these frames.
-            siril.cmd("unselect", reg_seq_name, "0", str(n_frames - 1))
+            siril.cmd("unselect", reg_seq_name, "1", str(n_frames))
             siril.cmd("select", reg_seq_name, str(start_idx), str(end_idx))
 
             out_name = f"batch_{bi:03d}_result"
@@ -1122,7 +1126,7 @@ class Stage1Mixin:
         # Restore full selection so the registered sequence is left in
         # a sane state for anything that might inspect it afterward.
         try:
-            siril.cmd("select", reg_seq_name, "0", str(n_frames - 1))
+            siril.cmd("select", reg_seq_name, "1", str(n_frames))
         except Exception:
             pass
 

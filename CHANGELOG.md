@@ -1,5 +1,18 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.7.1
+
+* **Fixed a crash in 2.7.0's Batch stacking right at the first batch:
+  `select`/`unselect` failed with "The second argument must be
+  between 1 and the number of images."** The Siril docs' own example
+  (`select . 0 0` "selects the first...") suggested 0-indexed frame
+  numbers, but the live command actually rejects anything outside
+  `[1, N]` — confirmed against a real Siril instance via the error
+  above. `_exec_stage1_batched`'s per-batch `select`/`unselect` calls
+  now use 1-indexed, inclusive frame ranges (`(bi-1)*batch_size+1` to
+  `min(bi*batch_size, n_frames)`, and `unselect ... 1 n_frames` to
+  clear state between batches) instead of 0-indexed ones.
+
 ## 2.7.0
 
 * **Redesigned Batch stacking's core architecture: register the whole
