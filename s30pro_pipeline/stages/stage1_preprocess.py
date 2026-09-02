@@ -1188,6 +1188,7 @@ class Stage1Mixin:
 
         progress("Preprocess: combining all batches into one result...",
                  0.82)
+        combine_scratch = None
         if len(batch_results) == 1:
             final_master = batch_results[0]
         else:
@@ -1202,6 +1203,16 @@ class Stage1Mixin:
 
         final_dst = os.path.join(proc_dir, f"result{self.fits_extension}")
         shutil.copy2(final_master, final_dst)
+
+        # _combine_registered_masters' own scratch dir holds a full-size
+        # copy of every batch master plus the combined result itself —
+        # easily the single largest thing left on disk at this point.
+        # final_dst above already has everything anyone downstream
+        # needs, so free it right away rather than leaving it around
+        # until the very end (or, previously, forever — this scratch
+        # dir was never actually cleaned up at all).
+        if cleanup and combine_scratch and os.path.isdir(combine_scratch):
+            shutil.rmtree(combine_scratch, ignore_errors=True)
         siril.cmd("cd", f'"{cwd}"')
         siril.cmd("cd", "process")
         siril.cmd("load", "result")

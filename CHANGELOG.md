@@ -1,5 +1,19 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.7.4
+
+* **Fixed Batch stacking's final combine step never cleaning up its
+  own scratch directory, even with "Clean up temp files" on.**
+  `_combine_registered_masters` writes a full-size copy of every
+  batch master (plus the combined result itself) into
+  `process/_batch_combine_scratch` — easily the single largest thing
+  left on disk once combining starts — but nothing ever deleted that
+  directory afterward; it silently persisted until the next
+  Preprocess run wiped the whole `process` folder. `_exec_stage1_batched`
+  now removes it right after the combined result is copied out to
+  `result<ext>`, same as everything else "Clean up temp files"
+  already frees.
+
 ## 2.7.3
 
 * **Fixed the final combine step failing with "Stacking error: input

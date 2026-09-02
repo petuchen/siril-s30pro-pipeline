@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.7.3-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.7.4-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -322,6 +322,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.7.4 | Fixed Batch stacking's final combine step never cleaning up its own scratch directory (a full-size copy of every batch master) even with "Clean up temp files" on. |
 | 2.7.3 | Fixed Batch stacking's final combine failing with "input images have different sizes" — each per-batch stack call was re-deriving its own canvas size via Siril's `-maximize`, instead of reusing the one common size the shared registration pass already fixed; `-maximize` is now off per-batch, and feathering/overlap normalization (which need it) now raise a clear error together with Batch stacking. |
 | 2.7.2 | "Combine with existing master" and "Batch stacking" explanations moved out of tiny inline captions into a "ⓘ Details" popup at a much larger, readable font size; also refreshed Batch stacking's text to match the current register-once architecture. |
 | 2.7.1 | Fixed a crash in 2.7.0's Batch stacking — `select`/`unselect` need 1-indexed frame ranges, not 0-indexed (confirmed against a live Siril instance). |
