@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.5.3-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.5.4-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -322,6 +322,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.5.4 | Fixed a second SIGABRT crash (`_on_failed`'s own unguarded logging call) and added a global crash guard (`sys.excepthook`) so any future uncaught exception in a Qt slot fails gracefully instead of aborting the whole app. |
 | 2.5.3 | Fixed a hard process crash (SIGABRT) that could hit on Batch stacking — an exception escaping the worker thread's `run()` uncaught made PyQt6 abort the whole app instead of failing gracefully; both worker threads are now fully guarded. |
 | 2.5.2 | Fixed Batch stacking aborting on a transient logging timeout mid-run — logging calls inside the batch loop now fail safe instead of killing however many batches were already stacked. |
 | 2.5.1 | Fixed "Use Siril's image" looking like it did nothing when the compare view was showing "After" — it now force-switches to "Before" so the newly imported image is always visible. |

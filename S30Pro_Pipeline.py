@@ -195,6 +195,7 @@ import copy
 import json
 import random
 import shutil
+import traceback
 import hashlib
 import tempfile
 import threading
@@ -242,7 +243,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.5.3"
+VERSION = "2.5.4"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -1088,10 +1089,27 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
             pass
 
     def _on_failed(self, err):
+        """Slot for Worker.failed — fires on the GUI thread via a
+        queued cross-thread signal delivery whenever a stage's exec
+        function raises. Exactly the situation where the Siril
+        connection is most likely to already be unhealthy (a broken/
+        timed-out connection is a common reason a stage fails in the
+        first place) — so the log call here uses _log_safe rather than
+        self.siril.log(...) directly. A user hit this exact chain: a
+        stage failed because the connection was already bad, and this
+        handler's own (unguarded, pre-2.5.4) siril.log() call then
+        raised too, escaping this Qt slot uncaught — which, same as
+        the Worker.run() case 2.5.3 fixed, makes PyQt6/sip call Qt's
+        qFatal() and abort the whole process instead of just failing
+        to show a log line. QMessageBox.critical is also guarded for
+        the same reason, even though it's far less likely to raise."""
         self._set_running(False)
         self.status_label.setText(f"Error: {err}")
-        self.siril.log(f"Pipeline error: {err}", LogColor.RED)
-        QMessageBox.critical(self, "Pipeline error", err)
+        self._log_safe(f"Pipeline error: {err}", LogColor.RED)
+        try:
+            QMessageBox.critical(self, "Pipeline error", err)
+        except Exception:
+            pass
         # A preview fetch may have been deferred while this stage ran
         # (see _refresh_preview's self.worker.isRunning() guard) — retry it
         # now that the Siril connection is free again.
@@ -1956,7 +1974,41 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         event.accept()
 
 
+def _install_crash_guard():
+    """Installs a global sys.excepthook so an exception that reaches
+    Qt's dispatch boundary uncaught (an overridden virtual method like
+    QThread.run(), or a signal-slot invocation via the meta-object
+    system) can no longer abort the entire process.
+
+    PyQt6 (since PyQt5.5) installs its own default exception hook that
+    calls sys.exit() and then abort() for exactly this situation —
+    *unless* the application has already installed its own
+    sys.excepthook, in which case PyQt6 defers to that one instead of
+    its own fatal default. Two separate crash reports during Batch
+    stacking showed this happening from more than one call site (a
+    Worker-thread run() escape, then a main-thread _on_failed() escape
+    right after) — patching each individual call site with its own
+    try/except (2.5.2's _log_safe, 2.5.3's Worker/PreviewFetchWorker
+    hardening, and this version's _on_failed fix) only closes the
+    specific spots already found by then. Installing this hook here,
+    once, at startup, closes
+    the whole class of crash at once: any *future* exception that
+    reaches this boundary uncaught now gets printed instead of taking
+    the whole application down with it."""
+    def _hook(exc_type, exc_value, exc_tb):
+        try:
+            traceback.print_exception(exc_type, exc_value, exc_tb)
+        except Exception:
+            try:
+                print(f"[{APP_NAME}] unhandled exception: "
+                     f"{exc_type.__name__}: {exc_value}")
+            except Exception:
+                pass
+    sys.excepthook = _hook
+
+
 def main():
+    _install_crash_guard()
     app = QApplication(sys.argv)
     win = UnifiedPipelineWindow()
     if getattr(win, "initialization_successful", False):

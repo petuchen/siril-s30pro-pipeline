@@ -1,5 +1,29 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.5.4
+
+* **Fixed a second hard crash (SIGABRT), this time on the main GUI
+  thread.** After 2.5.3's fix, a user hit another abort — same
+  signature (`abort() <- QMessageLogger::fatal <- pyqt6_err_print`)
+  but this time on Thread 0 (main thread), inside a queued signal
+  delivery (`PyQtSlotProxy::unislot`). Root cause: `_on_failed` (the
+  handler for every stage failure) called `self.siril.log(...)`
+  directly instead of the safe wrapper — and a stage most often fails
+  *because* the Siril connection is already unhealthy, which is
+  exactly when this handler's own logging call is also most likely to
+  raise. That second, unguarded exception escaped the Qt slot
+  uncaught and triggered the same fatal-abort behavior 2.5.3 fixed for
+  the worker thread, just from a different call site. Fixed `_on_failed`
+  to use `_log_safe` and wrapped its `QMessageBox.critical` call too.
+* **Added a global crash guard** (`_install_crash_guard`, installed at
+  startup via `sys.excepthook`) so this entire *class* of crash is
+  closed at once, not just the specific call sites found so far: PyQt6
+  defers to an application's own `sys.excepthook` instead of its
+  default sys.exit()+abort() behavior when one is installed, so any
+  *future* exception that reaches Qt's dispatch boundary uncaught
+  (whether in a slot, a virtual method override, or anywhere else) now
+  gets printed instead of taking the whole application down.
+
 ## 2.5.3
 
 * **Fixed a hard process crash (SIGABRT) on a second Batch stacking

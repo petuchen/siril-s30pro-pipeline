@@ -504,6 +504,25 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.5.4</td><td><b>Fixed a second hard crash (SIGABRT),
+        this time on the main GUI thread.</b> After 2.5.3's fix, a
+        user hit another abort with the same signature
+        (<code>abort()</code> &larr; <code>QMessageLogger::fatal</code> &larr;
+        <code>pyqt6_err_print()</code>) but this time inside a queued
+        signal delivery on the main thread. Root cause:
+        <code>_on_failed</code> (the handler for every stage failure)
+        called Siril's logging function directly instead of the safe
+        wrapper — and a stage most often fails <i>because</i> the
+        Siril connection is already unhealthy, which is exactly when
+        this handler's own logging call is also most likely to raise.
+        That second, unguarded exception escaped the Qt slot uncaught
+        and triggered the same fatal-abort behavior. Fixed, and also
+        added a global crash guard installed at startup
+        (<code>sys.excepthook</code>) so this entire <i>class</i> of
+        crash is closed at once going forward, not just the specific
+        spots found so far — PyQt6 defers to an application's own
+        exception hook instead of its default abort-on-uncaught-
+        exception behavior when one is installed.</td></tr>
       <tr><td>2.5.3</td><td><b>Fixed a hard process crash (SIGABRT) on
         Batch stacking.</b> A user's crash log showed the real
         faulting thread this time — <code>Thread 2 Crashed:: Worker</code>:
@@ -1267,6 +1286,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.5.4</td><td><b>修正第二個硬性當機（SIGABRT），這次發生在主要 GUI 執行緒。</b>在 2.5.3 修正之後，有位使用者又遇到另一次當機，錯誤特徵相同（<code>abort()</code> ← <code>QMessageLogger::fatal</code> ← <code>pyqt6_err_print()</code>），但這次是發生在主執行緒、處理排入佇列的訊號傳遞時。根本原因：<code>_on_failed</code>（每次步驟失敗時的處理函式）直接呼叫 Siril 的記錄函式，而不是透過安全包裝函式呼叫——而一個步驟之所以失敗，往往正是因為 Siril 連線已經不健康，這時這個處理函式自己的記錄呼叫也最容易跟著失敗。這第二個沒有受到保護的例外，就這樣從 Qt 的 slot 中逃逸出去，觸發了同一種硬性中止行為。已修正這個問題，並且新增一個在程式啟動時安裝的全域當機防護（<code>sys.excepthook</code>），讓這整個類型的當機問題一次性地被堵住，而不只是修好目前找到的幾個地方——當應用程式自行安裝了例外處理鉤子後，PyQt6 會改用該鉤子，而不會再套用它預設的「例外未被攔截就直接中止程式」行為。</td></tr>
       <tr><td>2.5.3</td><td><b>修正批次疊圖可能出現的程式硬性當機（SIGABRT）。</b>這次使用者提供的當機記錄中出現了真正發生錯誤的執行緒——<code>Thread 2 Crashed:: Worker</code>：<code>abort()</code> ← <code>QMessageLogger::fatal</code> ← <code>pyqt6_err_print()</code> ← <code>sipQThread::run()</code>。這是 PyQt6／sip 的行為：當一個 Python 例外完全沒有被攔截、直接從被覆寫的 Qt 虛擬方法（例如 <code>QThread.run()</code>）中逃逸出去時，它就不再是 Python 端可以攔截處理的失敗，而是會讓整個程式直接中止。背景工作執行緒原本就有用一層例外處理包住整個工作流程，但處理例外的程式碼本身並沒有受到保護：組合錯誤訊息文字這個動作本身也可能拋出例外（例如 Siril IPC 逾時後，socket 連線出現錯位或損毀，導致例外參數格式異常），而這第二層例外沒有任何東西可以攔截，於是就這樣逃出了 <code>run()</code>。現在已強化兩個背景工作執行緒，讓每一個步驟——列印堆疊追蹤、組合錯誤訊息，以及發送訊號本身——都個別受到保護，兩者都不會再讓例外逃逸。之後不論是批次疊圖或其他任何地方發生例外，都會正常顯示成「Pipeline error: ...」訊息，而不會再讓整個應用程式當掉。</td></tr>
       <tr><td>2.5.2</td><td><b>修正：批次疊圖可能因為單純的記錄訊息逾時而中止整個流程。</b>有位使用者在處理 438 張、切成 9 批的疊圖時，在第一則記錄訊息就遇到暫時性的 <code>SirilConnectionError: Timeout while receiving data</code>——這其實不是真正的錯誤，只是一次不穩定的 IPC 往返逾時，但因為沒有攔截，整個執行就被中止了。批次疊圖在一次可能長達數十分鐘的執行過程中，會呼叫 Siril 的次數遠多於一般的前置處理執行，讓單一次不穩定的記錄呼叫有更多機會出現、進而拖垮整個流程。現在批次迴圈內的每一次記錄呼叫都會安全失敗、不再拋出例外——單純一行記錄訊息失敗，不會再賠上先前已經完成的好幾批疊圖成果。這項修正不影響一般單次執行的流程，也不會掩蓋真正 Siril 指令本身逾時的情況（那類情況仍會照常拋出錯誤——遺失指令的回覆確認是真正的問題，不是單純的顯示訊息）。</td></tr>
       <tr><td>2.5.1</td><td><b>修正：點擊「使用 Siril 目前影像」有時看起來像沒反應。</b>點擊後永遠都會更新該步驟的「before」預覽資料，但比較檢視畫面當時可能還停留在「After」（在決定要回 Siril 重做某些調整之前，停在 After 檢視是很常見的情況）——於是新匯入的影像其實已經更新，只是顯示在你當下沒在看的那一格。現在按下這個按鈕會強制把比較檢視切換到「Before」模式，確保剛匯入的影像一定會立刻顯示出來。</td></tr>
