@@ -804,7 +804,8 @@ class Stage1Mixin:
         return "r_" + seq_name
 
     def _stack_sequence(self, progress, seq_name, progress_base=0.75,
-                        progress_span=0.15, log_prefix="", out_name="result"):
+                        progress_span=0.15, log_prefix="", out_name="result",
+                        maximize=True):
         """Stacks the already-registered `seq_name` (see
         _register_sequence) with whichever method/options the
         Preprocess panel has selected, writing
@@ -818,7 +819,25 @@ class Stage1Mixin:
         `seq_name`'s intermediate files itself — the caller decides
         when that registered sequence is no longer needed by anyone
         (a single-pass run does it right away; Batch stacking waits
-        until every batch is done with it)."""
+        until every batch is done with it).
+
+        `maximize=False` drops Average (rejection)'s own `-maximize`
+        flag. That flag re-derives the output canvas from whichever
+        frames are CURRENTLY selected/included, using their individual
+        registration entries — it does not simply reuse each frame's
+        already-fixed physical size from `_register_sequence`'s own
+        `seqapplyreg -framing=max` (which padded every frame in the
+        sequence, once, to one common union canvas before any
+        batching/selecting happened). So calling this with a
+        frame-range subset selected (as every batch does) and
+        `-maximize` still on makes each batch re-maximize against only
+        its own subset's shift range — producing a DIFFERENT physical
+        canvas size per batch, which then makes the final combine
+        step's plain `stack` (no registration data to fall back on)
+        fail with "input images have different sizes". Batch stacking
+        passes `maximize=False` for exactly this reason; the
+        single-pass path leaves it at the default True, unchanged from
+        before this parameter existed."""
         siril = self.siril
         feather = self.feather_checkbox.isChecked()
         feather_amount = self.feather_amount.value()
@@ -841,17 +860,19 @@ class Stage1Mixin:
                          "-filter-included", "-32b", f"-out={out_name}"]
         else:  # Average (rejection) — the default
             stack_cmd = ["stack", seq_name, " rej 3 3", "-norm=addscale",
-                         "-output_norm", "-rgb_equal", "-maximize",
+                         "-output_norm", "-rgb_equal",
                          "-filter-included", "-32b", f"-out={out_name}"]
+            if maximize:
+                stack_cmd.append("-maximize")
             if self.weighting_checkbox.isChecked():
                 wmap = {"Number of Stars": "nbstars",
                         "Weighted FWHM": "wfwhm", "Noise": "noise"}
                 stack_cmd.append(
                     "-weight="
                     f"{wmap[self.weighting_method_combo.currentText()]}")
-            if feather:
+            if maximize and feather:
                 stack_cmd.append(f"-feather={feather_amount}")
-            if self.overlap_norm_checkbox.isChecked():
+            if maximize and self.overlap_norm_checkbox.isChecked():
                 stack_cmd.append("-overlap_norm")
         siril.cmd(*stack_cmd)
         siril.cmd("load", out_name)
@@ -1021,6 +1042,27 @@ class Stage1Mixin:
                 "per batch. Turn off Batch stacking, or switch "
                 "Stacking method away from Comet Stack.")
 
+        # Feathering and overlap normalization both require Siril's
+        # -maximize on the stack command (see _stack_sequence's
+        # docstring) — and -maximize has to stay OFF for every
+        # per-batch stack call below, because it re-derives the output
+        # canvas from only that batch's own frame subset instead of
+        # reusing the one common canvas _register_sequence already
+        # fixed for the whole session, producing a different physical
+        # size per batch. So there's no way to honor either option
+        # correctly while batching.
+        if self.stack_method_combo.currentText() == "Average (rejection)" and (
+                self.feather_checkbox.isChecked()
+                or self.overlap_norm_checkbox.isChecked()):
+            raise RuntimeError(
+                "Batch stacking doesn't support feathering or overlap "
+                "normalization — both need Siril's -maximize at stack "
+                "time, which has to stay off per-batch so every "
+                "batch's master comes out the same physical size (see "
+                "the Batch stacking Details popup for why). Turn off "
+                "feathering/overlap normalization, or turn off Batch "
+                "stacking.")
+
         batch_size = self.batch_size_spin.value()
         light_files = sorted(
             f for f in os.listdir(lights_dir)
@@ -1116,7 +1158,8 @@ class Stage1Mixin:
             out_name = f"batch_{bi:03d}_result"
             self._stack_sequence(
                 progress, reg_seq_name, frac_base + frac_span * 0.2,
-                frac_span * 0.8, log_prefix=prefix, out_name=out_name)
+                frac_span * 0.8, log_prefix=prefix, out_name=out_name,
+                maximize=False)
 
             batch_result = os.path.join(
                 proc_dir, f"{out_name}{self.fits_extension}")

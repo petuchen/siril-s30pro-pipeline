@@ -1,5 +1,33 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.7.3
+
+* **Fixed the final combine step failing with "Stacking error: input
+  images have different sizes" after every batch stacked
+  successfully.** Root cause: `_stack_sequence`'s Average (rejection)
+  branch always passed Siril's `-maximize` flag, which re-derives the
+  output canvas from only the frames currently selected/included,
+  using their individual registration entries — it does not simply
+  reuse each frame's already-fixed physical size from
+  `_register_sequence`'s own `seqapplyreg -framing=max` (applied once,
+  to the whole session, before any batching). So every per-batch
+  stack call, each selecting a different frame-range subset, was
+  re-maximizing against only its own subset's shift range and coming
+  out a different physical size — which the final combine (no
+  registration data to fall back on) then rejected outright.
+
+  `_stack_sequence` now takes a `maximize` parameter (default `True`,
+  unchanged for the normal single-pass path); Batch stacking's
+  per-batch calls now pass `maximize=False`, so every batch simply
+  reuses the one common canvas size the shared registration pass
+  already fixed, and all batch masters come out identically sized.
+  Since feathering and overlap normalization both require
+  `-maximize` per Siril, and there's no way to honor either correctly
+  while `-maximize` has to stay off per-batch, Batch stacking now
+  raises a clear error up front if either is enabled together with
+  Average (rejection) stacking, the same way it already does for
+  Comet Stack mode.
+
 ## 2.7.2
 
 * **"Combine with existing master" and "Batch stacking" explanations
