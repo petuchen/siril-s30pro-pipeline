@@ -642,9 +642,17 @@ class Stage1Mixin:
                 and self.combine_master_path_edit.text().strip()):
             self._combine_with_existing_master(progress)
 
-        # ---- SPCC
-        if self.spcc_checkbox.isChecked():
-            self._platesolve_and_spcc(progress)
+        # ---- plate solve (always — see _platesolve_result's docstring:
+        # a freshly-stacked result's WCS is wrong/stale until re-solved,
+        # which breaks Crop/Annotate downstream even when SPCC is off)
+        # then SPCC color calibration if requested.
+        solved = self._platesolve_result(progress)
+        if solved and self.spcc_checkbox.isChecked():
+            try:
+                self._run_spcc()
+            except (s.DataError, s.CommandError, s.SirilError) as e:
+                self.siril.log(f"SPCC failed (continuing): {e}",
+                                LogColor.SALMON)
 
         # ---- save stacked result with a descriptive name
         file_name = self._save_result_named()
@@ -910,15 +918,25 @@ class Stage1Mixin:
         if cleanup:
             self._clean_process(reg_seq_name)
 
-    def _platesolve_and_spcc(self, progress):
+    def _platesolve_result(self, progress):
         """Plate-solves the current Siril image (Siril's own solver,
         then local Astrometry.net, then a full blind solve for Milky
-        Way Mode's very wide field) and runs SPCC color calibration if
-        that succeeds. Shared by the normal single-pass path and Batch
-        stacking's final assembled result — SPCC only makes sense to
+        Way Mode's very wide field) and returns whether it succeeded.
+
+        This ALWAYS runs after stacking/combining, regardless of the
+        SPCC checkbox: confirmed by a user's own direct test in Siril
+        that a freshly-stacked result.fit carries a wrong/stale WCS
+        until it's freshly plate-solved (Annotate then places objects
+        at a consistent, fixed-offset wrong position even though
+        Siril's own Annotate tool works fine once re-solved). Every
+        later stage — Crop, Annotate, etc. — depends on a valid WCS
+        being present from this point on, so this can't be left
+        conditional on whether the user also wants SPCC's color
+        calibration. Shared by the normal single-pass path and Batch
+        stacking's final assembled result — this only makes sense to
         run once, on the fully combined image, not once per batch."""
         siril = self.siril
-        progress("Preprocess: plate solving result + SPCC...", 0.85)
+        progress("Preprocess: plate solving result...", 0.85)
         solved = False
         mw_args = self._milkyway_solve_args()
         is_milkyway = (self.stack_method_combo.currentText()
@@ -989,12 +1007,23 @@ class Stage1Mixin:
                         "local Astrometry.net solver (solve-field) with "
                         "matching index files to enable -localasnet.",
                         LogColor.SALMON)
+        if not solved:
+            siril.log(
+                "Preprocess: plate-solve did not succeed — later stages "
+                "(Crop, Annotate) may not have a valid WCS to work "
+                "with.", LogColor.SALMON)
+        return solved
+
+    def _platesolve_and_spcc(self, progress):
+        """Back-compat wrapper: plate-solves (see _platesolve_result)
+        and, if that succeeds, runs SPCC color calibration."""
+        solved = self._platesolve_result(progress)
         if solved:
             try:
                 self._run_spcc()
             except (s.DataError, s.CommandError, s.SirilError) as e:
-                siril.log(f"SPCC failed (continuing): {e}",
-                          LogColor.SALMON)
+                self.siril.log(f"SPCC failed (continuing): {e}",
+                                LogColor.SALMON)
 
     # ------------------------------------------------------- Batch stacking
 
@@ -1248,8 +1277,16 @@ class Stage1Mixin:
                 and self.combine_master_path_edit.text().strip()):
             self._combine_with_existing_master(progress)
 
-        if self.spcc_checkbox.isChecked():
-            self._platesolve_and_spcc(progress)
+        # ---- plate solve (always) then SPCC if requested — see
+        # _platesolve_result's docstring for why this can't be
+        # conditional on the SPCC checkbox.
+        solved = self._platesolve_result(progress)
+        if solved and self.spcc_checkbox.isChecked():
+            try:
+                self._run_spcc()
+            except (s.DataError, s.CommandError, s.SirilError) as e:
+                self.siril.log(f"SPCC failed (continuing): {e}",
+                                LogColor.SALMON)
 
         file_name = self._save_result_named()
         progress("Preprocess: done.", 1.0)

@@ -1,5 +1,29 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.9.0
+
+* **Fixed Annotate placing objects at consistently wrong positions
+  after stacking, even when Crop hadn't touched the image yet.** A
+  user's own direct test in Siril isolated the cause precisely:
+  loading a freshly-stacked `result.fit` and annotating it gave wrong
+  positions, but re-running Siril's own plate solving on that exact
+  file first made it correct — meaning the WCS solution a stack
+  carries right out of registration/stacking is stale or wrong until
+  it's freshly re-solved, regardless of anything the plugin's Annotate
+  stage does with it.
+
+  Preprocess previously only ran a post-stack plate-solve as a side
+  effect of `_platesolve_and_spcc` being gated behind the "SPCC color
+  calibration" checkbox — so with SPCC turned off, nothing ever
+  re-solved the stacked result, and every later stage (Crop, Annotate)
+  inherited that stale WCS. Plate solving is now split out into its
+  own step (`_platesolve_result`) and always runs right after
+  stacking/combining in both the normal single-pass path and Batch
+  stacking's final assembled result, regardless of the SPCC checkbox.
+  SPCC's own color calibration still only runs when that checkbox is
+  checked, but now only as a second step after the plate-solve has
+  already happened for everyone.
+
 ## 2.8.1
 
 * **Fixed a later stage's preview (e.g. Annotate right after Final

@@ -504,6 +504,25 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.9.0</td><td><b>Fixed Annotate placing objects at
+        consistently wrong positions after stacking, even without
+        Crop having touched the image yet.</b> A user's own direct
+        test in Siril pinned down the cause: loading a freshly-stacked
+        <code>result.fit</code> and annotating it gave wrong
+        positions, but re-running Siril's own plate solving on that
+        exact file first made it correct — the WCS a stack carries
+        right out of registration/stacking is stale or wrong until
+        it's freshly re-solved, regardless of anything Annotate itself
+        does with it. Preprocess previously only ran a post-stack
+        plate-solve as a side effect of SPCC being enabled (the "SPCC
+        color calibration" checkbox), so with SPCC off, nothing ever
+        re-solved the stacked result and every later stage inherited
+        a stale WCS. Plate solving is now its own step that always
+        runs right after stacking/combining — in both the normal
+        single-pass path and Batch stacking's final assembled result —
+        regardless of the SPCC checkbox; SPCC's own color calibration
+        still only runs when checked, now strictly after the
+        plate-solve has already happened.</td></tr>
       <tr><td>2.8.1</td><td><b>Fixed a later stage's preview (e.g.
         Annotate right after Final Touch) showing a "super bright" /
         double-stretched image, even after clicking "⇩ Use Siril's
@@ -1486,6 +1505,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.9.0</td><td><b>修正堆疊後「標註」步驟把天體標示在錯誤位置（且是固定方向的偏移），即使 Crop 裁切都還沒動過影像也一樣。</b>使用者直接在 Siril 裡做的實測釐清了根本原因：讀取剛疊完的 <code>result.fit</code> 並標註，位置就是錯的；但先手動對這個檔案重新做一次板解算之後，位置就正確了——也就是說，一份主影像剛完成對齊／疊圖時所帶的 WCS 座標，本身就是過時或不正確的，要等重新解算過才會正確，這與「標註」步驟自己的程式邏輯完全無關。前置處理先前只有在「SPCC 色彩校正」勾選框開啟時，才會順帶執行堆疊後的板解算——因此只要 SPCC 沒勾選，就完全不會有任何步驟重新解算剛疊好的結果，導致後續每個步驟（Crop、標註）都繼承了這個過時的 WCS。現在板解算已獨立成自己的一個步驟，不論 SPCC 勾選框狀態為何，都會在疊圖／合併完成後立刻執行——單次流程與批次疊圖的最終合併結果都一樣。SPCC 本身的色彩校正仍然只在勾選時才執行，但現在一定會排在板解算之後才進行。</td></tr>
       <tr><td>2.8.1</td><td><b>修正後續步驟（例如緊接在「最終潤飾」之後的「標註」）的預覽畫面出現「過度明亮」／重複拉伸的問題，即使點了「⇩ 使用 Siril 目前影像」也一樣。</b>自動預覽讀取（針對這個工作階段session中尚未執行過的步驟）以及「使用 Siril 目前影像」按鈕，兩者都會抓取 Siril 目前載入的影像，並且在「顯示時自動拉伸」勾選開啟時，對它套用一次僅用於畫面顯示的自動拉伸，好讓線性、尚未處理過的資料也能在預覽時看起來正常。這個自動拉伸函式原本就有自己的安全判斷，理應跳過「已經拉伸過」的影像（畫面中位數亮度高於某個門檻），但典型深空影像「整張畫面」的中位數，即使影像本身已經處理得很好，仍然會因為大部分畫面是暗夜空背景而偏低——導致這個判斷無法可靠辨識出「這張影像其實已經處理過了」，於是預覽就在「最終潤飾」已經處理好的結果上，又疊加了一次拉伸。Siril 裡實際的 FITS 資料自始至終都沒有問題——出錯的只有這個特定的預覽畫面。現在新增了一小段狀態記錄，每當某個步驟把結果推送進 Siril 時就會同步更新，記錄這個結果到底還是線性資料、還是已經是可直接顯示的成品；預覽相關的程式碼現在會先查詢這個記錄，而不是只單靠亮度判斷法。</td></tr>
       <tr><td>2.8.0</td><td><b>修正批次疊圖把影像裁切到幾乎所剩無幾的問題。</b>2.7.5 版為了修正「尺寸不一致」的合併當機問題，把唯一一次、涵蓋整個工作階段的共用對齊步驟強制改用 <code>-framing=min</code>——雖然保證了每個批次都會共用固定的畫布尺寸，但這個尺寸是「整個工作階段」的共同重疊區域，對於拍攝時間較長、望遠鏡確實有明顯漂移的工作階段來說，這個區域可能非常小（遠小於單一批次——因為時間跨度短得多——原本能保留的範圍）。批次疊圖現在改回依疊圖方式決定的一般取景範圍（「平均（含拒絕）」通常會是「max」，也就是完整聯集，和一般執行相同），讓每個批次盡量保留自己那個影格範圍本來能涵蓋的實際範圍；因此批次之間又會出現不同的實際尺寸。最後的合併步驟現在會自行處理這個差異，先做一次輕量、僅限平移（shift-only）的對齊（<code>-transf=shift</code>）再疊圖，而不是假設批次之間完全沒有位移。這和 2.7.0 版之前那個造成當機與疊影問題的舊對齊步驟有本質上的不同：舊版是對「各自獨立對齊」（各批次有各自的參考影格）的主影像做不限制自由度的仿射／homography 對齊；而這裡每個批次主影像本來就共用同一次對齊、同一個參考影格——彼此之間唯一可能有的差異只是單純的裁切／平移量——因此只做平移對齊（不必猜測旋轉或縮放）預期會既可靠又精準，若平移對齊本身失敗，還會依序退回不限制自由度的一般對齊、以及完全不對齊直接疊圖。</td></tr>
       <tr><td>2.7.5</td><td><b>真正修正了批次主影像尺寸不一致的問題。</b>2.7.3 版的修正方式（逐批關閉 <code>-maximize</code>）事後證實並沒有解決真正的根本原因——實機測試時，合併步驟後來又出現一模一樣的「input images have different sizes」錯誤。真正的機制是：Siril 的 <code>seqapplyreg -framing=max</code>（「平均（含拒絕）」這個最常用疊圖方式的預設取景模式）只會依照「每一張影格自己」的位移量去加上剛好足夠的黑邊，並不會把整個序列裡的每一張影格都統一補齊到同一個共用畫布大小。因此，兩個不同批次各自選取的影格範圍不同，理所當然會產生不同的實際輸出尺寸——不管逐批疊圖時 <code>-maximize</code> 開或關都一樣，因為這個參數本來就只會在「同一批次自己的子集合內」把尺寸調整一致，從來不會跨批次生效。批次疊圖現在已改為在對齊階段一律強制使用 <code>-framing=min</code>（和 Median／Sum 疊圖方式原本就採用的取景模式相同）——在同一次 seqapplyreg 呼叫中，把整個工作階段所有影格都裁切到彼此共同的重疊區域：這是「只決定一次」的固定尺寸，之後不論哪個批次抽取哪些影格，都天生就會是同一個尺寸。這和 Median／Sum 疊圖原本就接受的取捨一樣：結果只涵蓋所有影格共同重疊的區域，而不是任何單一影格曾經涵蓋到的完整聯集範圍。單次（未使用批次功能）的疊圖流程不受影響。</td></tr>
