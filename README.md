@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.8.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.8.1-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -322,6 +322,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.8.1 | Fixed a later stage's preview (e.g. Annotate right after Final Touch) showing a "super bright" double-stretched image — the display-only autostretch no longer re-applies on top of an already-processed image, tracked via a new `_current_image_linear` flag instead of relying solely on a brightness heuristic that dark-sky-dominated deep-sky images can fool. |
 | 2.8.0 | Fixed Batch stacking cropping images down to almost nothing — registration uses full "max" framing again (each batch keeps its own real coverage), and the final combine now reconciles any resulting size differences with a light, shift-only registration pass instead of forcing one tiny fixed crop for the whole session. |
 | 2.7.5 | Actually fixed batch masters coming out different sizes — Batch stacking now forces `-framing=min` at registration (one fixed size for the whole session, decided once) instead of relying on per-batch `-maximize`, which only ever reconciled sizes within one batch, never across batches. |
 | 2.7.4 | Fixed Batch stacking's final combine step never cleaning up its own scratch directory (a full-size copy of every batch master) even with "Clean up temp files" on. |

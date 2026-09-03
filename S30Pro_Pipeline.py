@@ -243,7 +243,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.8.0"
+VERSION = "2.8.1"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -398,6 +398,18 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
                                  # (Hold-stars-until-stretch option) for the
                                  # Stretch stage to recombine after its own pass
         self._last_run_stage_idx = None  # for the Ctrl+Z "undo last stage" shortcut
+        self._current_image_linear = True  # whether Siril's currently
+            # loaded image is still linear/unprocessed (needs a display
+            # stretch to preview sensibly) or already non-linear/display-
+            # ready (e.g. after Stretch/Final Touch) — kept in sync by
+            # _finish_stage's after_linear argument, and consulted by
+            # _refresh_preview/_load_siril_current_into_stage so they
+            # don't apply a second display autostretch on top of an
+            # already-stretched image (see their own comments for why
+            # display_autostretch's own "median > 0.15" heuristic isn't
+            # reliable enough alone — a typical deep-sky image's WHOLE
+            # frame median stays low even when well processed, since
+            # dark sky background dominates the pixel count).
         self._subsky_boxes = None  # user-edited background sample boxes
                                     # [(x, y, size), ...] in image pixel
                                     # coords, set via "Preview & edit
@@ -732,7 +744,17 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
             return
         self._preview_pending = False
 
-        stretch_on = self.chk_display_stretch.isChecked()
+        # Only auto-stretch for display if the last stage that actually
+        # pushed something into Siril left it linear/unprocessed (see
+        # _current_image_linear) — otherwise this double-stretches an
+        # already-processed image (e.g. after Final Touch), which
+        # display_autostretch's own "median > 0.15" safety check can't
+        # reliably catch on its own: a typical deep-sky image's WHOLE
+        # frame median stays low even when well processed, since dark
+        # sky background dominates the pixel count, so that guard alone
+        # doesn't recognize "already stretched" reliably.
+        stretch_on = (self.chk_display_stretch.isChecked()
+                     and self._current_image_linear)
 
         def fetch():
             arr = self._get_current_image()  # may raise RuntimeError
@@ -849,6 +871,11 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
                                  self.snapshots_raw_after.get(stage_idx), backup,
                                  before_linear=stage_idx < IDX_STR,
                                  after_linear=stage_idx < IDX_HIST)
+            # `backup` is what just got pushed into Siril above — keep
+            # _current_image_linear in sync the same way _finish_stage
+            # does, using the same "restored to before which stage"
+            # logic already used for after_linear just above.
+            self._current_image_linear = stage_idx < IDX_HIST
             progress(f"{STAGES[stage_idx]} undone.", 1.0)
             self.siril.log(f"Undid stage: {STAGES[stage_idx]}", LogColor.BLUE)
         self._launch([job])
@@ -901,7 +928,17 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         except RuntimeError as e:
             QMessageBox.warning(self, "No image", str(e))
             return
-        do_stretch = self.chk_display_stretch.isChecked()
+        # Same gating as _refresh_preview: only stretch for display if
+        # the last thing pushed into Siril was still linear/unprocessed
+        # — otherwise this doubles up on an already-stretched image
+        # (e.g. right after Final Touch), which display_autostretch's
+        # own brightness heuristic can't reliably catch by itself. If
+        # you genuinely loaded a fresh, still-linear image manually in
+        # Siril after a later pipeline stage had already run, this
+        # preview just won't be pre-stretched for you — the underlying
+        # image itself is unaffected either way.
+        do_stretch = (self.chk_display_stretch.isChecked()
+                     and self._current_image_linear)
         hwc = to_hwc_float(arr)
         if do_stretch:
             hwc = display_autostretch(hwc)
@@ -1007,6 +1044,16 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         self.snapshots_raw_after[idx] = after
         self._store_snapshot(idx, before, after, before_linear, after_linear)
         self._last_run_stage_idx = idx
+        # `after` is what actually got pushed into Siril (via
+        # _set_current_image or a siril.cmd call, by the caller, just
+        # before this) — record whether IT is linear so a later
+        # _refresh_preview/_load_siril_current_into_stage fetch of
+        # Siril's current image knows whether a display autostretch is
+        # still needed, instead of only trusting display_autostretch's
+        # own pixel-statistics heuristic (unreliable on typical
+        # deep-sky images, whose dark sky background can keep the
+        # WHOLE-frame median low even once well processed).
+        self._current_image_linear = after_linear
         if progress:
             progress(done_msg, 1.0)
         self.siril.log(log_msg, LogColor.GREEN)
@@ -1939,6 +1986,7 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         for btn in self.undo_buttons.values():
             btn.setEnabled(False)
         self._last_run_stage_idx = None
+        self._current_image_linear = True
         self._subsky_boxes = None
         self._pending_crop_box = None
         self._ann_base_canvas = None

@@ -1,5 +1,33 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.8.1
+
+* **Fixed a later stage's preview (e.g. Annotate right after Final
+  Touch) showing a "super bright" / double-stretched image, even
+  after clicking "⇩ Use Siril's image."** Both the automatic preview
+  fetch (for a stage that hasn't run yet this session) and the "Use
+  Siril's image" button pull Siril's currently-loaded image and, if
+  the display-stretch checkbox is on, run it through a display-only
+  autostretch (`display_autostretch`) so linear/unprocessed data
+  previews sensibly. That function has its own safety check meant to
+  skip already-stretched images (median brightness above a
+  threshold), but a typical deep-sky image's *whole-frame* median
+  stays low even when perfectly well processed — most of the frame is
+  dark sky background — so the check doesn't reliably catch an
+  already-processed image, and the preview got stretched a second
+  time on top of what Final Touch had already produced, which is what
+  made it look badly overexposed. The underlying FITS data in Siril
+  was never actually wrong — only this specific preview render was.
+
+  Added `self._current_image_linear`, kept in sync by `_finish_stage`
+  (every stage's own bookkeeping tail, called right after it pushes
+  its result into Siril) and by `_undo_stage`, recording whether
+  whatever was just pushed into Siril is still linear or already
+  display-ready. Both `_refresh_preview`'s auto-fetch and "Use Siril's
+  image" now only apply the display autostretch when this flag says
+  the image is still linear, instead of trusting `display_autostretch`'s
+  own heuristic alone.
+
 ## 2.8.0
 
 * **Fixed Batch stacking cropping the image down to almost nothing.**

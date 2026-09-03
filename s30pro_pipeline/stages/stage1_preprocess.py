@@ -653,6 +653,11 @@ class Stage1Mixin:
         after_arr = self._get_current_image()
         self._store_snapshot(0, before_arr, after_arr,
                              before_linear=True, after_linear=True)
+        # Preprocess doesn't route through _finish_stage (it has its own
+        # tail here), so it has to update this itself — a freshly
+        # stacked result is always linear/unprocessed, same as
+        # _finish_stage would record for after_linear=True.
+        self._current_image_linear = True
         siril.log(f"Preprocess complete: {file_name}", LogColor.GREEN)
 
     def _build_calibration_masters(self, progress, progress_frac=0.05):
@@ -1252,6 +1257,11 @@ class Stage1Mixin:
         after_arr = self._get_current_image()
         self._store_snapshot(0, before_arr, after_arr,
                              before_linear=True, after_linear=True)
+        # Preprocess doesn't route through _finish_stage (it has its own
+        # tail here), so it has to update this itself — a freshly
+        # stacked result is always linear/unprocessed, same as
+        # _finish_stage would record for after_linear=True.
+        self._current_image_linear = True
         self._log_safe(
             f"Preprocess complete ({n_batches} batches, "
             f"{n_frames} subs total): {file_name}", LogColor.GREEN)

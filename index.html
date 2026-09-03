@@ -504,6 +504,28 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.8.1</td><td><b>Fixed a later stage's preview (e.g.
+        Annotate right after Final Touch) showing a "super bright" /
+        double-stretched image, even after clicking "⇩ Use Siril's
+        image."</b> Both the automatic preview fetch (for a stage
+        that hasn't run yet this session) and the "Use Siril's image"
+        button pull Siril's currently-loaded image and, if the
+        display-stretch checkbox is on, run it through a display-only
+        autostretch so linear/unprocessed data previews sensibly.
+        That function has its own safety check meant to skip
+        already-stretched images (median brightness above a
+        threshold), but a typical deep-sky image's whole-frame median
+        stays low even when perfectly well processed — most of the
+        frame is dark sky background — so the check doesn't reliably
+        catch an already-processed image, and the preview got
+        stretched a second time on top of what Final Touch had
+        already produced. The underlying FITS data in Siril was never
+        actually wrong — only this specific preview render was. Added
+        a small piece of state, kept in sync every time a stage
+        pushes its result into Siril, recording whether that result
+        is still linear or already display-ready; the preview paths
+        now consult it instead of trusting the brightness heuristic
+        alone.</td></tr>
       <tr><td>2.8.0</td><td><b>Fixed Batch stacking cropping the
         image down to almost nothing.</b> 2.7.5's fix for the
         "different sizes" combine crash forced <code>-framing=min</code>
@@ -1464,6 +1486,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.8.1</td><td><b>修正後續步驟（例如緊接在「最終潤飾」之後的「標註」）的預覽畫面出現「過度明亮」／重複拉伸的問題，即使點了「⇩ 使用 Siril 目前影像」也一樣。</b>自動預覽讀取（針對這個工作階段session中尚未執行過的步驟）以及「使用 Siril 目前影像」按鈕，兩者都會抓取 Siril 目前載入的影像，並且在「顯示時自動拉伸」勾選開啟時，對它套用一次僅用於畫面顯示的自動拉伸，好讓線性、尚未處理過的資料也能在預覽時看起來正常。這個自動拉伸函式原本就有自己的安全判斷，理應跳過「已經拉伸過」的影像（畫面中位數亮度高於某個門檻），但典型深空影像「整張畫面」的中位數，即使影像本身已經處理得很好，仍然會因為大部分畫面是暗夜空背景而偏低——導致這個判斷無法可靠辨識出「這張影像其實已經處理過了」，於是預覽就在「最終潤飾」已經處理好的結果上，又疊加了一次拉伸。Siril 裡實際的 FITS 資料自始至終都沒有問題——出錯的只有這個特定的預覽畫面。現在新增了一小段狀態記錄，每當某個步驟把結果推送進 Siril 時就會同步更新，記錄這個結果到底還是線性資料、還是已經是可直接顯示的成品；預覽相關的程式碼現在會先查詢這個記錄，而不是只單靠亮度判斷法。</td></tr>
       <tr><td>2.8.0</td><td><b>修正批次疊圖把影像裁切到幾乎所剩無幾的問題。</b>2.7.5 版為了修正「尺寸不一致」的合併當機問題，把唯一一次、涵蓋整個工作階段的共用對齊步驟強制改用 <code>-framing=min</code>——雖然保證了每個批次都會共用固定的畫布尺寸，但這個尺寸是「整個工作階段」的共同重疊區域，對於拍攝時間較長、望遠鏡確實有明顯漂移的工作階段來說，這個區域可能非常小（遠小於單一批次——因為時間跨度短得多——原本能保留的範圍）。批次疊圖現在改回依疊圖方式決定的一般取景範圍（「平均（含拒絕）」通常會是「max」，也就是完整聯集，和一般執行相同），讓每個批次盡量保留自己那個影格範圍本來能涵蓋的實際範圍；因此批次之間又會出現不同的實際尺寸。最後的合併步驟現在會自行處理這個差異，先做一次輕量、僅限平移（shift-only）的對齊（<code>-transf=shift</code>）再疊圖，而不是假設批次之間完全沒有位移。這和 2.7.0 版之前那個造成當機與疊影問題的舊對齊步驟有本質上的不同：舊版是對「各自獨立對齊」（各批次有各自的參考影格）的主影像做不限制自由度的仿射／homography 對齊；而這裡每個批次主影像本來就共用同一次對齊、同一個參考影格——彼此之間唯一可能有的差異只是單純的裁切／平移量——因此只做平移對齊（不必猜測旋轉或縮放）預期會既可靠又精準，若平移對齊本身失敗，還會依序退回不限制自由度的一般對齊、以及完全不對齊直接疊圖。</td></tr>
       <tr><td>2.7.5</td><td><b>真正修正了批次主影像尺寸不一致的問題。</b>2.7.3 版的修正方式（逐批關閉 <code>-maximize</code>）事後證實並沒有解決真正的根本原因——實機測試時，合併步驟後來又出現一模一樣的「input images have different sizes」錯誤。真正的機制是：Siril 的 <code>seqapplyreg -framing=max</code>（「平均（含拒絕）」這個最常用疊圖方式的預設取景模式）只會依照「每一張影格自己」的位移量去加上剛好足夠的黑邊，並不會把整個序列裡的每一張影格都統一補齊到同一個共用畫布大小。因此，兩個不同批次各自選取的影格範圍不同，理所當然會產生不同的實際輸出尺寸——不管逐批疊圖時 <code>-maximize</code> 開或關都一樣，因為這個參數本來就只會在「同一批次自己的子集合內」把尺寸調整一致，從來不會跨批次生效。批次疊圖現在已改為在對齊階段一律強制使用 <code>-framing=min</code>（和 Median／Sum 疊圖方式原本就採用的取景模式相同）——在同一次 seqapplyreg 呼叫中，把整個工作階段所有影格都裁切到彼此共同的重疊區域：這是「只決定一次」的固定尺寸，之後不論哪個批次抽取哪些影格，都天生就會是同一個尺寸。這和 Median／Sum 疊圖原本就接受的取捨一樣：結果只涵蓋所有影格共同重疊的區域，而不是任何單一影格曾經涵蓋到的完整聯集範圍。單次（未使用批次功能）的疊圖流程不受影響。</td></tr>
       <tr><td>2.7.4</td><td><b>修正批次疊圖最後的合併步驟，即使開啟「清理暫存檔案」也從未清理自己使用的暫存資料夾。</b>合併步驟會把每個批次主影像的完整大小副本（以及合併結果本身）都寫進一個暫存資料夾——這通常是合併開始後硬碟上單一體積最大的東西——但先前完全沒有任何程式碼會在之後刪除它，導致它就這樣一直留著，直到下一次前置處理執行、整個 process 資料夾被清空為止。現在合併結果一複製出去之後就會立刻刪除這個暫存資料夾，和「清理暫存檔案」原本就會清理的其他項目做法一致。</td></tr>
