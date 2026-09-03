@@ -1,5 +1,36 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.8.0
+
+* **Fixed Batch stacking cropping the image down to almost nothing.**
+  2.7.5's fix for the "different sizes" combine crash forced
+  `-framing=min` on the ONE shared, whole-session registration pass —
+  guaranteeing every batch shared a fixed canvas size, but that size
+  is the overlap of the *entire session*, which for a long run with
+  real mount drift can be tiny (much smaller than what any single
+  batch, spanning far less time, would keep on its own).
+
+  Batch stacking now registers with the normal per-method framing
+  again (usually "max" — full union, same as a normal run), so each
+  batch keeps as much of its own frame range's real coverage as
+  possible; batches are allowed to come out different physical sizes
+  again as a result. The final combine (`_combine_registered_masters`)
+  now reconciles that itself with a light, shift-only registration
+  pass (Siril's `register ... -transf=shift`) before stacking, instead
+  of assuming zero offset. This is meaningfully different from the
+  pre-2.7.0 design's registration step, which is what originally
+  caused crashes and ghosting: that one used unrestricted
+  affine/homography registration between masters that had been
+  registered completely independently (their own reference frame,
+  their own canvas). Here, every batch master already shares the
+  SAME registration pass and reference frame — the only thing that
+  can differ is a pure crop/translation offset — so shift-only
+  registration (no rotation or scale for the star matcher to get
+  wrong) is expected to be both reliable and precise. Falls back to
+  unrestricted registration, then to stacking without registration,
+  only if shift-only registration itself fails, logging clearly at
+  each fallback.
+
 ## 2.7.5
 
 * **Actually fixed batch masters coming out different sizes** — 2.7.3's

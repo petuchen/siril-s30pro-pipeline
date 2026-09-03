@@ -390,20 +390,17 @@ class Stage1Mixin:
             "never actually the problem. Only the memory-heavy "
             "rejection-stacking step is split into groups of the "
             "size below, each group stacking its own frame range out "
-            "of that one shared, already-registered sequence. "
-            "Registration always crops to the area common to the "
-            "whole session (\"minimum\" framing) here, regardless of "
-            "stack method, so every group shares one fixed canvas "
-            "size no matter which frames it contains — trading away "
-            "the outer edge only some frames touched for a guarantee "
-            "every group comes out identically sized.\n\n"
-            "Because every group's master comes from the same "
-            "registration pass and canvas framing, they're already "
-            "pixel-aligned with each other, so the final combine is "
-            "a plain weighted stack (Siril's -weight=nbstack, so a "
-            "group built from more subs correctly outweighs one "
-            "built from fewer) with no re-registration step needed "
-            "at all.\n\n"
+            "of that one shared, already-registered sequence.\n\n"
+            "Every group's master is scale- and rotation-aligned with "
+            "every other (same registration pass, same reference "
+            "frame) — but each group's own framing is computed from "
+            "just that group's own subset of shifts, so groups can "
+            "still come out different physical sizes. The final "
+            "combine reconciles that with a light, shift-only "
+            "registration pass (Siril's -transf=shift — no rotation "
+            "or scale for it to get wrong) before a weighted stack "
+            "(-weight=nbstack, so a group built from more subs "
+            "correctly outweighs one built from fewer).\n\n"
             "Calibration masters are still built once and shared by "
             "every group; SPCC and \"Combine with existing master\" "
             "still run once, on the final assembled result. Not "
@@ -733,7 +730,7 @@ class Stage1Mixin:
         return seq_name
 
     def _register_sequence(self, progress, seq_name, progress_base=0.4,
-                           progress_span=0.2, log_prefix="", framing=None):
+                           progress_span=0.2, log_prefix=""):
         """Registers `seq_name` (plate-solve if local Gaia astrometry is
         available, falling back to star-based registration) and
         applies the registration (seqapplyreg), leaving every frame
@@ -742,28 +739,14 @@ class Stage1Mixin:
         the old _register_and_stack (which now just chains this with
         _stack_sequence) so Batch stacking can register the WHOLE
         session exactly once — see _exec_stage1_batched for why that
-        matters: batch masters built from frame-range subsets of ONE
-        shared registration pass are already pixel-aligned with each
-        other, so combining them afterward needs no re-registration at
-        all, unlike the earlier per-batch-independent-registration
-        design.
-
-        `framing` overrides the usual method-based choice (see below)
-        — Batch stacking forces `"min"` regardless of stack method.
-        With `-framing=max` (Average (rejection)'s normal default),
-        seqapplyreg pads EACH frame only as much as THAT frame's own
-        shift requires, not to one shared size for the whole session —
-        so two different frame-range subsets of the same registered
-        sequence can (and, confirmed against a live Siril instance,
-        reliably do) come out different physical sizes, since each
-        batch's own `-maximize` recompute at stack time only knows
-        about that batch's own frames' shift range. `-framing=min`
-        instead crops every frame to the area common to the WHOLE
-        sequence in this one seqapplyreg call — one fixed size,
-        decided once, that every later subset trivially shares no
-        matter which frames it contains. Same trade-off Median/Sum
-        already accept below: the result only covers the overlap area,
-        not the full union every frame touched."""
+        matters: every batch stacks a frame-range subset of this ONE
+        shared registration pass, so every batch master is scale- and
+        rotation-aligned with every other from the start (only a
+        per-batch framing/crop difference remains, which
+        _combine_registered_masters reconciles with a light,
+        shift-only registration pass), unlike the earlier
+        per-batch-independent-registration design where batches had no
+        shared reference at all."""
         siril = self.siril
         cleanup = self.cleanup_checkbox.isChecked()
         drizzle = self.drizzle_checkbox.isChecked()
@@ -811,14 +794,8 @@ class Stage1Mixin:
         # (-framing=min) — this guarantees uniform size without needing
         # stack's own -maximize at all. Trade-off: the Median/Sum result
         # only covers the overlap area, not the full union every frame
-        # touched (Average still gets the wider union canvas). `framing`
-        # lets the caller override this — see the docstring for why
-        # Batch stacking always forces "min".
-        if framing is not None:
-            apply_framing = framing
-        else:
-            apply_framing = (
-                "max" if stack_method == "Average (rejection)" else "min")
+        # touched (Average still gets the wider union canvas).
+        apply_framing = "max" if stack_method == "Average (rejection)" else "min"
 
         progress(f"{log_prefix}Preprocess: applying registration...",
                  progress_base + progress_span * 0.5)
@@ -1043,13 +1020,17 @@ class Stage1Mixin:
         step is then split: each batch selects its own frame-index
         range out of that ONE shared, already-registered sequence
         (Siril's `select`/`unselect` + `stack ... -filter-included`)
-        and stacks just that range. Since every batch master comes
-        from the same registration pass and the same canvas framing,
-        they're already pixel-aligned with each other — so the final
-        combine (_combine_registered_masters) is a plain weighted
-        stack with NO register or plate-solve step needed at all,
-        eliminating the whole class of bugs the old design kept
-        running into.
+        and stacks just that range. Every batch master is scale- and
+        rotation-aligned with every other (same registration pass, same
+        reference frame) — but each batch's own framing is computed
+        from just that batch's own subset of shifts, so batches can
+        still come out different physical sizes (a pure crop/translation
+        difference, nothing more). _combine_registered_masters
+        reconciles that with a restricted, shift-only registration
+        pass — no rotation/scale degrees of freedom to get wrong,
+        unlike the old design's unrestricted star-matching between
+        independently-registered masters, which is what made it both
+        crash-prone and imprecise.
 
         Calibration masters (darks/flats/biases) are still built once
         against the full calibration-frame folders, same as before.
@@ -1149,18 +1130,21 @@ class Stage1Mixin:
         # for every sub — this is the architectural fix: every batch
         # below stacks a subset of this one shared, identically
         # registered/framed sequence instead of registering its own
-        # independent subset. framing="min" (not the Average
-        # (rejection) method's usual "max") is forced here regardless
-        # of stack method — see _register_sequence's docstring: "max"
-        # pads each frame only as much as ITS OWN shift needs, so two
-        # different batches' subsets come out different physical
-        # sizes; "min" crops every frame to one common, fixed size
-        # decided once for the whole session, which every batch then
-        # trivially shares.
+        # independent subset. Framing uses the normal per-method
+        # default (usually "max" for Average (rejection)) rather than
+        # forcing "min" — v2.7.5 forced "min" here to guarantee every
+        # batch came out the same size, but "min" crops to the overlap
+        # of the WHOLE SESSION, which for a long session with real
+        # mount drift can be tiny. Batches are now allowed to come out
+        # different sizes again (each batch's own overlap is naturally
+        # much larger, since it spans far less time/drift than the
+        # whole session) — _combine_registered_masters below handles
+        # reconciling that with a light, shift-only registration pass
+        # instead of assuming they're already identical.
         seq_name = self._convert_calibrate_seqsubsky(
             progress, 0.05, 0.13)
         reg_seq_name = self._register_sequence(
-            progress, seq_name, 0.19, 0.14, framing="min")
+            progress, seq_name, 0.19, 0.14)
 
         batch_root = os.path.join(proc_dir, "_batches")
         os.makedirs(batch_root, exist_ok=True)
@@ -1232,8 +1216,9 @@ class Stage1Mixin:
                 proc_dir, "_batch_combine_scratch")
             self._log_safe(
                 f"Combining all {len(batch_results)} batch masters "
-                "(already pixel-aligned from the shared registration "
-                "pass — no re-registration needed)...", LogColor.BLUE)
+                "(shift-only registration, since they share a "
+                "common reference and can only differ by crop "
+                "offset)...", LogColor.BLUE)
             final_master = self._combine_registered_masters(
                 progress, batch_results, combine_scratch)
 
@@ -1276,28 +1261,42 @@ class Stage1Mixin:
 
     def _combine_registered_masters(self, progress, master_paths, work_dir,
                                     log_prefix=""):
-        """Combines N batch masters that all came from ONE shared
-        registration pass (see _exec_stage1_batched) into a single
-        result, weighted by each one's STACKCNT header (Siril's
-        `-weight=nbstack`) so a batch built from more subs correctly
-        dominates one built from fewer, and patches the combined
-        result's LIVETIME/STACKCNT to the true sum across all inputs.
+        """Combines N batch masters into a single result, weighted by
+        each one's STACKCNT header (Siril's `-weight=nbstack`) so a
+        batch built from more subs correctly dominates one built from
+        fewer, and patches the combined result's LIVETIME/STACKCNT to
+        the true sum across all inputs.
 
-        Unlike the retired _combine_all_masters, this does NOT
-        register or plate-solve the masters against each other at
-        all — since every batch was stacked from a frame-range subset
-        of the same already-registered sequence with the same canvas
-        framing, they're already pixel-aligned. Real-world testing of
-        the old re-register-then-combine approach showed it could both
-        crash/hang (registering already-stacked full masters is a
-        much less mature Siril code path than registering raw subs)
-        and, even when it succeeded, produce a visibly wrong result —
-        ghosting/overlap rather than clean integration — from the
-        imprecision of matching two full processed images by their
-        stars alone. Skipping that step entirely fixes both problems
-        at once. Returns the path to the combined result; never
-        modifies any of master_paths themselves (each is only ever
-        copied)."""
+        Every batch came from stacking a frame-range subset of ONE
+        shared, whole-session registration pass (see
+        _exec_stage1_batched) — so they're already pixel-SCALE- and
+        ROTATION-aligned with each other, on the same reference frame.
+        The only thing that can differ between them is a pure XY
+        translation/crop offset, because each batch's own framing
+        (max or min) is computed from just that batch's own subset of
+        shifts, not the whole session's. So this registers them with
+        `register ... -transf=shift` — shift-only, no rotation or
+        scale degrees of freedom to get wrong — before stacking,
+        rather than assuming zero offset (an earlier version of this
+        method skipped registration entirely, which failed outright
+        whenever batches came out different sizes: "input images have
+        different sizes", since a plain `stack` has no registration
+        data to reconcile that with) or using unrestricted
+        affine/homography registration (the pre-2.7.0 design's
+        approach, applied to independently-registered masters with
+        genuinely different reference frames — that combination was
+        both crash-prone and imprecise enough to produce visible
+        ghosting). Restricting to shift-only, on masters that share a
+        common reference and can only differ by translation, avoids
+        both problems: there's no wrong rotation/scale for the star
+        matcher to find, and no genuinely independent registration
+        solutions to reconcile. Falls back to unrestricted registration
+        (default `-transf=homography`) and then to stacking without
+        registration, in that order, only if shift-only registration
+        itself fails — logging clearly at each fallback so a resulting
+        misalignment isn't silent. Returns the path to the combined
+        result; never modifies any of master_paths themselves (each is
+        only ever copied)."""
         siril = self.siril
         if len(master_paths) == 1:
             return master_paths[0]
@@ -1337,13 +1336,57 @@ class Stage1Mixin:
         try:
             siril.cmd("convert", "allmasters", "-out=./")
 
-            # No register/seqapplyreg here at all — see the docstring.
-            # The batch masters already share identical pixel
-            # alignment and canvas size, so this is a plain weighted
-            # stack.
-            siril.cmd("stack", "allmasters_", " rej 3 3", "-norm=addscale",
-                      "-output_norm", "-rgb_equal", "-weight=nbstack",
-                      "-32b", "-out=combined_result")
+            # Shift-only registration first (see docstring for why
+            # this is expected to be both reliable and sufficient
+            # here) — with a fallback to unrestricted registration,
+            # and finally to no registration at all, only if the
+            # steps before it fail outright.
+            registered = False
+            try:
+                siril.cmd("register", "allmasters_", "-transf=shift")
+                registered = True
+            except (s.DataError, s.CommandError, s.SirilError) as e:
+                self._log_safe(
+                    f"{log_prefix}Combine: shift-only registration "
+                    f"failed ({e}), falling back to unrestricted "
+                    "registration.", LogColor.SALMON)
+                try:
+                    siril.cmd("register", "allmasters_")
+                    registered = True
+                except (s.DataError, s.CommandError, s.SirilError) as e2:
+                    self._log_safe(
+                        f"{log_prefix}Combine: unrestricted "
+                        f"registration also failed ({e2}). Stacking "
+                        "without registration — check the combined "
+                        "result carefully for misalignment.",
+                        LogColor.SALMON)
+
+            seq_for_stack = "allmasters_"
+            if registered:
+                try:
+                    siril.cmd("seqapplyreg", "allmasters_",
+                              "-kernel=square", "-framing=max")
+                    seq_for_stack = "r_allmasters_"
+                except (s.DataError, s.CommandError, s.SirilError) as e:
+                    self._log_safe(
+                        f"{log_prefix}Combine: couldn't apply a "
+                        f"registration transform ({e}) — stacking "
+                        "without re-aligning; check the combined "
+                        "result carefully for misalignment.",
+                        LogColor.SALMON)
+
+            combine_stack_cmd = [
+                "stack", seq_for_stack, " rej 3 3", "-norm=addscale",
+                "-output_norm", "-rgb_equal", "-weight=nbstack",
+                "-32b", "-out=combined_result"]
+            if seq_for_stack != "allmasters_":
+                # Only meaningful (and only safe — see the "No
+                # registration layer passed" / "images have different
+                # sizes" failure this whole method exists to avoid)
+                # once seqapplyreg has actually produced a registered
+                # sequence to maximize against.
+                combine_stack_cmd.append("-maximize")
+            siril.cmd(*combine_stack_cmd)
 
             result_path = os.path.join(
                 work_dir, f"combined_result{self.fits_extension}")
