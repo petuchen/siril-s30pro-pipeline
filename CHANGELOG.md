@@ -1,5 +1,24 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.10.0
+
+* **Added a "Bake into image (for Watermark & later stages)" checkbox
+  to Annotate.** By design, Annotate never touched the actual working
+  image handed to Siril — markers/labels only ever went into the
+  exported JPG/PNG and this stage's own before/after preview, so
+  "Remove all" and re-running the stage stay fully non-destructive.
+  The side effect: any stage run after Annotate (most commonly
+  Watermark, which just reads whatever's currently loaded in Siril)
+  never saw the annotations, since the plain unmarked image was all
+  that was ever pushed back into Siril's working buffer.
+
+  This new checkbox (off by default, preserving the existing
+  behavior) bakes the fully-rendered annotated canvas — markers,
+  labels, constellation lines, everything currently drawn — into
+  Siril's working image when checked, so Watermark (or anything else
+  run afterward) shows the annotations too. Undo still restores the
+  pre-annotation image either way, since that's tracked separately.
+
 ## 2.9.0
 
 * **Fixed Annotate placing objects at consistently wrong positions

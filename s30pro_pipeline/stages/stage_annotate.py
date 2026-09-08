@@ -535,6 +535,21 @@ class AnnotateMixin:
             "just show the plain image (useful if you want to keep the stage "
             "in the pipeline but not clutter the preview/export with labels).")
         style_v.addWidget(self.ann_show_overlay_checkbox)
+
+        self.ann_bake_checkbox = QCheckBox(
+            "Bake into image (for Watermark & later stages)")
+        self.ann_bake_checkbox.setChecked(False)
+        self.ann_bake_checkbox.setToolTip(
+            "By default, annotation markers/labels only appear in the "
+            "exported JPG/PNG and this stage's own before/after preview — "
+            "the actual image handed to Siril (and any later stage, "
+            "including Watermark) stays unmarked, so \"Remove all\" and "
+            "re-running this stage are always non-destructive. Check this "
+            "to also bake the markers/labels into that working image "
+            "itself, so Watermark (or anything else run after Annotate) "
+            "shows them too. Undo still restores the pre-annotation image "
+            "either way.")
+        style_v.addWidget(self.ann_bake_checkbox)
         v.addWidget(style_box)
 
         # ============================================ ③ Run / update / save
@@ -1624,7 +1639,24 @@ class AnnotateMixin:
         self.snapshot_ready.emit(IDX_ANN)
 
         self.stage_backups[IDX_ANN] = before_img
-        self.snapshots_raw_after[IDX_ANN] = img
+        if self.ann_bake_checkbox.isChecked():
+            # Push the fully-rendered annotated canvas (markers, labels,
+            # constellation lines — everything currently in `canvas`)
+            # into Siril's working image, not just the plain `img`, so
+            # Watermark (or any stage run after Annotate) sees the
+            # annotations too instead of the bare image. `annotated_rgb`
+            # is in display orientation (see the flip a few lines up);
+            # flip it back to FITS row-order before it goes back into
+            # Siril, matching the same flip Watermark's own bake step
+            # does with its rendered canvas.
+            baked = np.flipud(annotated_rgb)
+            baked_planar = np.transpose(baked, (2, 0, 1)).astype(np.float32)
+            self._set_current_image(
+                baked_planar, "AstroPipeline: annotate (baked)")
+            self.snapshots_raw_after[IDX_ANN] = baked_planar
+            self._current_image_linear = False
+        else:
+            self.snapshots_raw_after[IDX_ANN] = img
         self._last_run_stage_idx = IDX_ANN
 
         if show_overlay:

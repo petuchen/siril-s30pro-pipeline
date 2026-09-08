@@ -243,7 +243,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.9.0"
+VERSION = "2.10.0"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -1437,6 +1437,7 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
                     self.ann_custom_lines_edit.toPlainText().splitlines()
                     if row.strip()],
                 "show_overlay": self.ann_show_overlay_checkbox.isChecked(),
+                "bake": self.ann_bake_checkbox.isChecked(),
                 "cat_messier": self.ann_cat_messier_checkbox.isChecked(),
                 "cat_ngc": self.ann_cat_ngc_checkbox.isChecked(),
                 "cat_ic": self.ann_cat_ic_checkbox.isChecked(),
@@ -1638,6 +1639,7 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         self.ann_custom_lines_edit.setPlainText(
             "\n".join(str(t) for t in an.get("custom_lines", [])))
         self.ann_show_overlay_checkbox.setChecked(an.get("show_overlay", True))
+        self.ann_bake_checkbox.setChecked(an.get("bake", False))
         self.ann_cat_messier_checkbox.setChecked(an.get("cat_messier", True))
         self.ann_cat_ngc_checkbox.setChecked(an.get("cat_ngc", True))
         self.ann_cat_ic_checkbox.setChecked(an.get("cat_ic", True))
