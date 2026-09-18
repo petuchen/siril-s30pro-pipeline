@@ -1,5 +1,34 @@
 # S30 Pro Pipeline — Changelog
 
+## 2.11.0
+
+* **Added a full bilingual (English / Traditional Chinese) interface to
+  the plugin's own desktop window** — matching this documentation
+  site's long-standing EN/繁體中文 toggle. Every stage's labels,
+  tooltips, buttons, checkboxes, dropdowns, dialogs, and
+  progress/status messages now switch language instantly via a new
+  EN/中文 toggle in the top-right of the session ribbon, alongside the
+  window chrome itself: the stage rail's names and group headers
+  (Stack/Clean/Stretch/Finish), each stage's pane-header title and
+  one-line description, the preview toolbar's stage stepper, and
+  Undo's progress text. The chosen language is saved and restored with
+  the rest of a session's settings (Export/Import settings JSON), same
+  as every other preference.
+
+  A few things are deliberately left English-only, by design rather
+  than oversight: Siril's own console log (`siril.log(...)`) is a
+  shared external log Siril itself writes to, not this plugin's own
+  UI, so every message sent there stays English regardless of the
+  interface language; a handful of proper-noun dropdowns (sensor
+  profiles, AI model names, palette/constellation-color preset names,
+  telescope/filter names, Annotate's marker-style and label-position
+  combos) keep their original text since they're either literal
+  catalogue/dict keys read back via their displayed text, or names
+  that don't really translate; and text baked directly into exported
+  pixels (Annotate's on-image labels, Watermark's rendered text) is
+  unaffected by the interface language, since it's drawn from your own
+  session data, not the UI.
+
 ## 2.10.0
 
 * **Added a "Bake into image (for Watermark & later stages)" checkbox

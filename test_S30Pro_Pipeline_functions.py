@@ -40,6 +40,16 @@ from astropy.io import fits as _astropy_fits
 # --------------------------------------------------------------------------
 
 
+class _TrStub:
+    """Minimal stand-in for `self` when calling PaletteMixin instance
+    methods (_gimp_replacement_polish, _palette_nebulachrome) directly off
+    the class in tests — they only ever touch `self.tr(...)` for their
+    internal progress strings, nothing else."""
+    def tr(self, key):
+        from s30pro_pipeline.i18n import tr as _tr
+        return _tr("en", key)
+
+
 class _LogColor:
     GREEN = "green"
     BLUE = "blue"
@@ -1010,7 +1020,7 @@ def test_palette_nebulachrome(pipeline, np):
     img[2][core_mask] = 0.15
 
     out = pipeline.UnifiedPipelineWindow._palette_nebulachrome(
-        img, strength=0.7, peak_gamma=3.0, progress=None)
+        _TrStub(), img, strength=0.7, peak_gamma=3.0, progress=None)
 
     check("output shape matches input", out.shape == img.shape)
     check("output stays in [0, 1]",
@@ -1057,7 +1067,9 @@ def test_gimp_replacement_polish(pipeline, np):
     noise = rng.normal(0, 0.05, base.shape).astype(np.float32)
     img = np.clip(base + noise, 0.0, 1.0)
 
-    poly = pipeline.UnifiedPipelineWindow._gimp_replacement_polish
+    _gimp_polish_stub = _TrStub()
+    poly = lambda *a, **kw: pipeline.UnifiedPipelineWindow._gimp_replacement_polish(
+        _gimp_polish_stub, *a, **kw)
 
     # No-op: every parameter at its neutral default should return
     # (near-)identical output — confirms none of the passes fire when the

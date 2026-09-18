@@ -16,30 +16,38 @@ from s30pro_pipeline.image_utils import to_hwc_float, make_qimage
 SLIDER_VALUE_LABEL_WIDTH = 40
 
 
+_TOUCH_SLIDER_SPECS = (
+    ("brightness", "touch_slider_brightness", -100, 100, 0),
+    ("contrast", "touch_slider_contrast", -100, 100, 0),
+    ("saturation", "touch_slider_saturation", 0, 200, 100),
+    ("shadows", "touch_slider_shadows", -100, 100, 0),
+    ("highlights", "touch_slider_highlights", -100, 100, 0),
+    ("sharpen", "touch_slider_sharpen", 0, 100, 0),
+)
+
+
 class TouchMixin:
     def _build_stage_touch(self):
+        # Title stays literal English for now — stage titles move
+        # together in Phase 7 (see stage_watermark.py's comment).
         box, v = self._stage_box(11, "Final Touch — Photo Adjustments",
                                  enabled_check=False)
         self.stage_touch_box = box
 
-        info = QLabel("iPhone-style finishing: brightness, contrast, saturation, "
-                      "shadows/highlights and sharpening. Load the image, drag "
-                      "sliders, watch the live preview, then run to apply at "
-                      "full resolution.")
-        info.setObjectName("SubHeader")
-        info.setWordWrap(True)
-        v.addWidget(info)
+        self.touch_info_label = QLabel(self.tr("touch_info"))
+        self.touch_info_label.setObjectName("SubHeader")
+        self.touch_info_label.setWordWrap(True)
+        v.addWidget(self.touch_info_label)
 
         top = QHBoxLayout()
-        self.touch_load_btn = QPushButton("📥  Load image")
-        self.touch_load_btn.setToolTip("Load the image currently in Siril "
-                                       "into this stage's live preview.")
+        self.touch_load_btn = QPushButton(self.tr("touch_load_btn"))
+        self.touch_load_btn.setToolTip(self.tr("touch_load_tooltip"))
         self.touch_load_btn.clicked.connect(self._load_touch_preview)
         top.addWidget(self.touch_load_btn)
         top.addStretch()
-        reset_btn = QPushButton("↺  Reset")
-        reset_btn.clicked.connect(self._reset_touch_controls)
-        top.addWidget(reset_btn)
+        self.touch_reset_btn = QPushButton(self.tr("touch_reset_btn"))
+        self.touch_reset_btn.clicked.connect(self._reset_touch_controls)
+        top.addWidget(self.touch_reset_btn)
         v.addLayout(top)
 
         g = QGridLayout()
@@ -48,14 +56,11 @@ class TouchMixin:
         g.setColumnStretch(1, 1)
         self.touch_sliders = {}
         self.touch_labels = {}
-        specs = (("brightness", "☀ Brightness", -100, 100, 0),
-                 ("contrast", "◐ Contrast", -100, 100, 0),
-                 ("saturation", "🎨 Saturation", 0, 200, 100),
-                 ("shadows", "🌑 Shadows", -100, 100, 0),
-                 ("highlights", "🌕 Highlights", -100, 100, 0),
-                 ("sharpen", "◇ Sharpen", 0, 100, 0))
-        for r, (key, label, lo, hi, default) in enumerate(specs):
-            g.addWidget(QLabel(label + ":"), r, 0)
+        self.touch_slider_row_labels = {}
+        for r, (key, i18n_key, lo, hi, default) in enumerate(_TOUCH_SLIDER_SPECS):
+            lbl = QLabel(self.tr(i18n_key) + ":")
+            g.addWidget(lbl, r, 0)
+            self.touch_slider_row_labels[key] = lbl
             sl = QSlider(Qt.Orientation.Horizontal)
             sl.setRange(lo, hi)
             sl.setValue(default)
@@ -70,10 +75,15 @@ class TouchMixin:
         v.addLayout(g)
 
         srow = QHBoxLayout()
-        srow.addWidget(QLabel("Sharpen method:"))
+        self.touch_sharpen_method_label = QLabel(
+            self.tr("touch_sharpen_method_label"))
+        srow.addWidget(self.touch_sharpen_method_label)
         self.touch_sharpen_mode_combo = QComboBox()
+        # Plain addItems, not addItem+data: the code below reads
+        # currentIndex(), never currentText(), so a translated label
+        # can't break anything downstream.
         self.touch_sharpen_mode_combo.addItems(
-            ["Unsharp Mask (fast)", "Richardson-Lucy Deconvolution (recovers detail)"])
+            [self.tr("touch_sharpen_unsharp"), self.tr("touch_sharpen_rl")])
         # Without this, QComboBox's default AdjustToContentsOnFirstShow
         # policy sizes the closed box to fit its widest item — here the
         # 48-character Richardson-Lucy label — which alone is wider than
@@ -84,11 +94,7 @@ class TouchMixin:
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.touch_sharpen_mode_combo.setMinimumContentsLength(20)
         self.touch_sharpen_mode_combo.setToolTip(
-            "Unsharp Mask boosts existing edge contrast (cheap, safe).\n"
-            "Richardson-Lucy Deconvolution estimates the blur PSF and inverts "
-            "it — recovers more real detail (same idea as AstroSharp / "
-            "PixInsight deconvolution) but is slower and can ring on noisy "
-            "data. The Sharpen slider sets its iteration count.")
+            self.tr("touch_sharpen_tooltip"))
         self.touch_sharpen_mode_combo.currentIndexChanged.connect(
             self._on_touch_changed)
         srow.addWidget(self.touch_sharpen_mode_combo, 1)
@@ -98,6 +104,24 @@ class TouchMixin:
             lambda: self._launch([self._exec_stage_touch]), undo_stage=IDX_TOUCH)
         v.addLayout(row)
         return box
+
+    def retranslate_ui_touch(self):
+        self.touch_info_label.setText(self.tr("touch_info"))
+        self.touch_load_btn.setText(self.tr("touch_load_btn"))
+        self.touch_load_btn.setToolTip(self.tr("touch_load_tooltip"))
+        self.touch_reset_btn.setText(self.tr("touch_reset_btn"))
+        for key, i18n_key, _lo, _hi, _default in _TOUCH_SLIDER_SPECS:
+            self.touch_slider_row_labels[key].setText(self.tr(i18n_key) + ":")
+        self.touch_sharpen_method_label.setText(
+            self.tr("touch_sharpen_method_label"))
+        cur = self.touch_sharpen_mode_combo.currentIndex()
+        self.touch_sharpen_mode_combo.setItemText(
+            0, self.tr("touch_sharpen_unsharp"))
+        self.touch_sharpen_mode_combo.setItemText(
+            1, self.tr("touch_sharpen_rl"))
+        self.touch_sharpen_mode_combo.setCurrentIndex(cur)
+        self.touch_sharpen_mode_combo.setToolTip(
+            self.tr("touch_sharpen_tooltip"))
 
     def _reset_touch_controls(self):
         defaults = {"brightness": 0, "contrast": 0, "saturation": 100,
@@ -157,7 +181,7 @@ class TouchMixin:
         try:
             img = self._get_current_image()
         except Exception as e:
-            QMessageBox.information(self, "No image", str(e))
+            QMessageBox.information(self, self.tr("touch_no_image_title"), str(e))
             return
         hwc = to_hwc_float(img)
         h, w, _ = hwc.shape
@@ -167,7 +191,7 @@ class TouchMixin:
                              interpolation=cv2.INTER_AREA)
         self.touch_proxy = hwc
         self._update_touch_live()
-        self.status_label.setText("Final Touch loaded — drag the sliders.")
+        self.status_label.setText(self.tr("touch_loaded_status"))
 
     def _on_touch_changed(self):
         for key, sl in self.touch_sliders.items():
@@ -193,13 +217,13 @@ class TouchMixin:
             self._refresh_preview()
 
     def _exec_stage_touch(self, progress):
-        progress("Final touch: fetching image...", 0.05)
+        progress(self.tr("touch_progress_fetching"), 0.05)
         before = self._get_current_image()
         before, _ = self._reconcile_held_stars(before, progress)
-        progress("Final touch: applying adjustments (full resolution)...", 0.4)
+        progress(self.tr("touch_progress_applying"), 0.4)
         after = self._apply_touch_params(before)
         self._set_current_image(after, "AstroPipeline: final touch")
         self._finish_stage(IDX_TOUCH, before, after,
-                           "Final touch: done.", "Final touch applied",
+                           self.tr("touch_progress_done"), "Final touch applied",
                            before_linear=False, after_linear=False,
                            autosave_name="final_touched", progress=progress)

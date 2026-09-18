@@ -17,28 +17,29 @@ from s30pro_pipeline.ui_widgets import HistogramEditor
 
 class HistMixin:
     def _build_stage_hist(self):
+        # Title stays literal English for now — stage titles move
+        # together in Phase 7 (see stage_watermark.py's comment).
         box, v = self._stage_box(10, "Histogram Fine-Tune — Per Channel",
                                  enabled_check=False)
         self.stage_hist_box = box
 
-        info = QLabel("Drag the three points (⚫ shadows, ◾ midtones, ⚪ highlights) "
-                      "on the histogram — the preview updates live. Pick a channel "
-                      "to fine-tune colors separately.")
-        info.setObjectName("SubHeader")
-        info.setWordWrap(True)
-        v.addWidget(info)
+        self.hist_info_label = QLabel(self.tr("hist_info"))
+        self.hist_info_label.setObjectName("SubHeader")
+        self.hist_info_label.setWordWrap(True)
+        v.addWidget(self.hist_info_label)
 
         top = QHBoxLayout()
         top.setSpacing(8)
-        self.hist_load_btn = QPushButton("📥  Load current image")
-        self.hist_load_btn.setToolTip(
-            "Grab the image currently loaded in Siril into the editor "
-            "(histogram + live preview)")
+        self.hist_load_btn = QPushButton(self.tr("hist_load_btn"))
+        self.hist_load_btn.setToolTip(self.tr("hist_load_tooltip"))
         self.hist_load_btn.clicked.connect(self._load_hist_preview)
         top.addWidget(self.hist_load_btn)
         top.addStretch()
-        top.addWidget(QLabel("Channel:"))
+        self.hist_channel_row_label = QLabel(self.tr("hist_channel_label"))
+        top.addWidget(self.hist_channel_row_label)
         self.hist_channel_combo = QComboBox()
+        # Not translated — see the module-level i18n.py comment on why
+        # "RGB"/"R"/"G"/"B" stay as-is (they're dict keys downstream).
         self.hist_channel_combo.addItems(["RGB", "R", "G", "B"])
         top.addWidget(self.hist_channel_combo)
         v.addLayout(top)
@@ -49,11 +50,14 @@ class HistMixin:
         g = QGridLayout()
         g.setHorizontalSpacing(10)
         g.setVerticalSpacing(8)
-        for col, name in enumerate(("Shadows", "Midtones", "Highlights")):
-            lbl = QLabel(name)
+        self.hist_col_labels = []
+        for col, i18n_key in enumerate(
+                ("hist_col_shadows", "hist_col_midtones", "hist_col_highlights")):
+            lbl = QLabel(self.tr(i18n_key))
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             g.addWidget(lbl, 0, col + 1)
             g.setColumnStretch(col + 1, 1)
+            self.hist_col_labels.append(lbl)
 
         self.hist_controls = {}
         colors = {"R": "#ff6b6b", "G": "#69db7c", "B": "#74a8ff", "RGB": "#ffffff"}
@@ -77,9 +81,9 @@ class HistMixin:
         v.addLayout(g)
 
         reset_row = QHBoxLayout()
-        reset_btn = QPushButton("↺  Reset")
-        reset_btn.clicked.connect(self._reset_hist_controls)
-        reset_row.addWidget(reset_btn)
+        self.hist_reset_btn = QPushButton(self.tr("hist_reset_btn"))
+        self.hist_reset_btn.clicked.connect(self._reset_hist_controls)
+        reset_row.addWidget(self.hist_reset_btn)
         reset_row.addStretch()
         v.addLayout(reset_row)
 
@@ -95,6 +99,16 @@ class HistMixin:
             for spin in controls.values():
                 spin.valueChanged.connect(self._on_hist_spin_changed)
         return box
+
+    def retranslate_ui_hist(self):
+        self.hist_info_label.setText(self.tr("hist_info"))
+        self.hist_load_btn.setText(self.tr("hist_load_btn"))
+        self.hist_load_btn.setToolTip(self.tr("hist_load_tooltip"))
+        self.hist_channel_row_label.setText(self.tr("hist_channel_label"))
+        for lbl, i18n_key in zip(self.hist_col_labels, (
+                "hist_col_shadows", "hist_col_midtones", "hist_col_highlights")):
+            lbl.setText(self.tr(i18n_key))
+        self.hist_reset_btn.setText(self.tr("hist_reset_btn"))
 
     def _reset_hist_controls(self):
         for controls in self.hist_controls.values():
@@ -126,7 +140,8 @@ class HistMixin:
                 sh, mid, hi = self._hist_params_from_ui(ch)
                 if sh > 0 or hi < 1.0 or abs(mid - 0.5) > 1e-4:
                     if progress:
-                        progress(f"Histogram: adjusting {ch}...", 0.5 + i * 0.15)
+                        progress(self.tr("hist_progress_adjusting").format(ch=ch),
+                                 0.5 + i * 0.15)
                     out[i] = mtf_channel(out[i], sh, mid, hi)
         return np.clip(out, 0.0, 1.0).astype(np.float32)
 
@@ -135,7 +150,7 @@ class HistMixin:
         try:
             img = self._get_current_image()
         except Exception as e:
-            QMessageBox.information(self, "No image", str(e))
+            QMessageBox.information(self, self.tr("hist_no_image_title"), str(e))
             return
         hwc = to_hwc_float(img)
         h, w, _ = hwc.shape
@@ -146,8 +161,7 @@ class HistMixin:
         self.hist_proxy = hwc  # (h,w,3) float, display proxy
         self.hist_editor.set_image_data(hwc)
         self._update_hist_live()
-        self.status_label.setText(
-            "Histogram editor loaded — drag the points to fine-tune.")
+        self.status_label.setText(self.tr("hist_loaded_status"))
 
     def _on_hist_editor_changed(self):
         """Graph marker moved → sync spinboxes (silently) → live preview."""
@@ -188,14 +202,14 @@ class HistMixin:
             self._refresh_preview()
 
     def _exec_stage_hist(self, progress):
-        progress("Histogram: fetching image...", 0.05)
+        progress(self.tr("hist_progress_fetching"), 0.05)
         before = self._get_current_image()
         before, _ = self._reconcile_held_stars(before, progress)
-        progress("Histogram: applying stretch (full resolution)...", 0.3)
+        progress(self.tr("hist_progress_applying"), 0.3)
         after = self._apply_hist_params(before.copy(), progress)
         self._set_current_image(after, "AstroPipeline: histogram fine-tune")
         self._finish_stage(IDX_HIST, before, after,
-                           "Histogram fine-tune: done.",
+                           self.tr("hist_progress_done"),
                            "Histogram fine-tune complete — pipeline finished!",
                            before_linear=False, after_linear=False,
                            autosave_name="final_finetuned", progress=progress)

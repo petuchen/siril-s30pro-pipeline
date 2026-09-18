@@ -21,38 +21,27 @@ SLIDER_VALUE_LABEL_WIDTH = 40
 
 class PaletteMixin:
     def _build_stage_palette(self):
+        # Title stays literal English for now — stage titles move
+        # together in Phase 7 (see stage_watermark.py's comment).
         box, v = self._stage_box(8, "Hubble Palette — Synthetic SHO/HOO",
                                  enabled_check=False)
         self.stage_pal_box = box
 
-        info = QLabel("For dual-band (LP filter) data on emission nebulae. "
-                      "Extracts Hα from red and OIII from green+blue, then "
-                      "remixes them into a false-color palette. No real SII "
-                      "exists on an OSC camera — SHO here is synthetic. "
-                      "Turn SPCC off in stage 1 when using this. Tip: run "
-                      "stage 5 (Remove Stars) first so the palette only "
-                      "recolors the nebula, not the stars.")
-        info.setObjectName("SubHeader")
-        info.setWordWrap(True)
-        v.addWidget(info)
+        self.pal_info_label = QLabel(self.tr("pal_info"))
+        self.pal_info_label.setObjectName("SubHeader")
+        self.pal_info_label.setWordWrap(True)
+        v.addWidget(self.pal_info_label)
 
         mrow = QHBoxLayout()
         mrow.setSpacing(10)
-        mrow.addWidget(QLabel("Mode:"))
+        self.pal_mode_row_label = QLabel(self.tr("pal_mode_label"))
+        mrow.addWidget(self.pal_mode_row_label)
         self.palette_mode_combo = QComboBox()
+        # Plain addItems: read via currentIndex() everywhere, so
+        # translated labels are safe here.
         self.palette_mode_combo.addItems(
-            ["Channel mix (SHO / HOO)",
-             "NebulaChrome (deep palette)"])
-        self.palette_mode_combo.setToolTip(
-            "Channel mix: extract Hα/OIII and remix with the weights below.\n"
-            "NebulaChrome: background neutralization + bright-core white\n"
-            "reference (pushes the Hα core toward teal while the faint rim\n"
-            "stays red — no channel math), followed by a saturation /\n"
-            "shadows-highlights polish and a deconvolution sharpen pass. The\n"
-            "recolor/saturation are luminosity-masked to the nebula itself\n"
-            "(Peak isolation slider) so the background doesn't pick up a\n"
-            "color cast, then the whole result is blended against the\n"
-            "original by the Recolor strength slider below.")
+            [self.tr("pal_mode_mix"), self.tr("pal_mode_nebulachrome")])
+        self.palette_mode_combo.setToolTip(self.tr("pal_mode_tooltip"))
         self.palette_mode_combo.currentIndexChanged.connect(
             self._on_palette_mode_changed)
         mrow.addWidget(self.palette_mode_combo, 1)
@@ -60,8 +49,11 @@ class PaletteMixin:
 
         top = QHBoxLayout()
         top.setSpacing(10)
-        top.addWidget(QLabel("Preset:"))
+        self.pal_preset_row_label = QLabel(self.tr("pal_preset_label"))
+        top.addWidget(self.pal_preset_row_label)
         self.palette_preset_combo = QComboBox()
+        # Not translated — see the module i18n.py comment: preset names
+        # are dict keys shared with constants.py and settings JSON.
         self.palette_preset_combo.addItems(list(PALETTE_PRESETS.keys()))
         self.palette_preset_combo.setCurrentText("SHO — golden dynamic")
         self.palette_preset_combo.currentTextChanged.connect(
@@ -73,11 +65,13 @@ class PaletteMixin:
         g = QGridLayout()
         g.setHorizontalSpacing(10)
         g.setVerticalSpacing(8)
-        for col, name in enumerate(("Hα weight", "OIII weight")):
-            lbl = QLabel(name)
+        self.pal_weight_col_labels = []
+        for col, i18n_key in enumerate(("pal_ha_weight", "pal_oiii_weight")):
+            lbl = QLabel(self.tr(i18n_key))
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             g.addWidget(lbl, 0, col + 1)
             g.setColumnStretch(col + 1, 1)
+            self.pal_weight_col_labels.append(lbl)
         colors = {"R": "#ff6b6b", "G": "#69db7c", "B": "#74a8ff"}
         self.palette_weights = {}
         for r, ch in enumerate(("R", "G", "B")):
@@ -97,29 +91,24 @@ class PaletteMixin:
 
         # Own row each (was one crowded row) — the two labels together were
         # too wide for the ~1/3-window-width target.
-        self.palette_linfit_checkbox = QCheckBox("Linear fit OIII to Hα")
+        self.palette_linfit_checkbox = QCheckBox(self.tr("pal_linfit"))
         self.palette_linfit_checkbox.setChecked(True)
-        self.palette_linfit_checkbox.setToolTip(
-            "Rescales the (usually much weaker) OIII signal so its background\n"
-            "and spread match Hα before mixing — recommended.")
+        self.palette_linfit_checkbox.setToolTip(self.tr("pal_linfit_tooltip"))
         v.addWidget(self.palette_linfit_checkbox)
         self.palette_set_profile_checkbox = QCheckBox(
-            "Auto-set stretch profile (narrowband)")
+            self.tr("pal_auto_profile"))
         self.palette_set_profile_checkbox.setChecked(True)
         v.addWidget(self.palette_set_profile_checkbox)
 
         nc_row = QHBoxLayout()
         nc_row.setSpacing(10)
-        nc_row.addWidget(QLabel("NebulaChrome recolor strength:"))
+        self.pal_nc_strength_row_label = QLabel(self.tr("pal_nc_strength_label"))
+        nc_row.addWidget(self.pal_nc_strength_row_label)
         self.palette_nebulachrome_strength = QSlider(Qt.Orientation.Horizontal)
         self.palette_nebulachrome_strength.setRange(0, 100)
         self.palette_nebulachrome_strength.setValue(70)
         self.palette_nebulachrome_strength.setToolTip(
-            "How strongly to blend the NebulaChrome recolor/polish/sharpen "
-            "result against the original — 100% is the full effect, lower "
-            "values keep more of the original color. This is what keeps the "
-            "effect controllable instead of overcorrecting like the old "
-            "Color Calibration trick did.")
+            self.tr("pal_nc_strength_tooltip"))
         nc_row.addWidget(self.palette_nebulachrome_strength, 1)
         self.palette_nebulachrome_strength_label = QLabel("70%")
         self.palette_nebulachrome_strength_label.setMinimumWidth(
@@ -131,17 +120,13 @@ class PaletteMixin:
 
         nc_peak_row = QHBoxLayout()
         nc_peak_row.setSpacing(10)
-        nc_peak_row.addWidget(QLabel("NebulaChrome peak isolation:"))
+        self.pal_nc_peak_row_label = QLabel(self.tr("pal_nc_peak_label"))
+        nc_peak_row.addWidget(self.pal_nc_peak_row_label)
         self.palette_nebulachrome_peak = QSlider(Qt.Orientation.Horizontal)
         self.palette_nebulachrome_peak.setRange(100, 600)
         self.palette_nebulachrome_peak.setValue(300)
         self.palette_nebulachrome_peak.setToolTip(
-            "How sharply the recolor/saturation is restricted to bright "
-            "nebula structure vs. the sky background — an automatic "
-            "luminosity mask. Higher = a harder cutoff (background stays "
-            "untouched even if it isn't perfectly neutral), lower = a "
-            "softer, more gradual falloff. Fixes the background picking up "
-            "a blue cast from the recolor.")
+            self.tr("pal_nc_peak_tooltip"))
         nc_peak_row.addWidget(self.palette_nebulachrome_peak, 1)
         self.palette_nebulachrome_peak_label = QLabel("3.0")
         self.palette_nebulachrome_peak_label.setMinimumWidth(
@@ -157,13 +142,12 @@ class PaletteMixin:
         gv.setSpacing(8)
 
         self.palette_gimp_toggle_btn = QPushButton(
-            "▸  GIMP replacement polish")
+            "▸  " + self.tr("pal_gimp_toggle"))
         self.palette_gimp_toggle_btn.setObjectName("CollapseHeader")
         self.palette_gimp_toggle_btn.setCheckable(True)
         self.palette_gimp_toggle_btn.setChecked(False)
         self.palette_gimp_toggle_btn.setToolTip(
-            "Click to expand/collapse — collapsed by default since this "
-            "is an optional extra pass most people won't need.")
+            self.tr("pal_gimp_toggle_tooltip"))
         gv.addWidget(self.palette_gimp_toggle_btn)
 
         gimp_content = QWidget()
@@ -173,23 +157,14 @@ class PaletteMixin:
         gcv.setSpacing(8)
         gv.addWidget(gimp_content)
 
-        gimp_info = QLabel(
-            "Colors ▸ Saturation, Colors ▸ Shadows-Highlights, Colors ▸ "
-            "Brightness-Contrast, Filters ▸ Enhance ▸ Sharpen, and "
-            "Filters ▸ Enhance ▸ Noise Reduction, folded into one "
-            "tunable, repeatable step (from gimp_replacement.py) instead "
-            "of a manual TIFF round-trip through GIMP. Runs after the "
-            "recolor above, on whichever mode you picked. All sliders "
-            "default to \"no change\".")
-        gimp_info.setObjectName("SubHeader")
-        gimp_info.setWordWrap(True)
-        gcv.addWidget(gimp_info)
+        self.pal_gimp_info_label = QLabel(self.tr("pal_gimp_info"))
+        self.pal_gimp_info_label.setObjectName("SubHeader")
+        self.pal_gimp_info_label.setWordWrap(True)
+        gcv.addWidget(self.pal_gimp_info_label)
 
-        self.palette_gimp_checkbox = QCheckBox("Apply GIMP replacement polish")
+        self.palette_gimp_checkbox = QCheckBox(self.tr("pal_gimp_apply"))
         self.palette_gimp_checkbox.setToolTip(
-            "When off, none of the sliders below have any effect — the "
-            "Hubble Palette stage output is just the recolor result above, "
-            "same as before this option existed.")
+            self.tr("pal_gimp_apply_tooltip"))
         gcv.addWidget(self.palette_gimp_checkbox)
 
         gg = QGridLayout()
@@ -198,30 +173,24 @@ class PaletteMixin:
         gg.setColumnStretch(1, 1)
         self.palette_gimp_sliders = {}
         self.palette_gimp_labels = {}
+        self.palette_gimp_row_labels = {}
         gimp_specs = (
-            ("saturation", "🎨 Saturation", 0, 200, 100,
-             "Colors ▸ Saturation. 100% = unchanged, HSV saturation "
-             "channel scaled by this factor."),
-            ("shadows", "🌑 Shadows", -100, 100, 0,
-             "Colors ▸ Shadows-Highlights (shadows side). Positive lifts "
-             "dark tones — can reveal hidden detail but also lifts noise."),
-            ("highlights", "🌕 Highlights", -100, 100, 0,
-             "Colors ▸ Shadows-Highlights (highlights/white-point side). "
-             "Negative pulls down bright tones."),
-            ("contrast", "◐ Contrast", -100, 100, 0,
-             "Colors ▸ Brightness-Contrast (contrast only — brightness "
-             "isn't part of this workflow, Stretch already handles that)."),
-            ("sharpen", "◇ Sharpen", 0, 100, 0,
-             "Filters ▸ Enhance ▸ Sharpen (Unsharp Mask). Kept gentle by "
-             "design in the tutorial, since AstroSharp/deconvolution does "
-             "the heavier sharpening pass later."),
-            ("denoise", "✦ Denoise", 0, 100, 0,
-             "Filters ▸ Enhance ▸ Noise Reduction — edge-preserving "
-             "bilateral denoise, a light manual touch-up (not the AI "
-             "Denoise stage earlier in the pipeline)."),
+            ("saturation", "pal_gimp_saturation", 0, 200, 100,
+             "pal_gimp_saturation_tooltip"),
+            ("shadows", "pal_gimp_shadows", -100, 100, 0,
+             "pal_gimp_shadows_tooltip"),
+            ("highlights", "pal_gimp_highlights", -100, 100, 0,
+             "pal_gimp_highlights_tooltip"),
+            ("contrast", "pal_gimp_contrast", -100, 100, 0,
+             "pal_gimp_contrast_tooltip"),
+            ("sharpen", "pal_gimp_sharpen", 0, 100, 0,
+             "pal_gimp_sharpen_tooltip"),
+            ("denoise", "pal_gimp_denoise", 0, 100, 0,
+             "pal_gimp_denoise_tooltip"),
         )
-        for r, (key, label, lo, hi, default, tip) in enumerate(gimp_specs):
-            lbl = QLabel(label + ":")
+        for r, (key, label_key, lo, hi, default, tip_key) in enumerate(gimp_specs):
+            tip = self.tr(tip_key)
+            lbl = QLabel(self.tr(label_key) + ":")
             lbl.setToolTip(tip)
             gg.addWidget(lbl, r, 0)
             sl = QSlider(Qt.Orientation.Horizontal)
@@ -237,11 +206,13 @@ class PaletteMixin:
                 lambda v_, lb=val: lb.setText(str(v_)))
             self.palette_gimp_sliders[key] = sl
             self.palette_gimp_labels[key] = val
+            self.palette_gimp_row_labels[key] = lbl
         gcv.addLayout(gg)
 
-        gimp_reset_btn = QPushButton("↺  Reset")
-        gimp_reset_btn.clicked.connect(self._reset_palette_gimp_controls)
-        gcv.addWidget(gimp_reset_btn)
+        self.palette_gimp_reset_btn = QPushButton(self.tr("pal_gimp_reset_btn"))
+        self.palette_gimp_reset_btn.clicked.connect(
+            self._reset_palette_gimp_controls)
+        gcv.addWidget(self.palette_gimp_reset_btn)
 
         v.addWidget(gimp_box)
 
@@ -249,7 +220,7 @@ class PaletteMixin:
             gimp_content.setVisible(checked)
             arrow = "▾" if checked else "▸"
             self.palette_gimp_toggle_btn.setText(
-                f"{arrow}  GIMP replacement polish")
+                f"{arrow}  {self.tr('pal_gimp_toggle')}")
         self.palette_gimp_toggle_btn.toggled.connect(_on_gimp_collapse_toggle)
 
         def _on_gimp_toggle(checked):
@@ -277,11 +248,8 @@ class PaletteMixin:
         (QMessageBox), before handing off to the worker via `_launch`."""
         if IDX_STR in self.stage_backups:
             reply = QMessageBox.question(
-                self, "Stretch already ran",
-                "The Stretch stage has already run. Hubble Palette normally "
-                "runs before Stretch — applying it now will recombine "
-                "channels on an already-stretched (non-linear) image, which "
-                "may look unexpected.\n\nRun Palette anyway?",
+                self, self.tr("pal_stretch_ran_title"),
+                self.tr("pal_stretch_ran_body"),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No)
             if reply != QMessageBox.StandardButton.Yes:
@@ -325,6 +293,53 @@ class PaletteMixin:
         if nc_peak is not None:
             nc_peak.setEnabled(not mix)
 
+    def retranslate_ui_palette(self):
+        self.pal_info_label.setText(self.tr("pal_info"))
+        self.pal_mode_row_label.setText(self.tr("pal_mode_label"))
+        # Plain addItems, read via currentIndex() — safe to retranslate in
+        # place by index.
+        self.palette_mode_combo.setItemText(0, self.tr("pal_mode_mix"))
+        self.palette_mode_combo.setItemText(
+            1, self.tr("pal_mode_nebulachrome"))
+        self.palette_mode_combo.setToolTip(self.tr("pal_mode_tooltip"))
+        self.pal_preset_row_label.setText(self.tr("pal_preset_label"))
+        for col, i18n_key in enumerate(("pal_ha_weight", "pal_oiii_weight")):
+            self.pal_weight_col_labels[col].setText(self.tr(i18n_key))
+        self.palette_linfit_checkbox.setText(self.tr("pal_linfit"))
+        self.palette_linfit_checkbox.setToolTip(self.tr("pal_linfit_tooltip"))
+        self.palette_set_profile_checkbox.setText(self.tr("pal_auto_profile"))
+        self.pal_nc_strength_row_label.setText(
+            self.tr("pal_nc_strength_label"))
+        self.palette_nebulachrome_strength.setToolTip(
+            self.tr("pal_nc_strength_tooltip"))
+        self.pal_nc_peak_row_label.setText(self.tr("pal_nc_peak_label"))
+        self.palette_nebulachrome_peak.setToolTip(
+            self.tr("pal_nc_peak_tooltip"))
+
+        arrow = "▾" if self.palette_gimp_toggle_btn.isChecked() else "▸"
+        self.palette_gimp_toggle_btn.setText(
+            f"{arrow}  {self.tr('pal_gimp_toggle')}")
+        self.palette_gimp_toggle_btn.setToolTip(
+            self.tr("pal_gimp_toggle_tooltip"))
+        self.pal_gimp_info_label.setText(self.tr("pal_gimp_info"))
+        self.palette_gimp_checkbox.setText(self.tr("pal_gimp_apply"))
+        self.palette_gimp_checkbox.setToolTip(
+            self.tr("pal_gimp_apply_tooltip"))
+        for key, label_key, tip_key in (
+                ("saturation", "pal_gimp_saturation",
+                 "pal_gimp_saturation_tooltip"),
+                ("shadows", "pal_gimp_shadows", "pal_gimp_shadows_tooltip"),
+                ("highlights", "pal_gimp_highlights",
+                 "pal_gimp_highlights_tooltip"),
+                ("contrast", "pal_gimp_contrast", "pal_gimp_contrast_tooltip"),
+                ("sharpen", "pal_gimp_sharpen", "pal_gimp_sharpen_tooltip"),
+                ("denoise", "pal_gimp_denoise", "pal_gimp_denoise_tooltip")):
+            tip = self.tr(tip_key)
+            self.palette_gimp_row_labels[key].setText(self.tr(label_key) + ":")
+            self.palette_gimp_row_labels[key].setToolTip(tip)
+            self.palette_gimp_sliders[key].setToolTip(tip)
+        self.palette_gimp_reset_btn.setText(self.tr("pal_gimp_reset_btn"))
+
     def _reset_palette_gimp_controls(self):
         defaults = {"saturation": 100, "shadows": 0, "highlights": 0,
                     "contrast": 0, "sharpen": 0, "denoise": 0}
@@ -334,8 +349,7 @@ class PaletteMixin:
             sl.blockSignals(False)
             self.palette_gimp_labels[key].setText(str(defaults[key]))
 
-    @staticmethod
-    def _gimp_replacement_polish(img, saturation=1.0, shadows=0.0,
+    def _gimp_replacement_polish(self, img, saturation=1.0, shadows=0.0,
                                  highlights=0.0, contrast=0.0,
                                  sharpen_amount=0.0, denoise_strength=0.0,
                                  progress=None):
@@ -370,14 +384,14 @@ class PaletteMixin:
 
         if abs(saturation - 1.0) > 1e-3:
             if progress:
-                progress("GIMP polish: saturation...", 0.15)
+                progress(self.tr("pal_gimp_progress_saturation"), 0.15)
             hsv = rgb2hsv(out)
             hsv[..., 1] = np.clip(hsv[..., 1] * saturation, 0.0, 1.0)
             out = np.clip(hsv2rgb(hsv), 0.0, 1.0)
 
         if abs(shadows) > 1e-3 or abs(highlights) > 1e-3:
             if progress:
-                progress("GIMP polish: shadows/highlights...", 0.35)
+                progress(self.tr("pal_gimp_progress_tone"), 0.35)
             if abs(shadows) > 1e-3:
                 weight = 1.0 - out
                 out = out + shadows * weight * out
@@ -388,12 +402,12 @@ class PaletteMixin:
 
         if abs(contrast) > 1e-3:
             if progress:
-                progress("GIMP polish: contrast...", 0.5)
+                progress(self.tr("pal_gimp_progress_contrast"), 0.5)
             out = np.clip((out - 0.5) * (1.0 + contrast) + 0.5, 0.0, 1.0)
 
         if sharpen_amount > 1e-3:
             if progress:
-                progress("GIMP polish: sharpen...", 0.7)
+                progress(self.tr("pal_gimp_progress_sharpen"), 0.7)
             out = np.clip(
                 unsharp_mask(out, radius=2.0, amount=sharpen_amount,
                             channel_axis=-1),
@@ -401,7 +415,7 @@ class PaletteMixin:
 
         if denoise_strength > 1e-3:
             if progress:
-                progress("GIMP polish: noise reduction...", 0.9)
+                progress(self.tr("pal_gimp_progress_denoise"), 0.9)
             out = np.clip(
                 denoise_bilateral(
                     out, sigma_color=0.05 + 0.2 * denoise_strength,
@@ -410,8 +424,7 @@ class PaletteMixin:
 
         return np.transpose(out, (2, 0, 1)).astype(np.float32)
 
-    @staticmethod
-    def _palette_nebulachrome(img, strength=0.7, peak_gamma=3.0, progress=None):
+    def _palette_nebulachrome(self, img, strength=0.7, peak_gamma=3.0, progress=None):
         """NebulaChrome — consolidated pseudo-Hubble recolor, replacing the
         old "Color Calibration trick" (which applied a hard background/white
         -reference correction at full force and often overcorrected into a
@@ -452,7 +465,7 @@ class PaletteMixin:
 
         # --- pass 1: background neutralization + bright-core white ref ---
         if progress:
-            progress("NebulaChrome: background neutralization...", 0.2)
+            progress(self.tr("pal_nc_progress_neutralize"), 0.2)
         L = luminance(out)
         stride = max(1, L.size // 2000000)
         Ls = L.flatten()[::stride]
@@ -470,7 +483,7 @@ class PaletteMixin:
         # steepening the ramp so only genuine nebula signal counts — this
         # is what keeps the recolor/saturation off the background.
         if progress:
-            progress("NebulaChrome: building luminosity mask...", 0.35)
+            progress(self.tr("pal_nc_progress_mask"), 0.35)
         L2 = luminance(out)
         L2s = L2.flatten()[::stride]
         bg_level2 = float(np.percentile(L2s, 5.0))
@@ -480,7 +493,7 @@ class PaletteMixin:
         mask = mask ** max(1.0, float(peak_gamma))  # steeper = harder cutoff
 
         if progress:
-            progress("NebulaChrome: white reference from nebula core...", 0.45)
+            progress(self.tr("pal_nc_progress_whiteref"), 0.45)
         hi_mask = L2 >= peak_level
         if np.count_nonzero(hi_mask) > 100:
             ref = np.array([float(np.mean(out[c][hi_mask]))
@@ -494,7 +507,7 @@ class PaletteMixin:
 
         # --- pass 2: saturation + shadows/highlights polish ---
         if progress:
-            progress("NebulaChrome: saturation & tone polish...", 0.6)
+            progress(self.tr("pal_nc_progress_polish"), 0.6)
         Lp = luminance(out)
         sat_boost = 1.0 + 0.35 * mask  # gated: no boost on the background
         for c in range(3):
@@ -507,22 +520,21 @@ class PaletteMixin:
 
         # --- pass 3: deconvolution sharpen (recover nebula structure) ---
         if progress:
-            progress("NebulaChrome: deconvolution sharpen...", 0.8)
+            progress(self.tr("pal_nc_progress_sharpen"), 0.8)
         out = richardson_lucy_sharpen(out, sigma=1.7, iterations=8)
 
         # blend the full-strength result against the original
         if progress:
-            progress("NebulaChrome: blending...", 0.95)
+            progress(self.tr("pal_nc_progress_blending"), 0.95)
         strength = float(np.clip(strength, 0.0, 1.0))
         final = orig * (1.0 - strength) + out * strength
         return np.clip(final, 0.0, 1.0).astype(np.float32)
 
     def _exec_stage_palette(self, progress):
-        progress("Palette: fetching image...", 0.05)
+        progress(self.tr("pal_progress_fetching"), 0.05)
         before = self._get_current_image()
         if not (before.ndim == 3 and before.shape[0] == 3):
-            raise RuntimeError("Hubble palette requires an RGB image "
-                               "(mono images have no channels to remix).")
+            raise RuntimeError(self.tr("pal_error_rgb_required"))
         source = before
 
         nebulachrome_mode = self.palette_mode_combo.currentIndex() == 1
@@ -532,12 +544,12 @@ class PaletteMixin:
             peak_gamma = self.palette_nebulachrome_peak.value() / 100.0
             after = self._palette_nebulachrome(source, strength, peak_gamma, progress)
         else:
-            progress("Palette: extracting Hα / OIII...", 0.2)
+            progress(self.tr("pal_progress_extracting"), 0.2)
             ha = source[0].astype(np.float32)
             oiii = (0.5 * source[1] + 0.5 * source[2]).astype(np.float32)
 
             if self.palette_linfit_checkbox.isChecked():
-                progress("Palette: linear-fitting OIII to Hα...", 0.35)
+                progress(self.tr("pal_progress_linfit"), 0.35)
                 med_h = float(np.median(ha))
                 mad_h = float(np.median(np.abs(ha - med_h))) + 1e-9
                 med_o = float(np.median(oiii))
@@ -546,7 +558,7 @@ class PaletteMixin:
                 oiii = np.clip(oiii, 0.0, 1.0)
 
             preset = self.palette_preset_combo.currentText()
-            progress(f"Palette: mixing '{preset}'...", 0.6)
+            progress(self.tr("pal_progress_mixing").format(preset=preset), 0.6)
             after = np.zeros_like(before)
             for i, ch in enumerate(("R", "G", "B")):
                 w_ha = self.palette_weights[ch][0].value()
@@ -555,7 +567,7 @@ class PaletteMixin:
             after = np.clip(after, 0.0, 1.0).astype(np.float32)
 
         if self.palette_gimp_checkbox.isChecked():
-            progress("Palette: GIMP replacement polish...", 0.85)
+            progress(self.tr("pal_progress_gimp"), 0.85)
             g = self.palette_gimp_sliders
             after = self._gimp_replacement_polish(
                 after,
@@ -570,5 +582,6 @@ class PaletteMixin:
 
         self._set_current_image(after, f"AstroPipeline: palette {preset}")
         self._finish_stage(IDX_PAL, before, after,
-                           "Palette: done.", f"Palette applied: {preset}",
+                           self.tr("pal_progress_done"),
+                           f"Palette applied: {preset}",
                            progress=progress)

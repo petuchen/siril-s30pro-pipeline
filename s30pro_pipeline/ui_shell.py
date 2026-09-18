@@ -295,6 +295,16 @@ class SessionRibbon(QWidget):
         top.addWidget(self.progress)
         top.addWidget(self.progress_pct)
         top.addWidget(self.progress_time)
+        # Language toggle (EN / 繁體中文) — the window sets its actual
+        # label text via self.tr("lang_toggle") and connects its click
+        # handler once the window is constructed (see UiV2Mixin._build_ui
+        # and S30Pro_Pipeline.py's retranslate_ui/i18n rollout); a plain
+        # placeholder here keeps this widget class independent of the
+        # window's i18n machinery.
+        self.lang_btn = QPushButton("EN")
+        self.lang_btn.setObjectName("Link")
+        self.lang_btn.setToolTip("Switch interface language / 切換介面語言")
+        top.addWidget(self.lang_btn)
         v.addLayout(top)
 
         bottom = QHBoxLayout()

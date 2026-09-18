@@ -7,7 +7,7 @@
      tags/Releases exist, swap it for the dynamic
      https://img.shields.io/github/v/release/petuchen/siril-s30pro-pipeline
      badge instead, which updates itself. -->
-[![Version](https://img.shields.io/badge/version-2.10.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.11.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/github/license/petuchen/siril-s30pro-pipeline)](LICENSE)
 [![Siril](https://img.shields.io/badge/Siril-%E2%89%A5%201.4-orange)](https://siril.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
@@ -287,6 +287,11 @@ pyscript /path/to/S30Pro_Pipeline.py
 Tip: **⤓ Export settings** saves every knob to a JSON file — keep one per
 target type (galaxy / nebula / Hubble palette) and re-import anytime.
 
+The plugin's own window is bilingual — click **EN / 中文** in the top-right
+of the ribbon to switch the whole interface between English and Traditional
+Chinese at any time; the choice is saved and restored along with your other
+settings.
+
 ---
 
 ## Troubleshooting
@@ -322,6 +327,7 @@ releases. Full version history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Highlights |
 | --- | --- |
+| 2.11.0 | Added a full bilingual (English / Traditional Chinese) interface to the plugin's own desktop window, matching this site's EN/繁體中文 toggle — every stage's labels, tooltips, buttons, dialogs, and progress messages, plus the stage rail/pane headers/undo text, switch language via a new EN/中文 toggle in the ribbon; the choice is saved with the rest of a session's settings. |
 | 2.10.0 | Added a "Bake into image (for Watermark & later stages)" checkbox to Annotate — off by default (Annotate stays non-destructive, as before), but when checked it bakes the rendered markers/labels into the working image so Watermark and any later stage see the annotations too. |
 | 2.9.0 | Fixed Annotate placing objects at consistently wrong positions after stacking — a freshly-stacked result's WCS is stale until re-solved, confirmed by direct testing in Siril. Preprocess now always plate-solves right after stacking/combining, regardless of the SPCC checkbox, instead of only doing so as a side effect of SPCC being enabled. |
 | 2.8.1 | Fixed a later stage's preview (e.g. Annotate right after Final Touch) showing a "super bright" double-stretched image — the display-only autostretch no longer re-applies on top of an already-processed image, tracked via a new `_current_image_linear` flag instead of relying solely on a brightness heuristic that dark-sky-dominated deep-sky images can fool. |

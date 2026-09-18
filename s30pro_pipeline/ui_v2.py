@@ -84,6 +84,8 @@ class UiV2Mixin:
         self.ribbon = SessionRibbon(self.status_label, self.progress_bar,
                                     self.image_info_label)
         self.ribbon.refreshRequested.connect(self._update_image_info)
+        self.ribbon.lang_btn.setText(self.tr("lang_toggle"))
+        self.ribbon.lang_btn.clicked.connect(self._on_toggle_language)
         # Aliased so the window's 1.x-era progress-handling code
         # (_set_running / _on_progress) can drive these directly, same as
         # it already does for progress_bar/status_label/image_info_label.

@@ -243,7 +243,7 @@ from PyQt6.QtGui import (QFont, QImage, QPixmap, QPainter, QColor, QPen,
 from PyQt6.QtCore import QPointF
 
 APP_NAME = "S30 Pro Pipeline"
-VERSION = "2.10.0"
+VERSION = "2.11.0"
 
 # Shared UI sizing constant: the small numeric/percent readout next to every
 # slider in the app (Final Touch, Stretch, Hubble Palette/NebulaChrome, GIMP
@@ -304,6 +304,8 @@ from s30pro_pipeline.stages.stage_stretch import StretchMixin
 from s30pro_pipeline.stages.stage_annotate import AnnotateMixin
 from s30pro_pipeline.stages.stage1_preprocess import Stage1Mixin
 from s30pro_pipeline.ui_v2 import UiV2Mixin
+from s30pro_pipeline.ui_shell import STAGE_GROUPS
+from s30pro_pipeline.i18n import tr as _tr, DEFAULT_LANGUAGE
 
 class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin, PaletteMixin, StarsMixin, BgeMixin, DenoiseMixin, HistMixin, TouchMixin, WatermarkMixin, AgrMixin, CropMixin, ScnrMixin, QMainWindow):
 
@@ -364,6 +366,7 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         self.stage_backups = {}
         self.snapshots_raw_after = {}
         self.undo_buttons = {}
+        self._run_buttons = []  # every "Run this stage" button, for retranslate_ui_chrome
         self.worker = None
         # Background fetch for _refresh_preview()'s "no snapshot yet, show
         # Siril's current image" path — see _refresh_preview for why this
@@ -394,9 +397,17 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         self._temp_dir = tempfile.mkdtemp(prefix="s30pro_pipeline_")
         self.palette_star_cache = {"fingerprint": None, "starless_path": None,
                                    "stars_path": None}
+        self._stars_cache_state = "default"  # see retranslate_ui_stars
         self.held_stars = None  # star layer held back by the palette stage
                                  # (Hold-stars-until-stretch option) for the
                                  # Stretch stage to recombine after its own pass
+        self.lang = DEFAULT_LANGUAGE  # "en" or "zh" — see s30pro_pipeline/i18n.py.
+            # Set here (before any stage UI is built) so every stage's
+            # __init__-time widget construction can already call
+            # self.tr(...) if/when it's been converted; the language
+            # toggle (added once the header UI exists) flips this and
+            # re-applies every already-built widget's text via each
+            # stage's retranslate_ui_* hook (see UiV2Mixin).
         self._last_run_stage_idx = None  # for the Ctrl+Z "undo last stage" shortcut
         self._current_image_linear = True  # whether Siril's currently
             # loaded image is still linear/unprocessed (needs a display
@@ -536,22 +547,33 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
 
     # --------------------------------------------------------------------- UI
 
-    def _collapsible_section(self, title, start_expanded=False):
+    def _collapsible_section(self, title_key, start_expanded=False):
         """A titled, collapsible sub-section (arrow header + hideable
         content pane) for optional/advanced controls inside a stage card
         — same pattern as the Hubble Palette stage's "GIMP replacement
         polish" block. Returns (box, content_layout, toggle_btn); the
         caller adds widgets to content_layout and wires up anything else
-        (e.g. an enable/disable checkbox) itself."""
+        (e.g. an enable/disable checkbox) itself.
+
+        `title_key` is an i18n key (see i18n.py) — resolved via
+        self.tr(...) both here and by _retranslate_collapsible(...), and
+        stashed on the button as `toggle_btn.i18n_title_key` so the
+        checked/unchecked arrow-prefix closure below always renders the
+        current language rather than whatever was live at build time (a
+        raw string that isn't a real key just passes through tr()'s
+        fallback unchanged, so old call sites keep working un-translated
+        until they're converted)."""
         box = QGroupBox()
         bv = QVBoxLayout(box)
         bv.setContentsMargins(10, 6, 10, 10)
         bv.setSpacing(8)
 
-        toggle_btn = QPushButton(("▾  " if start_expanded else "▸  ") + title)
+        toggle_btn = QPushButton(
+            ("▾  " if start_expanded else "▸  ") + self.tr(title_key))
         toggle_btn.setObjectName("CollapseHeader")
         toggle_btn.setCheckable(True)
         toggle_btn.setChecked(start_expanded)
+        toggle_btn.i18n_title_key = title_key
         bv.addWidget(toggle_btn)
 
         content = QWidget()
@@ -563,12 +585,20 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
 
         def _on_toggle(checked):
             content.setVisible(checked)
-            toggle_btn.setText(("▾  " if checked else "▸  ") + title)
+            toggle_btn.setText(
+                ("▾  " if checked else "▸  ")
+                + self.tr(toggle_btn.i18n_title_key))
         toggle_btn.toggled.connect(_on_toggle)
 
         return box, cv, toggle_btn
 
-    def _info_row(self, summary, title, full_text):
+    def _retranslate_collapsible(self, toggle_btn):
+        """Re-renders a _collapsible_section(...) header after a language
+        switch, preserving its current expanded/collapsed arrow."""
+        arrow = "▾  " if toggle_btn.isChecked() else "▸  "
+        toggle_btn.setText(arrow + self.tr(toggle_btn.i18n_title_key))
+
+    def _info_row(self, summary_key, title_key, full_text_key):
         """A compact one-line SubHeader caption plus a small "ⓘ
         Details" button that pops the full explanation up in a
         separate, much larger-font dialog (see _show_info_popup).
@@ -582,21 +612,41 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         section itself compact and skimmable while still making the
         full explanation available on demand, at a size that's
         actually comfortable to read. Returns the QHBoxLayout so the
-        caller can add it to their own layout."""
+        caller can add it to their own layout.
+
+        `summary_key`/`title_key`/`full_text_key` are i18n keys,
+        resolved via self.tr(...) — the popup's title/body are
+        re-resolved fresh on each click (so no retranslate hook is
+        needed for those), while the caption label and "Details"
+        button are stashed on the row (`row.i18n_label`,
+        `row.i18n_summary_key`, `row.i18n_info_btn`) for
+        _retranslate_info_row(...). A raw (non-key) string passed here
+        just passes through tr()'s fallback unchanged, so old call
+        sites keep working un-translated until they're converted."""
         row = QHBoxLayout()
         row.setSpacing(6)
-        label = QLabel(summary)
+        label = QLabel(self.tr(summary_key))
         label.setObjectName("SubHeader")
         label.setWordWrap(True)
         row.addWidget(label, 1)
-        info_btn = QPushButton("ⓘ Details")
+        row.i18n_label = label
+        row.i18n_summary_key = summary_key
+        info_btn = QPushButton(self.tr("info_details_btn"))
         info_btn.setObjectName("Link")
         info_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         info_btn.setFlat(True)
         info_btn.clicked.connect(
-            lambda: self._show_info_popup(title, full_text))
+            lambda: self._show_info_popup(
+                self.tr(title_key), self.tr(full_text_key)))
         row.addWidget(info_btn, 0)
+        row.i18n_info_btn = info_btn
         return row
+
+    def _retranslate_info_row(self, row):
+        """Re-renders an _info_row(...)'s caption label and Details
+        button after a language switch."""
+        row.i18n_label.setText(self.tr(row.i18n_summary_key))
+        row.i18n_info_btn.setText(self.tr("info_details_btn"))
 
     def _show_info_popup(self, title, text):
         """Shows a longer explanation in a plain popup dialog at a
@@ -618,16 +668,17 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         row = QHBoxLayout()
         row.addStretch()
         if undo_stage is not None:
-            undo_btn = QPushButton("↩  Undo")
-            undo_btn.setToolTip("Restore the image as it was before this stage ran")
+            undo_btn = QPushButton(self.tr("undo_btn"))
+            undo_btn.setToolTip(self.tr("undo_tooltip"))
             undo_btn.setEnabled(False)
             undo_btn.clicked.connect(lambda: self._undo_stage(undo_stage))
             self.undo_buttons[undo_stage] = undo_btn
             row.addWidget(undo_btn)
-        btn = QPushButton("Run this stage")
+        btn = QPushButton(self.tr("run_this_stage"))
         btn.setObjectName("StageRun")
         btn.clicked.connect(slot)
         row.addWidget(btn)
+        self._run_buttons.append(btn)
         return row, btn
 
     def _slider_spin_row(self, label, minv, maxv, step, value, decimals,
@@ -643,11 +694,19 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         plain `box.valueChanged.connect(...)` from calling code misses
         slider drags entirely — `on_change` is the one place both paths
         reliably go through, for callers that need live updates while
-        dragging (e.g. the Crop stage's rotate-preview)."""
+        dragging (e.g. the Crop stage's rotate-preview).
+
+        The label widget is stashed as `box.i18n_label` (not part of
+        the return signature, to avoid touching every existing call
+        site) so a stage's retranslate_ui_<stage>() can later do
+        `self.some_spin.i18n_label.setText(self.tr(...))` without this
+        helper needing to know anything about i18n itself."""
         row = QHBoxLayout()
-        row.addWidget(QLabel(label))
+        lbl = QLabel(label)
+        row.addWidget(lbl)
 
         box = QDoubleSpinBox()
+        box.i18n_label = lbl
         box.setRange(minv, maxv)
         box.setSingleStep(step)
         box.setDecimals(decimals)
@@ -657,6 +716,7 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
             box.setToolTip(tooltip)
 
         slider = QSlider(Qt.Orientation.Horizontal)
+        box.i18n_slider = slider  # so retranslate can also update its tooltip
         steps = max(1, int(round((maxv - minv) / step)))
         slider.setRange(0, steps)
         slider.setValue(int(round((value - minv) / step)))
@@ -863,7 +923,12 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         elif stage_idx == IDX_TOUCH:
             self._reset_touch_controls()
         def job(progress):
-            progress(f"Undoing {STAGES[stage_idx]}...", 0.3)
+            # UI-facing progress text uses the translated rail label; the
+            # siril.log line below stays English-only per the usual
+            # log-vs-UI convention, using the raw STAGES[idx] string.
+            stage_name = self.tr(f"chrome_rail_{stage_idx}")
+            progress(self.tr("chrome_undoing_status").format(
+                stage=stage_name), 0.3)
             self._set_current_image(
                 backup, f"AstroPipeline: undo {STAGES[stage_idx]}")
             # swap the preview so 'after' shows the restored (before) state
@@ -876,7 +941,8 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
             # does, using the same "restored to before which stage"
             # logic already used for after_linear just above.
             self._current_image_linear = stage_idx < IDX_HIST
-            progress(f"{STAGES[stage_idx]} undone.", 1.0)
+            progress(self.tr("chrome_undone_status").format(
+                stage=stage_name), 1.0)
             self.siril.log(f"Undid stage: {STAGES[stage_idx]}", LogColor.BLUE)
         self._launch([job])
 
@@ -1384,11 +1450,100 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
             self.siril.undo_save_state(undo_label)
             self.siril.set_image_pixeldata(arr)
 
+    # ------------------------------------------------------------- i18n
+    def tr(self, key):
+        """Bilingual string lookup — see s30pro_pipeline/i18n.py. Call
+        this from any stage mixin (all composed into this one window
+        class) instead of hardcoding an English literal, once that
+        stage has been converted."""
+        return _tr(self.lang, key)
+
+    def _on_toggle_language(self):
+        self.lang = "zh" if self.lang == "en" else "en"
+        self.retranslate_ui()
+
+    # Every stage's own retranslate_ui_<stage>() hook, added here as it's
+    # converted to use self.tr(...) (see i18n rollout plan in
+    # CHANGELOG.md) — deliberately listed by name rather than
+    # auto-discovered, so it's obvious from this one place which stages
+    # are done and which still fall back to their hardcoded English.
+    _RETRANSLATE_HOOKS = (
+        "retranslate_ui_watermark",
+        "retranslate_ui_scnr", "retranslate_ui_crop", "retranslate_ui_agr",
+        "retranslate_ui_touch", "retranslate_ui_hist", "retranslate_ui_bge",
+        "retranslate_ui_denoise", "retranslate_ui_stars",
+        "retranslate_ui_palette", "retranslate_ui_stretch",
+        "retranslate_ui_annotate", "retranslate_ui_stage1",
+        "retranslate_ui_chrome",
+    )
+
+    def retranslate_ui(self):
+        """Re-applies every already-built widget's text/tooltip to the
+        current self.lang — called after the language toggle and after
+        loading a settings file that specifies "lang". A stage that
+        hasn't been converted to self.tr(...) yet simply has no
+        retranslate_ui_<stage>() method, so getattr(..., None) skips it
+        silently instead of erroring — the toggle always does whatever
+        partial translation exists rather than failing outright."""
+        self.ribbon.lang_btn.setText(self.tr("lang_toggle"))
+        for hook_name in self._RETRANSLATE_HOOKS:
+            hook = getattr(self, hook_name, None)
+            if hook is not None:
+                hook()
+
+    def _retranslate_slider_row(self, spin, label_key, tooltip_key=None):
+        """Convenience for a stage's retranslate_ui_<stage>(): re-applies
+        a _slider_spin_row()'s label (and, if given, its shared
+        box/slider tooltip) to the current language. See
+        _slider_spin_row's docstring for i18n_label/i18n_slider."""
+        spin.i18n_label.setText(self.tr(label_key))
+        if tooltip_key:
+            text = self.tr(tooltip_key)
+            spin.setToolTip(text)
+            spin.i18n_slider.setToolTip(text)
+
+    def retranslate_ui_chrome(self):
+        """Retranslates the shared Run/Undo row every stage gets from
+        _run_row — one pass here covers every stage's buttons at once,
+        including stages that haven't been converted to self.tr(...)
+        for their own labels yet. Also retranslates the stage rail
+        (ui_shell.StageRail/RailRow), each stage's pane header
+        (ui_shell.PaneHeader), and the preview toolbar's stage stepper —
+        none of those widget classes know about self.tr(...) themselves
+        (they're plain QWidgets with no window reference), so their
+        already-public QLabel attributes are re-set directly here."""
+        for btn in self._run_buttons:
+            btn.setText(self.tr("run_this_stage"))
+        for btn in self.undo_buttons.values():
+            btn.setText(self.tr("undo_btn"))
+            btn.setToolTip(self.tr("undo_tooltip"))
+
+        for idx, row in self.rail.rows.items():
+            row.name.setText(self.tr(f"chrome_rail_{idx}"))
+            row.setToolTip(self.tr(f"chrome_title_{idx}"))
+        for head, (_title, _idxs) in zip(self.rail._group_heads, STAGE_GROUPS):
+            key = {"STACK": "chrome_group_stack", "CLEAN": "chrome_group_clean",
+                  "STRETCH": "chrome_group_stretch",
+                  "FINISH": "chrome_group_finish"}[_title]
+            head.setText(self.tr(key))
+        for idx, header in self.stage_headers.items():
+            header.title.setText(self.tr(f"chrome_title_{idx}"))
+            header.set_description(self.tr(f"chrome_blurb_{idx}"))
+        # Refreshes the preview toolbar's "NN STAGE NAME" stepper label
+        # (and re-applies rail highlighting) for whichever stage is
+        # currently on screen — _select_stage rebuilds that label from
+        # STAGES[idx], which stays English-only (see chrome_rail_* above
+        # for the translated equivalent actually shown in the rail).
+        self.stage_step_label.setText(
+            f"{self.stage_stack.currentIndex() + 1:02d} "
+            f"{self.tr(f'chrome_rail_{self.stage_stack.currentIndex()}').upper()}")
+
     # ------------------------------------------------------ settings JSON I/O
 
     def _collect_settings(self):
         sd = {
             "app": APP_NAME, "version": VERSION,
+            "lang": self.lang,
             "stages_enabled": {
                 "preprocess": self.stage1_box.isChecked(),
                 "crop": self.stage_crop_box.isChecked(),
@@ -1455,10 +1610,16 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
             "watermark": {
                 "fields": {k: cb.isChecked()
                           for k, cb in self.wm_field_checkboxes.items()},
-                "position": self.wm_position_combo.currentText(),
+                # currentData(), not currentText() — the combo's shown
+                # label is translated (self.tr(...)) but its underlying
+                # value must stay the canonical English string this
+                # settings key has always stored, so an older exported
+                # settings file (or one written back by an older
+                # version) still round-trips correctly.
+                "position": self.wm_position_combo.currentData(),
                 "alpha_pct": self.wm_alpha_spin.value(),
                 "two_column": self.wm_two_col_checkbox.isChecked(),
-                "integration_unit": self.wm_integration_unit_combo.currentText(),
+                "integration_unit": self.wm_integration_unit_combo.currentData(),
                 "author_enabled": self.wm_author_checkbox.isChecked(),
                 "author_name": self.wm_author_edit.text(),
             },
@@ -1490,9 +1651,11 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
                 "pixel_fraction": self.pixel_fraction.value(),
                 "feather": self.feather_checkbox.isChecked(),
                 "feather_amount": self.feather_amount.value(),
-                "stack_method": self.stack_method_combo.currentText(),
+                # currentData(), not currentText() — see
+                # stage1_preprocess.py's _build_stage1 comment.
+                "stack_method": self.stack_method_combo.currentData(),
                 "weighting": self.weighting_checkbox.isChecked(),
-                "weighting_method": self.weighting_method_combo.currentText(),
+                "weighting_method": self.weighting_method_combo.currentData(),
                 "spcc": self.spcc_checkbox.isChecked(),
                 "compression": self.compression_checkbox.isChecked(),
                 "cleanup": self.cleanup_checkbox.isChecked(),
@@ -1528,12 +1691,18 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
                 "simplified": self.agr_simplified_checkbox.isChecked(),
                 "degree": self.agr_degree_spin.value(),
                 "downsample": self.agr_downsample_combo.currentText(),
-                "mode": self.agr_mode_combo.currentText(),
+                # currentData(), not currentText() — "subtract"/"divide"
+                # are shown translated but this needs the canonical
+                # English value (see _build_stage_agr's comment).
+                "mode": self.agr_mode_combo.currentData(),
             },
             "remove_bg": {
                 "method": self.bge_method_combo.currentIndex(),
                 "model": self.bge_model_combo.currentText(),
-                "correction": self.bge_correction_combo.currentText(),
+                # currentData(), not currentText() — "subtraction"/
+                # "division" are shown translated but this needs the
+                # canonical English value (see _build_stage2's comment).
+                "correction": self.bge_correction_combo.currentData(),
                 "smoothing": self.bge_smoothing_slider.value(),
                 "subsky_samples": self.subsky_samples.value(),
                 "subsky_tolerance": self.subsky_tolerance.value(),
@@ -1548,7 +1717,10 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
             },
             "stretch": {
                 "profile": self.profile_combo.currentText(),
-                "mode": self.stretch_mode_combo.currentText(),
+                # currentData(), not currentText() — "Ready-to-Use"/
+                # "Scientific" are shown translated but this needs the
+                # canonical English value (see _build_stage4's comment).
+                "mode": self.stretch_mode_combo.currentData(),
                 "log_d": self.log_d_spin.value(),
                 "auto_log_d": self.auto_d_checkbox.isChecked(),
                 "protect_b": self.protect_b_spin.value(),
@@ -1569,6 +1741,9 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         return sd
 
     def _apply_settings(self, sd):
+        self.lang = sd.get("lang", DEFAULT_LANGUAGE)
+        self.retranslate_ui()
+
         en = sd.get("stages_enabled", {})
         self.stage1_box.setChecked(en.get("preprocess", True))
         self.stage_crop_box.setChecked(en.get("crop", True))
@@ -1698,13 +1873,22 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         for k, cb in self.wm_field_checkboxes.items():
             if k in wm_fields:
                 cb.setChecked(bool(wm_fields[k]))
+        # findData()/setCurrentIndex(), not setCurrentText() — the
+        # combo's displayed text is translated, so matching against the
+        # canonical English value saved in settings has to go through
+        # its data slot instead (see the matching comment in
+        # _collect_settings above).
         if wm.get("position") in WATERMARK_POSITIONS:
-            self.wm_position_combo.setCurrentText(wm["position"])
+            idx = self.wm_position_combo.findData(wm["position"])
+            if idx >= 0:
+                self.wm_position_combo.setCurrentIndex(idx)
         if "alpha_pct" in wm:
             self.wm_alpha_spin.setValue(int(wm["alpha_pct"]))
         self.wm_two_col_checkbox.setChecked(bool(wm.get("two_column", False)))
-        self.wm_integration_unit_combo.setCurrentText(
+        idx = self.wm_integration_unit_combo.findData(
             wm.get("integration_unit", "Minutes"))
+        if idx >= 0:
+            self.wm_integration_unit_combo.setCurrentIndex(idx)
         self.wm_author_checkbox.setChecked(bool(wm.get("author_enabled", False)))
         self.wm_author_edit.setText(str(wm.get("author_name", "")))
 
@@ -1757,10 +1941,14 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         saved_stack_method = p.get("stack_method", "Average (rejection)")
         if saved_stack_method == "Median":
             saved_stack_method = "Median (Milky Way Mode)"
-        self.stack_method_combo.setCurrentText(saved_stack_method)
+        idx = self.stack_method_combo.findData(saved_stack_method)
+        if idx >= 0:
+            self.stack_method_combo.setCurrentIndex(idx)
         self.weighting_checkbox.setChecked(p.get("weighting", False))
         if p.get("weighting_method"):
-            self.weighting_method_combo.setCurrentText(p["weighting_method"])
+            idx = self.weighting_method_combo.findData(p["weighting_method"])
+            if idx >= 0:
+                self.weighting_method_combo.setCurrentIndex(idx)
         self.spcc_checkbox.setChecked(p.get("spcc", True))
         self.compression_checkbox.setChecked(p.get("compression", False))
         self.cleanup_checkbox.setChecked(p.get("cleanup", True))
@@ -1811,14 +1999,18 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         if agr.get("downsample"):
             self.agr_downsample_combo.setCurrentText(str(agr["downsample"]))
         if agr.get("mode"):
-            self.agr_mode_combo.setCurrentText(agr["mode"])
+            idx = self.agr_mode_combo.findData(agr["mode"])
+            if idx >= 0:
+                self.agr_mode_combo.setCurrentIndex(idx)
 
         b = sd.get("remove_bg", {})
         self.bge_method_combo.setCurrentIndex(int(b.get("method", 0)))
         if b.get("model"):
             self.bge_model_combo.setCurrentText(b["model"])
         if b.get("correction"):
-            self.bge_correction_combo.setCurrentText(b["correction"])
+            idx = self.bge_correction_combo.findData(b["correction"])
+            if idx >= 0:
+                self.bge_correction_combo.setCurrentIndex(idx)
         self.bge_smoothing_slider.setValue(int(b.get("smoothing", 50)))
         self.subsky_samples.setValue(int(b.get("subsky_samples", 20)))
         self.subsky_tolerance.setValue(float(b.get("subsky_tolerance", 2.0)))
@@ -1836,7 +2028,9 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
         if st.get("profile") in SENSOR_PROFILES:
             self.profile_combo.setCurrentText(st["profile"])
         if st.get("mode"):
-            self.stretch_mode_combo.setCurrentText(st["mode"])
+            idx = self.stretch_mode_combo.findData(st["mode"])
+            if idx >= 0:
+                self.stretch_mode_combo.setCurrentIndex(idx)
         self.log_d_spin.setValue(st.get("log_d", 2.0))
         self.auto_d_checkbox.setChecked(st.get("auto_log_d", True))
         self.protect_b_spin.setValue(st.get("protect_b", 6.0))
@@ -1989,6 +2183,8 @@ class UnifiedPipelineWindow(UiV2Mixin, Stage1Mixin, AnnotateMixin, StretchMixin,
             btn.setEnabled(False)
         self._last_run_stage_idx = None
         self._current_image_linear = True
+        self._stars_cache_state = "default"
+        self.stars_cache_label.setText(self.tr("stars_cache_label_default"))
         self._subsky_boxes = None
         self._pending_crop_box = None
         self._ann_base_canvas = None

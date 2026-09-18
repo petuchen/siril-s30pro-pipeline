@@ -72,22 +72,10 @@ class AnnotateMixin:
         self.stage_ann_box = box
         wlabel = self._ann_wlabel
 
-        info = QLabel("Labels stars and deep-sky objects for whatever's "
-                      "actually in the plate-solved field. Three steps "
-                      "below: pick which objects to show, pick how they're "
-                      "drawn (updates this panel immediately as you "
-                      "change it), then run — after running, use the "
-                      "action buttons to update, select, remove, or save "
-                      "the result without re-querying any catalogue. "
-                      "Messier/NGC/IC come from OpenNGC (downloaded once, "
-                      "cached on disk); Sharpless and Lynds Dark Nebulae "
-                      "come from live VizieR cone searches — real "
-                      "structured data, not guessed from Siril's console "
-                      "log. Saves an annotated JPG next to your data — "
-                      "the FITS image itself is not modified.")
-        info.setObjectName("SubHeader")
-        info.setWordWrap(True)
-        v.addWidget(info)
+        self.ann_info_label = QLabel(self.tr("ann_info"))
+        self.ann_info_label.setObjectName("SubHeader")
+        self.ann_info_label.setWordWrap(True)
+        v.addWidget(self.ann_info_label)
 
         # ============================================== ① Objects to show
         # Everything that decides *which* stars/DSOs/constellations get
@@ -96,8 +84,8 @@ class AnnotateMixin:
         # Hubble Palette advanced-options pattern) so the common case
         # (defaults are fine, just run it) doesn't force scrolling past a
         # wall of catalogue checkboxes to reach step 2/3 below.
-        obj_box, obj_v, _ = self._collapsible_section(
-            "① Objects to show", start_expanded=True)
+        obj_box, obj_v, self.ann_step1_toggle_btn = self._collapsible_section(
+            "ann_step1_title", start_expanded=True)
 
         # 2 columns throughout (swatch+checkbox, or label+control), one
         # item per row — keeps every row readable at the ~1/3-window-width
@@ -110,18 +98,14 @@ class AnnotateMixin:
         og.setColumnStretch(1, 1)
         row = 0
 
-        self.ann_stars_checkbox = QCheckBox("Stars (local catalogue)")
+        self.ann_stars_checkbox = QCheckBox(self.tr("ann_stars_checkbox"))
         self.ann_stars_checkbox.setChecked(True)
-        self.ann_stars_checkbox.setToolTip(
-            "Queries Siril's own local Bright Star Catalogue (3,661 stars, "
-            "no internet needed) for stars in the field down to the star "
-            "magnitude limit. Falls back to this script's own small "
-            "bundled star list if Siril's conesearch command isn't "
-            "available (Siril < 1.3).")
+        self.ann_stars_checkbox.setToolTip(self.tr("ann_stars_tooltip"))
         og.addWidget(self._color_swatch(CATALOG_COLORS["star"]), row, 0)
         og.addWidget(self.ann_stars_checkbox, row, 1)
         row += 1
-        og.addWidget(wlabel("Star mag limit:"), row, 0)
+        self.ann_star_mag_label = wlabel(self.tr("ann_star_mag_label"))
+        og.addWidget(self.ann_star_mag_label, row, 0)
         self.ann_mag_spin = QDoubleSpinBox()
         self.ann_mag_spin.setRange(0.0, 12.0)
         self.ann_mag_spin.setSingleStep(0.5)
@@ -129,60 +113,42 @@ class AnnotateMixin:
         og.addWidget(self.ann_mag_spin, row, 1)
         row += 1
 
-        self.ann_cat_messier_checkbox = QCheckBox("Messier")
+        self.ann_cat_messier_checkbox = QCheckBox(self.tr("ann_cat_messier"))
         self.ann_cat_messier_checkbox.setChecked(True)
         self.ann_cat_messier_checkbox.setToolTip(
-            "The 110 Messier objects, from OpenNGC (real RA/Dec, no "
-            "coordinate guessing). Downloaded once and cached on disk — "
-            "later runs use the cached copy, no internet needed.")
+            self.tr("ann_cat_messier_tooltip"))
         og.addWidget(self._color_swatch(CATALOG_COLORS["messier"]), row, 0)
         og.addWidget(self.ann_cat_messier_checkbox, row, 1)
         row += 1
 
-        self.ann_cat_ngc_checkbox = QCheckBox("NGC")
+        self.ann_cat_ngc_checkbox = QCheckBox(self.tr("ann_cat_ngc"))
         self.ann_cat_ngc_checkbox.setChecked(True)
-        self.ann_cat_ngc_checkbox.setToolTip(
-            "New General Catalogue — ~8,000 NGC objects, from the same "
-            "cached OpenNGC data as Messier above.")
+        self.ann_cat_ngc_checkbox.setToolTip(self.tr("ann_cat_ngc_tooltip"))
         og.addWidget(self._color_swatch(CATALOG_COLORS["ngc"]), row, 0)
         og.addWidget(self.ann_cat_ngc_checkbox, row, 1)
         row += 1
 
-        self.ann_cat_ic_checkbox = QCheckBox("IC")
+        self.ann_cat_ic_checkbox = QCheckBox(self.tr("ann_cat_ic"))
         self.ann_cat_ic_checkbox.setChecked(True)
-        self.ann_cat_ic_checkbox.setToolTip(
-            "Index Catalogue — ~5,000 IC objects, from the same cached "
-            "OpenNGC data as Messier above.")
+        self.ann_cat_ic_checkbox.setToolTip(self.tr("ann_cat_ic_tooltip"))
         og.addWidget(self._color_swatch(CATALOG_COLORS["ic"]), row, 0)
         og.addWidget(self.ann_cat_ic_checkbox, row, 1)
         row += 1
 
-        self.ann_cat_sh2_checkbox = QCheckBox("Sharpless (Sh2)")
-        self.ann_cat_sh2_checkbox.setToolTip(
-            "Sharpless catalogue of HII regions/emission nebulae, queried "
-            "live from VizieR (catalogue VII/20) for the current field. "
-            "Needs internet on every run — off by default for that "
-            "reason.")
+        self.ann_cat_sh2_checkbox = QCheckBox(self.tr("ann_cat_sh2"))
+        self.ann_cat_sh2_checkbox.setToolTip(self.tr("ann_cat_sh2_tooltip"))
         og.addWidget(self._color_swatch(CATALOG_COLORS["sh2"]), row, 0)
         og.addWidget(self.ann_cat_sh2_checkbox, row, 1)
         row += 1
 
-        self.ann_cat_ldn_checkbox = QCheckBox("Lynds Dark Nebulae")
-        self.ann_cat_ldn_checkbox.setToolTip(
-            "Lynds Catalogue of Dark Nebulae (LdN), queried live from "
-            "VizieR (catalogue VII/7A) for the current field. Needs "
-            "internet on every run — off by default for that reason.")
+        self.ann_cat_ldn_checkbox = QCheckBox(self.tr("ann_cat_ldn"))
+        self.ann_cat_ldn_checkbox.setToolTip(self.tr("ann_cat_ldn_tooltip"))
         og.addWidget(self._color_swatch(CATALOG_COLORS["ldn"]), row, 0)
         og.addWidget(self.ann_cat_ldn_checkbox, row, 1)
         row += 1
 
-        self.ann_online_checkbox = QCheckBox("All stars < mag limit (online)")
-        self.ann_online_checkbox.setToolTip(
-            "Siril's local star catalogue covers the field well already; "
-            "this additionally runs Siril's own online conesearch against "
-            "the VizieR Bright Star Catalogue (BSC) for every star below "
-            "the star magnitude limit, for denser coverage. Needs "
-            "internet.")
+        self.ann_online_checkbox = QCheckBox(self.tr("ann_online"))
+        self.ann_online_checkbox.setToolTip(self.tr("ann_online_tooltip"))
         og.addWidget(self.ann_online_checkbox, row, 0, 1, 2)
         row += 1
 
@@ -195,51 +161,44 @@ class AnnotateMixin:
         _default_preset = "Pale Lavender (default)"
         self.ann_const_color, self.ann_const_name_color = \
             CONSTELLATION_COLOR_PRESETS[_default_preset]
-        self.ann_const_checkbox = QCheckBox("Constellation lines")
-        self.ann_const_checkbox.setToolTip(
-            "Draws stick-figure lines between bright stars for whichever "
-            "constellations are (at least partly) in the plate-solved "
-            "field. Line topology is a widely used amateur/planetarium "
-            "\"connect the dots\" set (from the open-source d3-celestial "
-            "project), embedded and fully offline — the IAU only defines "
-            "official constellation *boundaries*, not lines, so different "
-            "atlases draw slightly different stick figures for the same "
-            "constellation. Use \"Select constellations...\" below to "
-            "leave some out.")
+        self.ann_const_checkbox = QCheckBox(self.tr("ann_const"))
+        self.ann_const_checkbox.setToolTip(self.tr("ann_const_tooltip"))
         og.addWidget(self.ann_const_checkbox, row, 0, 1, 2)
         row += 1
 
-        self.ann_const_names_checkbox = QCheckBox("Show constellation names")
+        self.ann_const_names_checkbox = QCheckBox(self.tr("ann_const_names"))
         self.ann_const_names_checkbox.setChecked(True)
         self.ann_const_names_checkbox.setToolTip(
-            "Labels each drawn constellation with its name, centered over "
-            "whichever part of its stick figure is inside the frame.")
+            self.tr("ann_const_names_tooltip"))
         og.addWidget(self.ann_const_names_checkbox, row, 0, 1, 2)
         row += 1
 
-        og.addWidget(wlabel("Line width:"), row, 0)
+        self.ann_line_width_label = wlabel(self.tr("ann_line_width_label"))
+        og.addWidget(self.ann_line_width_label, row, 0)
         self.ann_const_width_spin = QSpinBox()
         self.ann_const_width_spin.setRange(1, 8)
         self.ann_const_width_spin.setValue(1)
         self.ann_const_width_spin.setToolTip(
-            "Thickness of the constellation lines, in pixels (scaled up "
-            "automatically for high-resolution stacks).")
+            self.tr("ann_line_width_tooltip"))
         og.addWidget(self.ann_const_width_spin, row, 1)
         row += 1
 
-        og.addWidget(wlabel("Gap (px):"), row, 0)
+        self.ann_gap_label = wlabel(self.tr("ann_gap_label"))
+        og.addWidget(self.ann_gap_label, row, 0)
         self.ann_const_gap_spin = QSpinBox()
         self.ann_const_gap_spin.setRange(0, 60)
         self.ann_const_gap_spin.setValue(8)
-        self.ann_const_gap_spin.setToolTip(
-            "Shortens each line segment by this many pixels from both "
-            "ends, so lines don't touch the stars directly — 0 draws "
-            "star-to-star with no gap.")
+        self.ann_const_gap_spin.setToolTip(self.tr("ann_gap_tooltip"))
         og.addWidget(self.ann_const_gap_spin, row, 1)
         row += 1
 
-        og.addWidget(wlabel("Color preset:"), row, 0)
+        self.ann_color_preset_label = wlabel(self.tr("ann_color_preset_label"))
+        og.addWidget(self.ann_color_preset_label, row, 0)
         self.ann_const_preset_combo = QComboBox()
+        # Not translated — preset names are CONSTELLATION_COLOR_PRESETS
+        # dict keys, compared via currentText() in
+        # _apply_constellation_preset and read/written in settings
+        # JSON, same reasoning as Hubble Palette's preset combo.
         self.ann_const_preset_combo.addItem("Custom")
         self.ann_const_preset_combo.addItems(
             list(CONSTELLATION_COLOR_PRESETS.keys()))
@@ -248,17 +207,15 @@ class AnnotateMixin:
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.ann_const_preset_combo.setMinimumContentsLength(16)
         self.ann_const_preset_combo.setToolTip(
-            "Quick-pick a matched line/name color scheme. Picking either "
-            "color manually below switches this back to \"Custom\".")
+            self.tr("ann_color_preset_tooltip"))
         self.ann_const_preset_combo.currentTextChanged.connect(
             self._apply_constellation_preset)
         og.addWidget(self.ann_const_preset_combo, row, 1)
         row += 1
 
         self.ann_const_swatch = self._color_swatch(self.ann_const_color)
-        self.ann_const_color_btn = QPushButton("Line color...")
-        self.ann_const_color_btn.setToolTip(
-            "Pick a custom color for the constellation lines themselves.")
+        self.ann_const_color_btn = QPushButton(self.tr("ann_line_color_btn"))
+        self.ann_const_color_btn.setToolTip(self.tr("ann_line_color_tooltip"))
         self.ann_const_color_btn.clicked.connect(
             lambda: self._pick_constellation_color("line"))
         og.addWidget(self.ann_const_swatch, row, 0)
@@ -267,10 +224,10 @@ class AnnotateMixin:
 
         self.ann_const_name_swatch = self._color_swatch(
             self.ann_const_name_color)
-        self.ann_const_name_color_btn = QPushButton("Name color...")
+        self.ann_const_name_color_btn = QPushButton(
+            self.tr("ann_name_color_btn"))
         self.ann_const_name_color_btn.setToolTip(
-            "Pick a custom color for the constellation name labels — "
-            "independent of the line color above.")
+            self.tr("ann_name_color_tooltip"))
         self.ann_const_name_color_btn.clicked.connect(
             lambda: self._pick_constellation_color("name"))
         og.addWidget(self.ann_const_name_swatch, row, 0)
@@ -278,11 +235,10 @@ class AnnotateMixin:
         row += 1
         obj_v.addLayout(og)
 
-        self.ann_const_select_btn = QPushButton("🌌  Select constellations...")
+        self.ann_const_select_btn = QPushButton(
+            self.tr("ann_select_const_btn"))
         self.ann_const_select_btn.setToolTip(
-            "Choose which of the 88 constellations get stick-figure lines "
-            "drawn, if \"Constellation lines\" above is checked. Applies "
-            "the next time the Annotate stage runs.")
+            self.tr("ann_select_const_tooltip"))
         self.ann_const_select_btn.clicked.connect(
             self._show_constellation_selector_dialog)
         obj_v.addWidget(self.ann_const_select_btn)
@@ -294,71 +250,67 @@ class AnnotateMixin:
         # sub-panels (Circle/Open Cross/Label detail) show or hide
         # instantly as you change the controls above them — no need to
         # re-run the stage just to see which options apply to your choice.
-        style_box, style_v, _ = self._collapsible_section(
-            "② Annotation style", start_expanded=True)
+        style_box, style_v, self.ann_step2_toggle_btn = self._collapsible_section(
+            "ann_step2_title", start_expanded=True)
 
         sg = QGridLayout()
         sg.setHorizontalSpacing(10)
         sg.setVerticalSpacing(8)
         sg.setColumnStretch(1, 1)
 
-        sg.addWidget(wlabel("Label size:"), 0, 0)
+        self.ann_label_size_label = wlabel(self.tr("ann_label_size_label"))
+        sg.addWidget(self.ann_label_size_label, 0, 0)
         self.ann_size_spin = QDoubleSpinBox()
         self.ann_size_spin.setRange(0.5, 3.0)
         self.ann_size_spin.setSingleStep(0.1)
         self.ann_size_spin.setValue(1.0)
         sg.addWidget(self.ann_size_spin, 0, 1)
 
-        sg.addWidget(wlabel("Marker style:"), 1, 0)
+        self.ann_marker_style_row_label = wlabel(
+            self.tr("ann_marker_style_label"))
+        sg.addWidget(self.ann_marker_style_row_label, 1, 0)
         self.ann_marker_style_combo = QComboBox()
+        # Not translated — see the module i18n.py comment: displayed
+        # text is read via currentText() through several shared
+        # bidirectional dicts across this file and the per-object
+        # style dialog.
         self.ann_marker_style_combo.addItems(
             ["Circle", "Open Cross", "Circle + Open Cross"])
         self.ann_marker_style_combo.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.ann_marker_style_combo.setMinimumContentsLength(14)
         self.ann_marker_style_combo.setToolTip(
-            "How each star/DSO marker is drawn. \"Open Cross\" is a "
-            "reticle-style cross with a gap in the middle so it doesn't "
-            "cover the object itself — its gap and arm length scale with "
-            "the marker's size and are adjustable below. This panel "
-            "updates immediately as you change the style.")
+            self.tr("ann_marker_style_tooltip"))
         sg.addWidget(self.ann_marker_style_combo, 1, 1)
 
-        sg.addWidget(wlabel("Label distance (× radius):"), 2, 0)
+        self.ann_label_distance_row_label = wlabel(
+            self.tr("ann_label_distance_label"))
+        sg.addWidget(self.ann_label_distance_row_label, 2, 0)
         self.ann_cross_label_dist_spin = QDoubleSpinBox()
         self.ann_cross_label_dist_spin.setRange(-2.0, 5.0)
         self.ann_cross_label_dist_spin.setSingleStep(0.1)
         self.ann_cross_label_dist_spin.setValue(0.1)
         self.ann_cross_label_dist_spin.setToolTip(
-            "Extra breathing room between the label text and the marker "
-            "center, as a multiple of the marker's own radius — added on "
-            "top of every label's normal placement distance (which, for "
-            "Open Cross style, already includes the arm length below, "
-            "plus a small fixed margin so text never touches the "
-            "marker). Positive values push the label further out — "
-            "useful to clear a stretched, multi-line label so it "
-            "doesn't crowd Open Cross's arms; negative values pull it "
-            "in closer than the normal default, down to a minimum where "
-            "it would start overlapping the marker. Applies to every "
-            "marker style, not just Open Cross.")
+            self.tr("ann_label_distance_tooltip"))
         sg.addWidget(self.ann_cross_label_dist_spin, 2, 1)
         style_v.addLayout(sg)
 
         # -------------------------------------------------- marker style groups
-        self.ann_circle_style_box = QGroupBox("Circle style")
+        self.ann_circle_style_box = QGroupBox(self.tr("ann_circle_style_title"))
         circ_g = QGridLayout(self.ann_circle_style_box)
         circ_g.setHorizontalSpacing(10)
         circ_g.setVerticalSpacing(8)
         circ_g.setColumnStretch(1, 1)
 
-        self.ann_circle_auto_th_checkbox = QCheckBox("Auto thickness")
+        self.ann_circle_auto_th_checkbox = QCheckBox(
+            self.tr("ann_auto_thickness"))
         self.ann_circle_auto_th_checkbox.setChecked(True)
         self.ann_circle_auto_th_checkbox.setToolTip(
-            "Scales the circle's stroke width with the image resolution "
-            "and label size, same as before this option existed. Uncheck "
-            "to set a fixed pixel thickness instead.")
+            self.tr("ann_circle_auto_thickness_tooltip"))
         circ_g.addWidget(self.ann_circle_auto_th_checkbox, 0, 0, 1, 2)
-        circ_g.addWidget(wlabel("Thickness (px):"), 1, 0)
+        self.ann_circle_thickness_label = wlabel(
+            self.tr("ann_thickness_px_label"))
+        circ_g.addWidget(self.ann_circle_thickness_label, 1, 0)
         self.ann_circle_th_spin = QSpinBox()
         self.ann_circle_th_spin.setRange(1, 12)
         self.ann_circle_th_spin.setValue(2)
@@ -366,16 +318,13 @@ class AnnotateMixin:
         circ_g.addWidget(self.ann_circle_th_spin, 1, 1)
 
         self.ann_circle_custom_color_checkbox = QCheckBox(
-            "Custom color override")
+            self.tr("ann_custom_color_override"))
         self.ann_circle_custom_color_checkbox.setToolTip(
-            "Off (default): each catalogue keeps its own color, matching "
-            "the swatches above. On: every circle uses the single color "
-            "picked below instead — labels keep their per-catalogue color "
-            "either way.")
+            self.tr("ann_circle_custom_color_tooltip"))
         circ_g.addWidget(self.ann_circle_custom_color_checkbox, 2, 0, 1, 2)
         self.ann_circle_color = (255, 255, 255)
         self.ann_circle_swatch = self._color_swatch(self.ann_circle_color)
-        self.ann_circle_color_btn = QPushButton("Circle color...")
+        self.ann_circle_color_btn = QPushButton(self.tr("ann_circle_color_btn"))
         self.ann_circle_color_btn.setEnabled(False)
         self.ann_circle_color_btn.clicked.connect(
             lambda: self._pick_marker_color("circle"))
@@ -383,19 +332,22 @@ class AnnotateMixin:
         circ_g.addWidget(self.ann_circle_color_btn, 3, 1)
         style_v.addWidget(self.ann_circle_style_box)
 
-        self.ann_cross_style_box = QGroupBox("Open Cross style")
+        self.ann_cross_style_box = QGroupBox(self.tr("ann_cross_style_title"))
         cross_g = QGridLayout(self.ann_cross_style_box)
         cross_g.setHorizontalSpacing(10)
         cross_g.setVerticalSpacing(8)
         cross_g.setColumnStretch(1, 1)
 
-        self.ann_cross_auto_th_checkbox = QCheckBox("Auto thickness")
+        self.ann_cross_auto_th_checkbox = QCheckBox(
+            self.tr("ann_auto_thickness"))
         self.ann_cross_auto_th_checkbox.setChecked(True)
         self.ann_cross_auto_th_checkbox.setToolTip(
             self.ann_circle_auto_th_checkbox.toolTip().replace(
-                "circle's", "cross's"))
+                "circle's", "cross's").replace("圓圈的", "十字的"))
         cross_g.addWidget(self.ann_cross_auto_th_checkbox, 0, 0, 1, 2)
-        cross_g.addWidget(wlabel("Thickness (px):"), 1, 0)
+        self.ann_cross_thickness_row_label = wlabel(
+            self.tr("ann_thickness_px_label"))
+        cross_g.addWidget(self.ann_cross_thickness_row_label, 1, 0)
         self.ann_cross_th_spin = QSpinBox()
         self.ann_cross_th_spin.setRange(1, 12)
         self.ann_cross_th_spin.setValue(2)
@@ -403,55 +355,50 @@ class AnnotateMixin:
         cross_g.addWidget(self.ann_cross_th_spin, 1, 1)
 
         self.ann_cross_custom_color_checkbox = QCheckBox(
-            "Custom color override")
+            self.tr("ann_custom_color_override"))
         self.ann_cross_custom_color_checkbox.setToolTip(
-            "Same idea as the circle's custom color above, independent of "
-            "it — you can have a custom cross color with per-catalogue "
-            "circle colors, or vice versa, or both/neither.")
+            self.tr("ann_cross_custom_color_tooltip"))
         cross_g.addWidget(self.ann_cross_custom_color_checkbox, 2, 0, 1, 2)
         self.ann_cross_color = (255, 255, 255)
         self.ann_cross_swatch = self._color_swatch(self.ann_cross_color)
-        self.ann_cross_color_btn = QPushButton("Cross color...")
+        self.ann_cross_color_btn = QPushButton(self.tr("ann_cross_color_btn"))
         self.ann_cross_color_btn.setEnabled(False)
         self.ann_cross_color_btn.clicked.connect(
             lambda: self._pick_marker_color("cross"))
         cross_g.addWidget(self.ann_cross_swatch, 3, 0)
         cross_g.addWidget(self.ann_cross_color_btn, 3, 1)
 
-        cross_g.addWidget(wlabel("Gap (× radius):"), 4, 0)
+        self.ann_cross_gap_row_label = wlabel(self.tr("ann_cross_gap_label"))
+        cross_g.addWidget(self.ann_cross_gap_row_label, 4, 0)
         self.ann_cross_gap_spin = QDoubleSpinBox()
         self.ann_cross_gap_spin.setRange(0.0, 3.0)
         self.ann_cross_gap_spin.setSingleStep(0.1)
         self.ann_cross_gap_spin.setValue(0.5)
-        self.ann_cross_gap_spin.setToolTip(
-            "How far each arm starts from the object's center, as a "
-            "multiple of the marker's own radius — so it scales with the "
-            "object's apparent size instead of being a fixed pixel gap.")
+        self.ann_cross_gap_spin.setToolTip(self.tr("ann_cross_gap_tooltip"))
         cross_g.addWidget(self.ann_cross_gap_spin, 4, 1)
-        cross_g.addWidget(wlabel("Arm length (× radius):"), 5, 0)
+        self.ann_cross_arm_row_label = wlabel(self.tr("ann_cross_arm_label"))
+        cross_g.addWidget(self.ann_cross_arm_row_label, 5, 0)
         self.ann_cross_arm_spin = QDoubleSpinBox()
         self.ann_cross_arm_spin.setRange(0.1, 3.0)
         self.ann_cross_arm_spin.setSingleStep(0.1)
         self.ann_cross_arm_spin.setValue(0.7)
-        self.ann_cross_arm_spin.setToolTip(
-            "Length of each of the 4 arm strokes, as a multiple of the "
-            "marker's radius — also scales with object size.")
+        self.ann_cross_arm_spin.setToolTip(self.tr("ann_cross_arm_tooltip"))
         cross_g.addWidget(self.ann_cross_arm_spin, 5, 1)
 
-        cross_g.addWidget(wlabel("Label position:"), 6, 0)
+        self.ann_label_position_row_label = wlabel(
+            self.tr("ann_label_position_label"))
+        cross_g.addWidget(self.ann_label_position_row_label, 6, 0)
         self.ann_cross_label_pos_combo = QComboBox()
+        # Not translated — see the module i18n.py comment (same reason
+        # as ann_marker_style_combo above): NE/NW/SE/SW are also
+        # universal compass abbreviations.
         self.ann_cross_label_pos_combo.addItems(
             ["Auto (avoid overlap)", "NE", "NW", "SE", "SW"])
         self.ann_cross_label_pos_combo.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.ann_cross_label_pos_combo.setMinimumContentsLength(12)
         self.ann_cross_label_pos_combo.setToolTip(
-            "The open cross leaves its 4 diagonal corners clear of arms — "
-            "pick one to always place the name there, or leave on Auto to "
-            "let the same overlap-avoiding placement used for Circle "
-            "style pick the best free spot (preferring this corner when "
-            "you’ve chosen one)."
-        )
+            self.tr("ann_label_position_tooltip"))
         cross_g.addWidget(self.ann_cross_label_pos_combo, 6, 1)
         style_v.addWidget(self.ann_cross_style_box)
 
@@ -475,80 +422,54 @@ class AnnotateMixin:
         sync_marker_style_visibility()
 
         # -------------------------------------------------- label detail
-        self.ann_label_detail_box = QGroupBox("Label detail")
+        self.ann_label_detail_box = QGroupBox(self.tr("ann_label_detail_title"))
         ld_v = QVBoxLayout(self.ann_label_detail_box)
         ld_v.setSpacing(8)
-        ld_info = QLabel(
-            "Adds extra lines under each object's name, drawn stacked in "
-            "the same direction as the name itself, aligned to whichever "
-            "side of the marker the label sits on. The built-in fields "
-            "below only appear for Messier/NGC/IC objects (OpenNGC "
-            "carries this data; stars/Sharpless/LdN don't) and only when "
-            "that particular object actually has the field. Open Cross "
-            "style's arm on the label's side (up or down) stretches "
-            "automatically to reach a taller, multi-line label.")
-        ld_info.setObjectName("SubHeader")
-        ld_info.setWordWrap(True)
-        ld_v.addWidget(ld_info)
+        self.ann_label_detail_info = QLabel(self.tr("ann_label_detail_info"))
+        self.ann_label_detail_info.setObjectName("SubHeader")
+        self.ann_label_detail_info.setWordWrap(True)
+        ld_v.addWidget(self.ann_label_detail_info)
 
         ld_g = QGridLayout()
         ld_g.setHorizontalSpacing(10)
         ld_g.setVerticalSpacing(4)
-        self.ann_detail_type_checkbox = QCheckBox("Object type")
+        self.ann_detail_type_checkbox = QCheckBox(self.tr("ann_detail_type"))
         self.ann_detail_type_checkbox.setToolTip(
-            "e.g. \"Galaxy\", \"Open cluster\", \"Planetary nebula\".")
+            self.tr("ann_detail_type_tooltip"))
         ld_g.addWidget(self.ann_detail_type_checkbox, 0, 0)
-        self.ann_detail_mag_checkbox = QCheckBox("Magnitude")
+        self.ann_detail_mag_checkbox = QCheckBox(self.tr("ann_detail_mag"))
         self.ann_detail_mag_checkbox.setToolTip(
-            "OpenNGC's V-Mag, falling back to B-Mag when V-Mag is "
-            "missing.")
+            self.tr("ann_detail_mag_tooltip"))
         ld_g.addWidget(self.ann_detail_mag_checkbox, 0, 1)
-        self.ann_detail_const_checkbox = QCheckBox("Constellation")
+        self.ann_detail_const_checkbox = QCheckBox(self.tr("ann_detail_const"))
         ld_g.addWidget(self.ann_detail_const_checkbox, 1, 0)
-        self.ann_detail_size_checkbox = QCheckBox("Apparent size")
+        self.ann_detail_size_checkbox = QCheckBox(self.tr("ann_detail_size"))
         self.ann_detail_size_checkbox.setToolTip(
-            "OpenNGC's MajAx (apparent major axis), in arcminutes — the "
-            "same value already used to size the marker itself.")
+            self.tr("ann_detail_size_tooltip"))
         ld_g.addWidget(self.ann_detail_size_checkbox, 1, 1)
         ld_v.addLayout(ld_g)
 
-        ld_custom_label = wlabel("Custom lines (added to every label, in "
-                                 "this order — type one label line per "
-                                 "row of text):")
-        ld_v.addWidget(ld_custom_label)
+        self.ann_custom_lines_row_label = wlabel(
+            self.tr("ann_custom_lines_label"))
+        ld_v.addWidget(self.ann_custom_lines_row_label)
         self.ann_custom_lines_edit = QPlainTextEdit()
         self.ann_custom_lines_edit.setMaximumHeight(90)
         self.ann_custom_lines_edit.setPlaceholderText(
-            "One label line per row, e.g.:\nSession 1\nBortle 4")
+            self.tr("ann_custom_lines_placeholder"))
         self.ann_custom_lines_edit.setToolTip(
-            "Freeform text appended under every object's name (and any "
-            "built-in fields above) — the same text for every object, "
-            "e.g. a session date or your own note. Each row of text you "
-            "type is its own label line; blank rows are skipped.")
+            self.tr("ann_custom_lines_tooltip"))
         ld_v.addWidget(self.ann_custom_lines_edit)
         style_v.addWidget(self.ann_label_detail_box)
 
-        self.ann_show_overlay_checkbox = QCheckBox("Show annotation overlay")
+        self.ann_show_overlay_checkbox = QCheckBox(self.tr("ann_show_overlay"))
         self.ann_show_overlay_checkbox.setChecked(True)
         self.ann_show_overlay_checkbox.setToolTip(
-            "Uncheck to hide the markers/labels — running the stage will then "
-            "just show the plain image (useful if you want to keep the stage "
-            "in the pipeline but not clutter the preview/export with labels).")
+            self.tr("ann_show_overlay_tooltip"))
         style_v.addWidget(self.ann_show_overlay_checkbox)
 
-        self.ann_bake_checkbox = QCheckBox(
-            "Bake into image (for Watermark & later stages)")
+        self.ann_bake_checkbox = QCheckBox(self.tr("ann_bake"))
         self.ann_bake_checkbox.setChecked(False)
-        self.ann_bake_checkbox.setToolTip(
-            "By default, annotation markers/labels only appear in the "
-            "exported JPG/PNG and this stage's own before/after preview — "
-            "the actual image handed to Siril (and any later stage, "
-            "including Watermark) stays unmarked, so \"Remove all\" and "
-            "re-running this stage are always non-destructive. Check this "
-            "to also bake the markers/labels into that working image "
-            "itself, so Watermark (or anything else run after Annotate) "
-            "shows them too. Undo still restores the pre-annotation image "
-            "either way.")
+        self.ann_bake_checkbox.setToolTip(self.tr("ann_bake_tooltip"))
         style_v.addWidget(self.ann_bake_checkbox)
         v.addWidget(style_box)
 
@@ -565,100 +486,191 @@ class AnnotateMixin:
         #   Row 2: quick re-render actions that don't need a full re-run
         #   Row 3: file I/O (export the image, re-import a saved JSON)
         pick_row = QHBoxLayout()
-        self.ann_select_btn = QPushButton("Select objects...")
+        self.ann_select_btn = QPushButton(self.tr("ann_select_objects_btn"))
         self.ann_select_btn.setToolTip(
-            "Pick which of the labeled objects stay visible — unchecking "
-            "one removes it from the preview and export immediately, no "
-            "need to re-run the stage.")
+            self.tr("ann_select_objects_tooltip"))
         self.ann_select_btn.clicked.connect(self._show_object_selector_dialog)
         pick_row.addWidget(self.ann_select_btn)
-        self.ann_pick_btn = QPushButton("Pick object on image...")
+        self.ann_pick_btn = QPushButton(self.tr("ann_pick_object_btn"))
         self.ann_pick_btn.setCheckable(True)
         pick_row.addWidget(self.ann_pick_btn)
         v.addLayout(pick_row)
 
         redraw_row = QHBoxLayout()
-        self.ann_update_preview_btn = QPushButton("Update preview")
+        self.ann_update_preview_btn = QPushButton(
+            self.tr("ann_update_preview_btn"))
         self.ann_update_preview_btn.setToolTip(
-            "Re-renders every currently shown object using the "
-            "Annotation style panel's *current* settings — marker style, "
-            "colors, thickness, cross geometry, label detail lines — "
-            "without re-querying any catalogue or re-running plate "
-            "solving, so it's much faster than Run when you're just "
-            "iterating on how things look. Resets every object to the "
-            "panel defaults, so any per-object 🎨 overrides are "
-            "discarded — re-open \"Select objects...\" afterward to "
-            "reapply them if you still want them. Doesn't affect "
-            "constellation lines (uncheck \"Constellation lines\" and "
-            "re-run to remove those).")
+            self.tr("ann_update_preview_tooltip"))
         self.ann_update_preview_btn.clicked.connect(
             self._update_annotation_preview)
         redraw_row.addWidget(self.ann_update_preview_btn)
-        self.ann_remove_all_btn = QPushButton("Remove all")
-        self.ann_remove_all_btn.setToolTip(
-            "Hide every labeled object at once — one click, no need to "
-            "open \"Select objects to show...\" and uncheck them "
-            "individually. Non-destructive, same as unchecking every "
-            "object there: the underlying FITS image is never touched, "
-            "and re-running the stage brings the labels back. Doesn't "
-            "affect constellation lines — uncheck \"Constellation lines\" "
-            "and re-run to remove those.")
+        self.ann_remove_all_btn = QPushButton(self.tr("ann_remove_all_btn"))
+        self.ann_remove_all_btn.setToolTip(self.tr("ann_remove_all_tooltip"))
         self.ann_remove_all_btn.clicked.connect(self._remove_all_annotations)
         redraw_row.addWidget(self.ann_remove_all_btn)
         v.addLayout(redraw_row)
 
         file_row = QHBoxLayout()
-        self.ann_save_btn = QPushButton("Save image...")
-        self.ann_save_btn.setToolTip(
-            "Export the last annotated result as JPEG or PNG, wherever "
-            "you choose.")
+        self.ann_save_btn = QPushButton(self.tr("ann_save_image_btn"))
+        self.ann_save_btn.setToolTip(self.tr("ann_save_image_tooltip"))
         self.ann_save_btn.clicked.connect(self.on_save_annotated_image)
         file_row.addWidget(self.ann_save_btn)
-        self.ann_import_btn = QPushButton("Import annotation details...")
-        self.ann_import_btn.setToolTip(
-            "Load a previously saved annotated_*.json (auto-saved next "
-            "to the JPG every time this stage actually runs — see the "
-            "Run button above; \"Update preview\" doesn't write a new "
-            "one, but \"Save annotation details...\" below does, on "
-            "demand) and redraw exactly those objects onto the current "
-            "un-annotated base canvas — no catalogue queries or plate "
-            "solving needed. Meant for re-applying a saved annotation "
-            "set to the same image it came from; a warning appears if "
-            "the file's image size doesn't match the current one, since "
-            "every position would then be off.")
+        self.ann_import_btn = QPushButton(self.tr("ann_import_btn"))
+        self.ann_import_btn.setToolTip(self.tr("ann_import_tooltip"))
         self.ann_import_btn.clicked.connect(self._import_annotation_details_json)
         file_row.addWidget(self.ann_import_btn)
         v.addLayout(file_row)
 
         save_json_row = QHBoxLayout()
-        self.ann_save_json_btn = QPushButton("Save annotation details...")
-        self.ann_save_json_btn.setToolTip(
-            "Write the objects currently shown — including any per-object "
-            "🎨 style edits made via \"Select objects...\" — straight to a "
-            "JSON file now, without re-running the stage. The auto-saved "
-            "JSON from the last Run doesn't include those edits, since a "
-            "run always rebuilds its object list from the catalogues; "
-            "this is the only way to capture them.")
+        self.ann_save_json_btn = QPushButton(self.tr("ann_save_json_btn"))
+        self.ann_save_json_btn.setToolTip(self.tr("ann_save_json_tooltip"))
         self.ann_save_json_btn.clicked.connect(
             self._save_annotation_details_json_now)
         save_json_row.addWidget(self.ann_save_json_btn)
         v.addLayout(save_json_row)
 
-        self.ann_pick_btn.setToolTip(
-            "Click this, then click anywhere on the preview image to add "
-            "a custom object right there — its RA/Dec (from the same "
-            "plate-solve WCS the stage already used) becomes its default "
-            "name, styled with the Annotation style panel's current "
-            "settings. Stays armed for multiple picks in a row; click "
-            "this button again or press Esc to stop. Rename it, change "
-            "its style, or remove it afterward via \"Select objects...\" "
-            "🎨 editor, same as any catalogue object.")
+        self.ann_pick_btn.setToolTip(self.tr("ann_pick_btn_tooltip"))
         self.ann_pick_btn.toggled.connect(self._toggle_ann_pick_mode)
         self.ann_pick_hint = QLabel("")
         self.ann_pick_hint.setObjectName("SubHeader")
         self.ann_pick_hint.setWordWrap(True)
         v.addWidget(self.ann_pick_hint)
         return box
+
+    def retranslate_ui_annotate(self):
+        self.ann_info_label.setText(self.tr("ann_info"))
+        self._retranslate_collapsible(self.ann_step1_toggle_btn)
+        self.ann_stars_checkbox.setText(self.tr("ann_stars_checkbox"))
+        self.ann_stars_checkbox.setToolTip(
+            self.tr("ann_stars_tooltip"))
+        self.ann_star_mag_label.setText(self.tr("ann_star_mag_label"))
+        self.ann_cat_messier_checkbox.setText(self.tr("ann_cat_messier"))
+        self.ann_cat_messier_checkbox.setToolTip(
+            self.tr("ann_cat_messier_tooltip"))
+        self.ann_cat_ngc_checkbox.setText(self.tr("ann_cat_ngc"))
+        self.ann_cat_ngc_checkbox.setToolTip(self.tr("ann_cat_ngc_tooltip"))
+        self.ann_cat_ic_checkbox.setText(self.tr("ann_cat_ic"))
+        self.ann_cat_ic_checkbox.setToolTip(self.tr("ann_cat_ic_tooltip"))
+        self.ann_cat_sh2_checkbox.setText(self.tr("ann_cat_sh2"))
+        self.ann_cat_sh2_checkbox.setToolTip(self.tr("ann_cat_sh2_tooltip"))
+        self.ann_cat_ldn_checkbox.setText(self.tr("ann_cat_ldn"))
+        self.ann_cat_ldn_checkbox.setToolTip(self.tr("ann_cat_ldn_tooltip"))
+        self.ann_online_checkbox.setText(self.tr("ann_online"))
+        self.ann_online_checkbox.setToolTip(self.tr("ann_online_tooltip"))
+        self.ann_const_checkbox.setText(self.tr("ann_const"))
+        self.ann_const_checkbox.setToolTip(self.tr("ann_const_tooltip"))
+        self.ann_const_names_checkbox.setText(self.tr("ann_const_names"))
+        self.ann_const_names_checkbox.setToolTip(
+            self.tr("ann_const_names_tooltip"))
+        self.ann_line_width_label.setText(self.tr("ann_line_width_label"))
+        self.ann_const_width_spin.setToolTip(
+            self.tr("ann_line_width_tooltip"))
+        self.ann_gap_label.setText(self.tr("ann_gap_label"))
+        self.ann_const_gap_spin.setToolTip(self.tr("ann_gap_tooltip"))
+        self.ann_color_preset_label.setText(self.tr("ann_color_preset_label"))
+        self.ann_const_preset_combo.setToolTip(
+            self.tr("ann_color_preset_tooltip"))
+        self.ann_line_color_btn.setText(self.tr("ann_line_color_btn"))
+        self.ann_line_color_btn.setToolTip(
+            self.tr("ann_line_color_tooltip"))
+        self.ann_name_color_btn.setText(self.tr("ann_name_color_btn"))
+        self.ann_name_color_btn.setToolTip(
+            self.tr("ann_name_color_tooltip"))
+        self.ann_select_const_btn.setText(self.tr("ann_select_const_btn"))
+        self.ann_select_const_btn.setToolTip(
+            self.tr("ann_select_const_tooltip"))
+
+        self._retranslate_collapsible(self.ann_step2_toggle_btn)
+        self.ann_label_size_label.setText(self.tr("ann_label_size_label"))
+        self.ann_marker_style_row_label.setText(
+            self.tr("ann_marker_style_label"))
+        self.ann_marker_style_combo.setToolTip(
+            self.tr("ann_marker_style_tooltip"))
+        self.ann_label_distance_row_label.setText(
+            self.tr("ann_label_distance_label"))
+        self.ann_cross_label_dist_spin.setToolTip(
+            self.tr("ann_label_distance_tooltip"))
+
+        self.ann_circle_style_box.setTitle(self.tr("ann_circle_style_title"))
+        self.ann_circle_auto_th_checkbox.setText(
+            self.tr("ann_auto_thickness"))
+        self.ann_circle_auto_th_checkbox.setToolTip(
+            self.tr("ann_circle_auto_thickness_tooltip"))
+        self.ann_circle_thickness_label.setText(
+            self.tr("ann_thickness_px_label"))
+        self.ann_circle_custom_color_checkbox.setText(
+            self.tr("ann_custom_color_override"))
+        self.ann_circle_custom_color_checkbox.setToolTip(
+            self.tr("ann_circle_custom_color_tooltip"))
+        self.ann_circle_color_btn.setText(self.tr("ann_circle_color_btn"))
+
+        self.ann_cross_style_box.setTitle(self.tr("ann_cross_style_title"))
+        self.ann_cross_auto_th_checkbox.setText(self.tr("ann_auto_thickness"))
+        self.ann_cross_auto_th_checkbox.setToolTip(
+            self.ann_circle_auto_th_checkbox.toolTip().replace(
+                "circle's", "cross's").replace("圓圈的", "十字的"))
+        self.ann_cross_thickness_row_label.setText(
+            self.tr("ann_thickness_px_label"))
+        self.ann_cross_custom_color_checkbox.setText(
+            self.tr("ann_custom_color_override"))
+        self.ann_cross_custom_color_checkbox.setToolTip(
+            self.tr("ann_cross_custom_color_tooltip"))
+        self.ann_cross_color_btn.setText(self.tr("ann_cross_color_btn"))
+        self.ann_cross_gap_row_label.setText(self.tr("ann_cross_gap_label"))
+        self.ann_cross_gap_spin.setToolTip(self.tr("ann_cross_gap_tooltip"))
+        self.ann_cross_arm_row_label.setText(self.tr("ann_cross_arm_label"))
+        self.ann_cross_arm_spin.setToolTip(self.tr("ann_cross_arm_tooltip"))
+        self.ann_label_position_row_label.setText(
+            self.tr("ann_label_position_label"))
+        self.ann_cross_label_pos_combo.setToolTip(
+            self.tr("ann_label_position_tooltip"))
+
+        self.ann_label_detail_box.setTitle(self.tr("ann_label_detail_title"))
+        self.ann_label_detail_info.setText(self.tr("ann_label_detail_info"))
+        self.ann_detail_type_checkbox.setText(self.tr("ann_detail_type"))
+        self.ann_detail_type_checkbox.setToolTip(
+            self.tr("ann_detail_type_tooltip"))
+        self.ann_detail_mag_checkbox.setText(self.tr("ann_detail_mag"))
+        self.ann_detail_mag_checkbox.setToolTip(
+            self.tr("ann_detail_mag_tooltip"))
+        self.ann_detail_const_checkbox.setText(self.tr("ann_detail_const"))
+        self.ann_detail_size_checkbox.setText(self.tr("ann_detail_size"))
+        self.ann_detail_size_checkbox.setToolTip(
+            self.tr("ann_detail_size_tooltip"))
+        self.ann_custom_lines_row_label.setText(
+            self.tr("ann_custom_lines_label"))
+        self.ann_custom_lines_edit.setPlaceholderText(
+            self.tr("ann_custom_lines_placeholder"))
+        self.ann_custom_lines_edit.setToolTip(
+            self.tr("ann_custom_lines_tooltip"))
+
+        self.ann_show_overlay_checkbox.setText(self.tr("ann_show_overlay"))
+        self.ann_show_overlay_checkbox.setToolTip(
+            self.tr("ann_show_overlay_tooltip"))
+        self.ann_bake_checkbox.setText(self.tr("ann_bake"))
+        self.ann_bake_checkbox.setToolTip(self.tr("ann_bake_tooltip"))
+
+        self.ann_select_btn.setText(self.tr("ann_select_objects_btn"))
+        self.ann_select_btn.setToolTip(
+            self.tr("ann_select_objects_tooltip"))
+        self.ann_pick_btn.setText(self.tr("ann_pick_object_btn"))
+        self.ann_pick_btn.setToolTip(self.tr("ann_pick_btn_tooltip"))
+        self.ann_update_preview_btn.setText(
+            self.tr("ann_update_preview_btn"))
+        self.ann_update_preview_btn.setToolTip(
+            self.tr("ann_update_preview_tooltip"))
+        self.ann_remove_all_btn.setText(self.tr("ann_remove_all_btn"))
+        self.ann_remove_all_btn.setToolTip(
+            self.tr("ann_remove_all_tooltip"))
+        self.ann_save_btn.setText(self.tr("ann_save_image_btn"))
+        self.ann_save_btn.setToolTip(self.tr("ann_save_image_tooltip"))
+        self.ann_import_btn.setText(self.tr("ann_import_btn"))
+        self.ann_import_btn.setToolTip(self.tr("ann_import_tooltip"))
+        self.ann_save_json_btn.setText(self.tr("ann_save_json_btn"))
+        self.ann_save_json_btn.setToolTip(self.tr("ann_save_json_tooltip"))
+        # ann_pick_hint is left as-is — it's only ever non-empty while
+        # pick mode is actively armed, and _toggle_ann_pick_mode already
+        # sets it fresh from self.tr(...) every time it changes.
 
     # ------------------------------------------- Siril catalogue (conesearch)
     # Used only for stars — Siril's own bundled/online Bright Star Catalogue
@@ -1212,13 +1224,11 @@ class AnnotateMixin:
         base = getattr(self, "_ann_base_canvas", None)
         if base is None:
             QMessageBox.information(
-                self, "No annotated image",
-                "Run the Annotate stage at least once first, so there's "
-                "an un-annotated base canvas to redraw the imported "
-                "objects onto.")
+                self, self.tr("ann_no_image_title"),
+                self.tr("ann_no_image_body"))
             return
         path, _ = QFileDialog.getOpenFileName(
-            self, "Import annotation details", self.cwd,
+            self, self.tr("ann_import_dialog_title"), self.cwd,
             "JSON Files (*.json)")
         if not path:
             return
@@ -1231,18 +1241,18 @@ class AnnotateMixin:
                        for o in objects]
         except Exception as e:
             QMessageBox.critical(
-                self, "Import failed",
-                f"Couldn't read \"{os.path.basename(path)}\": {e}")
+                self, self.tr("ann_import_failed_title"),
+                self.tr("ann_import_failed_body").format(
+                    name=os.path.basename(path), e=e))
             return
 
         H, W = base.shape[0], base.shape[1]
         json_w, json_h = payload.get("image_width"), payload.get("image_height")
         if json_w and json_h and (json_w != W or json_h != H):
             QMessageBox.warning(
-                self, "Image size mismatch",
-                f"This file was saved for a {json_w}×{json_h} image, "
-                f"but the current one is {W}×{H} — imported object "
-                "positions will likely be wrong. Importing anyway.")
+                self, self.tr("ann_size_mismatch_title"),
+                self.tr("ann_size_mismatch_body").format(
+                    jw=json_w, jh=json_h, w=W, h=H))
 
         self._ann_drawn = drawable
         new_canvas = self._render_annotations(base, drawable)
@@ -1253,9 +1263,8 @@ class AnnotateMixin:
         snap["after"] = make_qimage(annotated_rgb, fits_orientation=False)
         self.snapshots[IDX_ANN] = snap
         self.snapshot_ready.emit(IDX_ANN)
-        self.status_label.setText(
-            f"Imported {len(drawable)} object(s) from "
-            f"{os.path.basename(path)}.")
+        self.status_label.setText(self.tr("ann_imported_status").format(
+            n=len(drawable), name=os.path.basename(path)))
         self.siril.log(
             f"Annotate: imported {len(drawable)} object(s) from {path}.",
             LogColor.GREEN)
@@ -1264,7 +1273,7 @@ class AnnotateMixin:
         from astropy.wcs import WCS
         import warnings
 
-        progress("Annotate: reading plate-solve solution...", 0.05)
+        progress(self.tr("ann_progress_reading_solution"), 0.05)
         hdr_str = self.siril.get_image_fits_header()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -1274,10 +1283,7 @@ class AnnotateMixin:
             wcs = WCS(header, naxis=2).celestial
         if not wcs.has_celestial or wcs.wcs.crval[0] == 0 and \
                 wcs.wcs.crval[1] == 0:
-            raise RuntimeError(
-                "No valid plate-solve solution in the image header. "
-                "Run plate solving (stage 1 with SPCC, or Siril's 'platesolve') "
-                "before annotating.")
+            raise RuntimeError(self.tr("ann_error_no_platesolve"))
 
         before_img = self._get_current_image()
         img, stars_reconciled = self._reconcile_held_stars(before_img, progress)
@@ -1332,8 +1338,7 @@ class AnnotateMixin:
                     targets.append((name, ra, dec, kind, size, extra))
 
             if self.ann_stars_checkbox.isChecked():
-                progress("Annotate: querying Siril's local star catalogue...",
-                         0.1)
+                progress(self.tr("ann_progress_local_stars"), 0.1)
                 stars = self._run_siril_conesearch(mag_limit, cat=None,
                                                     label="local stars")
                 if stars:
@@ -1357,7 +1362,7 @@ class AnnotateMixin:
             want_ldn = self.ann_cat_ldn_checkbox.isChecked()
             cra = cdec = radius = None
             if want_messier or want_ngc or want_ic or want_sh2 or want_ldn:
-                progress("Annotate: computing field coverage...", 0.15)
+                progress(self.tr("ann_progress_field_coverage"), 0.15)
                 try:
                     corners = np.array(
                         [[0, 0], [W - 1, 0], [0, H - 1], [W - 1, H - 1],
@@ -1376,7 +1381,7 @@ class AnnotateMixin:
                     want_messier = want_ngc = want_ic = want_sh2 = want_ldn = False
 
             if want_messier or want_ngc or want_ic:
-                progress("Annotate: fetching Messier/NGC/IC (OpenNGC)...", 0.25)
+                progress(self.tr("ann_progress_openngc"), 0.25)
                 try:
                     found = self._objects_openngc(
                         cra, cdec, radius, want_messier, want_ngc, want_ic)
@@ -1392,8 +1397,7 @@ class AnnotateMixin:
                         f"{e}", LogColor.SALMON)
 
             if want_sh2:
-                progress("Annotate: querying Sharpless catalogue (VizieR)...",
-                         0.35)
+                progress(self.tr("ann_progress_sh2"), 0.35)
                 try:
                     add_targets(
                         self._objects_sh2(cra, cdec, radius)[:ANNOTATE_MAX_PER_CATALOG],
@@ -1404,8 +1408,7 @@ class AnnotateMixin:
                         LogColor.SALMON)
 
             if want_ldn:
-                progress("Annotate: querying Lynds Dark Nebulae (VizieR)...",
-                         0.45)
+                progress(self.tr("ann_progress_ldn"), 0.45)
                 try:
                     add_targets(
                         self._objects_ldn(cra, cdec, radius)[:ANNOTATE_MAX_PER_CATALOG],
@@ -1426,13 +1429,12 @@ class AnnotateMixin:
                 warnings.simplefilter("ignore")
 
                 if self.ann_online_checkbox.isChecked():
-                    progress("Annotate: querying Siril's online Bright Star "
-                             "Catalogue (VizieR)...", 0.55)
+                    progress(self.tr("ann_progress_online_bsc"), 0.55)
                     online_stars = self._run_siril_conesearch(
                         mag_limit, cat="bsc", label="online BSC")
                     add_targets(online_stars, "star")
 
-                progress("Annotate: drawing labels...", 0.65)
+                progress(self.tr("ann_progress_drawing_labels"), 0.65)
                 # Scale markers/text with the image's actual pixel resolution
                 # (a 4000px-wide Seestar stack shouldn't get the same 10px
                 # circle as a 1000px preview). 1600px is the reference size
@@ -1584,7 +1586,7 @@ class AnnotateMixin:
             # affect them; toggle "Constellation lines" and re-run instead.
             const_drawn = 0
             if self.ann_const_checkbox.isChecked():
-                progress("Annotate: drawing constellation lines...", 0.63)
+                progress(self.tr("ann_progress_const_lines"), 0.63)
                 try:
                     const_drawn = self._draw_constellation_lines(
                         canvas, wcs, W, H)
@@ -1660,16 +1662,22 @@ class AnnotateMixin:
         self._last_run_stage_idx = IDX_ANN
 
         if show_overlay:
-            const_suffix = (f", {const_drawn} constellation"
-                           f"{'s' if const_drawn != 1 else ''}"
-                           if const_drawn else "")
-            progress(f"Annotate: done — {drawn} objects labeled"
-                     f"{const_suffix}.", 1.0)
+            # UI-facing progress text uses the translated suffix; the
+            # siril.log line stays English-only per the established
+            # log-vs-UI convention, so it gets its own plain-English
+            # suffix built directly rather than through self.tr(...).
+            ui_suffix = (self.tr("ann_const_suffix").format(n=const_drawn)
+                        if const_drawn else "")
+            log_suffix = (f", {const_drawn} constellation"
+                         f"{'s' if const_drawn != 1 else ''}"
+                         if const_drawn else "")
+            progress(self.tr("ann_progress_done").format(
+                drawn=drawn, suffix=ui_suffix), 1.0)
             self.siril.log(f"Annotated image saved: {out_path} "
-                           f"({drawn} objects{const_suffix}) — details: "
+                           f"({drawn} objects{log_suffix}) — details: "
                            f"{json_path}", LogColor.GREEN)
         else:
-            progress("Annotate: overlay hidden — showing plain image.", 1.0)
+            progress(self.tr("ann_progress_overlay_hidden"), 1.0)
             self.siril.log("Annotate: overlay hidden, no labels drawn.",
                            LogColor.BLUE)
 
@@ -1924,13 +1932,13 @@ class AnnotateMixin:
         drawn = getattr(self, "_ann_drawn", None)
         if base is None:
             QMessageBox.information(
-                self, "No annotated image",
-                "Run the Annotate stage at least once first.")
+                self, self.tr("ann_no_image_title"),
+                self.tr("ann_no_image_body"))
             return
         if not drawn:
             QMessageBox.information(
-                self, "Nothing to remove",
-                "The last Annotate run didn't label any objects.")
+                self, self.tr("ann_nothing_to_remove_title"),
+                self.tr("ann_nothing_labeled_body"))
             return
 
         new_canvas = self._render_annotations(base, [])
@@ -1942,7 +1950,7 @@ class AnnotateMixin:
         snap["after"] = make_qimage(annotated_rgb, fits_orientation=False)
         self.snapshots[IDX_ANN] = snap
         self.snapshot_ready.emit(IDX_ANN)
-        self.status_label.setText("All annotations removed.")
+        self.status_label.setText(self.tr("ann_removed_all_status"))
         self.siril.log(
             "Annotate: all annotations removed from the preview/export "
             "(FITS image untouched). Re-run the stage to bring them "
@@ -1965,13 +1973,13 @@ class AnnotateMixin:
         drawn = getattr(self, "_ann_drawn", None)
         if base is None:
             QMessageBox.information(
-                self, "No annotated image",
-                "Run the Annotate stage at least once first.")
+                self, self.tr("ann_no_image_title"),
+                self.tr("ann_no_image_body"))
             return
         if not drawn:
             QMessageBox.information(
-                self, "Nothing to update",
-                "The last Annotate run didn't label any objects.")
+                self, self.tr("ann_nothing_to_update_title"),
+                self.tr("ann_nothing_labeled_body"))
             return
 
         for d in drawn:
@@ -1987,8 +1995,7 @@ class AnnotateMixin:
         snap["after"] = make_qimage(annotated_rgb, fits_orientation=False)
         self.snapshots[IDX_ANN] = snap
         self.snapshot_ready.emit(IDX_ANN)
-        self.status_label.setText(
-            "Annotate: preview updated from the current panel settings.")
+        self.status_label.setText(self.tr("ann_preview_updated_status"))
         self.siril.log(
             "Annotate: preview updated from the Annotation style panel's "
             "current settings (any per-object overrides were reset).",
@@ -2005,17 +2012,14 @@ class AnnotateMixin:
             if (getattr(self, "_ann_base_canvas", None) is None
                     or getattr(self, "_ann_wcs", None) is None):
                 QMessageBox.information(
-                    self, "No annotated image",
-                    "Run the Annotate stage at least once first.")
+                    self, self.tr("ann_no_image_title"),
+                    self.tr("ann_no_image_body"))
                 self.ann_pick_btn.blockSignals(True)
                 self.ann_pick_btn.setChecked(False)
                 self.ann_pick_btn.blockSignals(False)
                 return
             self.compare.set_point_pick_mode(True)
-            self.ann_pick_hint.setText(
-                "Pick mode armed — click a point on the preview image to "
-                "add an object there. Click the button again or press "
-                "Esc to stop.")
+            self.ann_pick_hint.setText(self.tr("ann_pick_hint_armed"))
         else:
             self.compare.set_point_pick_mode(False)
             self.ann_pick_hint.setText("")
@@ -2030,7 +2034,7 @@ class AnnotateMixin:
         if btn is None or not btn.isChecked():
             return False
         btn.setChecked(False)  # triggers _toggle_ann_pick_mode(False)
-        self.status_label.setText("Pick object: stopped.")
+        self.status_label.setText(self.tr("ann_pick_stopped_status"))
         return True
 
     def _on_ann_point_picked(self, fx, fy):
@@ -2065,8 +2069,8 @@ class AnnotateMixin:
             ra, dec = float(world[0][0]), float(world[0][1])
         except Exception as e:
             QMessageBox.warning(
-                self, "Pick object failed",
-                f"Couldn't convert that point to RA/Dec: {e}")
+                self, self.tr("ann_pick_failed_title"),
+                self.tr("ann_pick_failed_body").format(e=e))
             return
 
         label = f"RA {ra:.3f}° Dec {dec:+.3f}°"
@@ -2094,8 +2098,7 @@ class AnnotateMixin:
         self.snapshots[IDX_ANN] = snap
         self.snapshot_ready.emit(IDX_ANN)
         self.status_label.setText(
-            f"Pick object: added \"{label}\" — rename or restyle it via "
-            "\"Select objects...\" 🎨.")
+            self.tr("ann_pick_added_status").format(label=label))
         self.siril.log(
             f"Annotate: manually added object \"{label}\" at pixel "
             f"({xd}, {yd}).", LogColor.GREEN)
@@ -2108,7 +2111,9 @@ class AnnotateMixin:
         Mirrors _pick_constellation_color's swatch-update pattern."""
         attr = f"ann_{which}_color"
         swatch = getattr(self, f"ann_{which}_swatch")
-        title = f"{which.capitalize()} marker color"
+        title = self.tr(
+            "ann_circle_marker_color_title" if which == "circle"
+            else "ann_cross_marker_color_title")
         b, g_, r = getattr(self, attr)
         initial = QColor(r, g_, b)
         color = QColorDialog.getColor(initial, self, title)
@@ -2132,8 +2137,9 @@ class AnnotateMixin:
         attr = "ann_const_color" if target == "line" else "ann_const_name_color"
         swatch = (self.ann_const_swatch if target == "line"
                   else self.ann_const_name_swatch)
-        title = ("Constellation line color" if target == "line"
-                 else "Constellation name color")
+        title = self.tr(
+            "ann_const_line_color_title" if target == "line"
+            else "ann_const_name_color_title")
         b, g_, r = getattr(self, attr)
         initial = QColor(r, g_, b)
         color = QColorDialog.getColor(initial, self, title)
@@ -2174,11 +2180,10 @@ class AnnotateMixin:
         object), so there's nothing to redraw from here — it just edits
         `self.ann_const_selected`, used the next time Annotate runs."""
         dlg = QDialog(self)
-        dlg.setWindowTitle("Select Constellations")
+        dlg.setWindowTitle(self.tr("ann_const_dialog_title"))
         dlg.resize(340, 480)
         dv = QVBoxLayout(dlg)
-        info = QLabel("Uncheck constellations to leave their lines out "
-                      "the next time Annotate runs:")
+        info = QLabel(self.tr("ann_const_dialog_info"))
         info.setObjectName("SubHeader")
         info.setWordWrap(True)
         dv.addWidget(info)
@@ -2196,8 +2201,8 @@ class AnnotateMixin:
         dv.addWidget(lw, 1)
 
         btn_row = QHBoxLayout()
-        select_all_btn = QPushButton("Select All")
-        deselect_all_btn = QPushButton("Deselect All")
+        select_all_btn = QPushButton(self.tr("ann_select_all_btn"))
+        deselect_all_btn = QPushButton(self.tr("ann_deselect_all_btn"))
         select_all_btn.clicked.connect(
             lambda: [lw.item(i).setCheckState(Qt.CheckState.Checked)
                     for i in range(lw.count())])
@@ -2224,10 +2229,15 @@ class AnnotateMixin:
             for i in range(lw.count())
             if lw.item(i).checkState() == Qt.CheckState.Checked}
         n = len(self.ann_const_selected)
-        msg = (f"Constellations: {n} of {len(CONSTELLATION_NAMES)} "
-              "selected — re-run Annotate to apply.")
-        self.status_label.setText(msg)
-        self.siril.log(f"Select constellations: {msg}", LogColor.GREEN)
+        total = len(CONSTELLATION_NAMES)
+        # UI status is translated; the siril.log line stays English-only
+        # per the established log-vs-UI convention, built directly here
+        # rather than via self.tr(...).
+        self.status_label.setText(
+            self.tr("ann_const_status").format(n=n, total=total))
+        log_msg = (f"Constellations: {n} of {total} selected — re-run "
+                  "Annotate to apply.")
+        self.siril.log(f"Select constellations: {log_msg}", LogColor.GREEN)
 
     _STYLE_KEY_TO_TEXT = {"circle": "Circle", "cross": "Open Cross",
                           "both": "Circle + Open Cross"}
@@ -2275,14 +2285,12 @@ class AnnotateMixin:
         applied_update = {"flag": False}
 
         dlg = QDialog(self)
-        dlg.setWindowTitle(f"Object Style — {d['label']}")
+        dlg.setWindowTitle(
+            self.tr("ann_style_dialog_title").format(label=d['label']))
         dlg.resize(360, 620)
         dv = QVBoxLayout(dlg)
 
-        info = QLabel("Overrides just this object — the Annotation style "
-                      "panel's settings are untouched and still apply to "
-                      "every other object. \"Update\" previews changes "
-                      "immediately without closing this dialog.")
+        info = QLabel(self.tr("ann_style_dialog_info"))
         info.setObjectName("SubHeader")
         info.setWordWrap(True)
         dv.addWidget(info)
@@ -2293,8 +2301,10 @@ class AnnotateMixin:
         g.setColumnStretch(1, 1)
         gr = 0
 
-        g.addWidget(QLabel("Marker style:"), gr, 0)
+        g.addWidget(QLabel(self.tr("ann_marker_style_label")), gr, 0)
         style_combo = QComboBox()
+        # Not translated — same reasoning as the main panel's
+        # ann_marker_style_combo (see the module i18n.py comment).
         style_combo.addItems(["Circle", "Open Cross", "Circle + Open Cross"])
         style_combo.setCurrentText(
             style_map.get(d.get("style", "circle"), "Circle"))
@@ -2330,17 +2340,15 @@ class AnnotateMixin:
             return swatch, pick
 
         circle_swatch, pick_circle_color = make_color_picker(
-            "circle_color", "Marker color")
-        circle_color_btn = QPushButton("Marker color...")
-        circle_color_btn.setToolTip(
-            "Color of the Circle marker (used when the marker style "
-            "above is Circle or Circle + Open Cross).")
+            "circle_color", self.tr("ann_marker_color_btn").rstrip("."))
+        circle_color_btn = QPushButton(self.tr("ann_marker_color_btn"))
+        circle_color_btn.setToolTip(self.tr("ann_marker_color_tooltip"))
         circle_color_btn.clicked.connect(pick_circle_color)
         g.addWidget(circle_swatch, gr, 0)
         g.addWidget(circle_color_btn, gr, 1)
         gr += 1
 
-        g.addWidget(QLabel("Marker thickness (px):"), gr, 0)
+        g.addWidget(QLabel(self.tr("ann_marker_thickness_label")), gr, 0)
         circle_th_spin = QSpinBox()
         circle_th_spin.setRange(1, 12)
         circle_th_spin.setValue(int(round(d.get("circle_th", d.get("th", 2)))))
@@ -2348,32 +2356,30 @@ class AnnotateMixin:
         gr += 1
 
         text_swatch, pick_text_color = make_color_picker(
-            "text_color", "Text color")
-        text_color_btn = QPushButton("Text color...")
-        text_color_btn.setToolTip(
-            "Color of the label text itself, independent of the marker "
-            "color(s).")
+            "text_color", self.tr("ann_text_color_btn").rstrip("."))
+        text_color_btn = QPushButton(self.tr("ann_text_color_btn"))
+        text_color_btn.setToolTip(self.tr("ann_text_color_tooltip"))
         text_color_btn.clicked.connect(pick_text_color)
         g.addWidget(text_swatch, gr, 0)
         g.addWidget(text_color_btn, gr, 1)
         gr += 1
 
         cross_swatch, pick_cross_color = make_color_picker(
-            "cross_color", "Cross color")
-        cross_color_btn = QPushButton("Cross color...")
+            "cross_color", self.tr("ann_cross_color_btn").rstrip("."))
+        cross_color_btn = QPushButton(self.tr("ann_cross_color_btn"))
         cross_color_btn.clicked.connect(pick_cross_color)
         g.addWidget(cross_swatch, gr, 0)
         g.addWidget(cross_color_btn, gr, 1)
         gr += 1
 
-        g.addWidget(QLabel("Cross thickness (px):"), gr, 0)
+        g.addWidget(QLabel(self.tr("ann_cross_thickness_label")), gr, 0)
         cross_th_spin = QSpinBox()
         cross_th_spin.setRange(1, 12)
         cross_th_spin.setValue(int(round(d.get("cross_th", d.get("th", 2)))))
         g.addWidget(cross_th_spin, gr, 1)
         gr += 1
 
-        g.addWidget(QLabel("Cross gap (× radius):"), gr, 0)
+        g.addWidget(QLabel(self.tr("ann_cross_gap_dialog_label")), gr, 0)
         gap_spin = QDoubleSpinBox()
         gap_spin.setRange(0.0, 3.0)
         gap_spin.setSingleStep(0.1)
@@ -2381,7 +2387,7 @@ class AnnotateMixin:
         g.addWidget(gap_spin, gr, 1)
         gr += 1
 
-        g.addWidget(QLabel("Cross arm (× radius):"), gr, 0)
+        g.addWidget(QLabel(self.tr("ann_cross_arm_dialog_label")), gr, 0)
         arm_spin = QDoubleSpinBox()
         arm_spin.setRange(0.1, 3.0)
         arm_spin.setSingleStep(0.1)
@@ -2389,37 +2395,30 @@ class AnnotateMixin:
         g.addWidget(arm_spin, gr, 1)
         gr += 1
 
-        g.addWidget(QLabel("Label position:"), gr, 0)
+        g.addWidget(QLabel(self.tr("ann_label_position_label")), gr, 0)
         pos_combo = QComboBox()
+        # Not translated — same reasoning as the main panel's
+        # ann_cross_label_pos_combo (see the module i18n.py comment).
         pos_combo.addItems(["Auto (avoid overlap)", "NE", "NW", "SE", "SW"])
         pos_combo.setCurrentText(
             pos_map.get(d.get("label_pref"), "Auto (avoid overlap)"))
         g.addWidget(pos_combo, gr, 1)
         gr += 1
 
-        g.addWidget(QLabel("Label distance (× radius):"), gr, 0)
+        g.addWidget(QLabel(self.tr("ann_label_distance_label")), gr, 0)
         dist_spin = QDoubleSpinBox()
         dist_spin.setRange(-2.0, 5.0)
         dist_spin.setSingleStep(0.1)
         dist_spin.setValue(round(d.get("label_extra", 0) / r, 2))
-        dist_spin.setToolTip(
-            "How far the label text sits from the marker, as a "
-            "multiple of the marker's own radius, on top of the normal "
-            "placement distance — negative values pull the label in "
-            "closer, positive values push it further out. Applies "
-            "regardless of marker style.")
+        dist_spin.setToolTip(self.tr("ann_label_distance_dialog_tooltip"))
         g.addWidget(dist_spin, gr, 1)
         gr += 1
         dv.addLayout(g)
 
-        dv.addWidget(QLabel("Label lines (one per row of text):"))
+        dv.addWidget(QLabel(self.tr("ann_label_lines_label")))
         lines_edit = QPlainTextEdit()
         lines_edit.setMaximumHeight(110)
-        lines_edit.setToolTip(
-            "The object's name plus any detail/custom lines, top to "
-            "bottom, one label line per row of text — type, delete, or "
-            "reorder rows freely (this box has its own Ctrl+Z undo for "
-            "text edits). This doesn't affect any other object.")
+        lines_edit.setToolTip(self.tr("ann_label_lines_tooltip"))
         lines_edit.setPlainText(
             "\n".join(d.get("label_lines", [d["label"]])))
         dv.addWidget(lines_edit)
@@ -2507,21 +2506,14 @@ class AnnotateMixin:
         dist_spin.valueChanged.connect(lambda _v: checkpoint())
 
         btn_row = QHBoxLayout()
-        undo_btn = QPushButton("↶  Undo")
+        undo_btn = QPushButton(self.tr("ann_undo_btn"))
         undo_btn.setEnabled(False)
-        undo_btn.setToolTip(
-            "Steps back one field change at a time within this dialog "
-            "(marker style, colors, thickness, cross geometry, or label "
-            "lines) — independent of whether you've clicked Update.")
+        undo_btn.setToolTip(self.tr("ann_undo_tooltip"))
         undo_btn.clicked.connect(do_undo)
         btn_row.addWidget(undo_btn)
 
-        reset_btn = QPushButton("↺  Reset to panel default")
-        reset_btn.setToolTip(
-            "Discards every override above and recomputes this object's "
-            "style and label lines exactly as the Annotation style panel "
-            "would produce them right now. Counts as a single undoable "
-            "step.")
+        reset_btn = QPushButton(self.tr("ann_reset_default_btn"))
+        reset_btn.setToolTip(self.tr("ann_reset_default_tooltip"))
 
         def do_reset():
             defaults = self._default_style_for_object(d)
@@ -2572,11 +2564,8 @@ class AnnotateMixin:
             if on_update:
                 on_update()
 
-        update_btn = QPushButton("🔄  Update")
-        update_btn.setToolTip(
-            "Applies these settings to the preview immediately, without "
-            "closing this dialog — keep adjusting and clicking Update to "
-            "see each change.")
+        update_btn = QPushButton(self.tr("ann_update_btn"))
+        update_btn.setToolTip(self.tr("ann_update_tooltip"))
         update_btn.clicked.connect(do_update)
         dv.addWidget(update_btn)
 
@@ -2616,13 +2605,13 @@ class AnnotateMixin:
         drawn = getattr(self, "_ann_drawn", None)
         if base is None:
             QMessageBox.information(
-                self, "No annotated image",
-                "Run the Annotate stage at least once first.")
+                self, self.tr("ann_no_image_title"),
+                self.tr("ann_no_image_body"))
             return
         if not drawn:
             QMessageBox.information(
-                self, "Nothing to select",
-                "The last Annotate run didn't label any objects.")
+                self, self.tr("ann_nothing_to_select_title"),
+                self.tr("ann_nothing_labeled_body"))
             return
 
         H, W = base.shape[0], base.shape[1]
@@ -2657,13 +2646,10 @@ class AnnotateMixin:
             self.snapshot_ready.emit(IDX_ANN)
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("Select Objects to Show")
+        dlg.setWindowTitle(self.tr("ann_selector_dialog_title"))
         dlg.resize(420, 460)
         dv = QVBoxLayout(dlg)
-        dlg_info = QLabel("Uncheck objects to hide them from the "
-                          "annotated image (updates live). Click 🎨 to "
-                          "give one object its own marker style, color, "
-                          "or label content.")
+        dlg_info = QLabel(self.tr("ann_selector_dialog_info"))
         dlg_info.setObjectName("SubHeader")
         dlg_info.setWordWrap(True)
         dv.addWidget(dlg_info)
@@ -2703,10 +2689,7 @@ class AnnotateMixin:
             row_h.addWidget(cb, 1)
             style_btn = QPushButton("🎨")
             style_btn.setFixedWidth(30)
-            style_btn.setToolTip(
-                "Customize this object's marker style, colors, and label "
-                "lines — independent of the Annotation style panel's "
-                "defaults.")
+            style_btn.setToolTip(self.tr("ann_style_btn_tooltip"))
             style_btn.clicked.connect(
                 lambda _checked=False, dd=d: open_style_editor(dd))
             row_h.addWidget(style_btn)
@@ -2718,8 +2701,8 @@ class AnnotateMixin:
         dv.addWidget(lw, 1)
 
         btn_row = QHBoxLayout()
-        select_all_btn = QPushButton("Select All")
-        deselect_all_btn = QPushButton("Deselect All (hide all)")
+        select_all_btn = QPushButton(self.tr("ann_select_all_btn"))
+        deselect_all_btn = QPushButton(self.tr("ann_deselect_all_hide_btn"))
         select_all_btn.clicked.connect(
             lambda: [cb.setChecked(True) for _, cb in row_checks])
         deselect_all_btn.clicked.connect(
@@ -2748,17 +2731,22 @@ class AnnotateMixin:
                 d.update(snap)
             apply_preview(original_drawn)
             self._last_annotated_canvas = original_canvas
-            self.status_label.setText("Select objects: canceled, no change.")
+            self.status_label.setText(
+                self.tr("ann_selector_canceled_status"))
             return
 
         kept = rebuild_kept()
         hidden_count = len(original_drawn) - len(kept)
-        msg = (f"Hid {hidden_count} object"
-              f"{'s' if hidden_count != 1 else ''} "
-              f"({len(kept)} shown). Use \"Save annotated image...\" "
-              "to export.")
-        self.status_label.setText(msg)
-        self.siril.log(f"Select objects: {msg}", LogColor.GREEN)
+        # UI status is translated; the siril.log line stays English-only
+        # per the established log-vs-UI convention.
+        ui_msg = self.tr("ann_selector_hid_status").format(
+            n=hidden_count, shown=len(kept))
+        self.status_label.setText(ui_msg)
+        log_msg = (f"Hid {hidden_count} object"
+                  f"{'s' if hidden_count != 1 else ''} "
+                  f"({len(kept)} shown). Use \"Save annotated image...\" "
+                  "to export.")
+        self.siril.log(f"Select objects: {log_msg}", LogColor.GREEN)
 
     def _save_annotation_details_json_now(self):
         """Writes the CURRENT in-memory object list (self._ann_drawn) to a
@@ -2772,9 +2760,8 @@ class AnnotateMixin:
         H = getattr(self, "_ann_img_h", None)
         if not drawn or not W or not H:
             QMessageBox.information(
-                self, "Nothing to save",
-                "Run the Annotate stage at least once first — there are "
-                "no labeled objects to save yet.")
+                self, self.tr("ann_nothing_to_save_title"),
+                self.tr("ann_nothing_to_save_body"))
             return
         last_out = getattr(self, "_ann_last_out_path", None)
         now = datetime.now().strftime("%Y-%m-%d_%H%M")
@@ -2782,18 +2769,18 @@ class AnnotateMixin:
             os.path.splitext(last_out)[0] + ".json" if last_out
             else os.path.join(self.cwd, f"annotated_{now}.json"))
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save annotation details", default_path,
+            self, self.tr("ann_save_json_dialog_title"), default_path,
             "JSON Files (*.json)")
         if not path:
             return
         try:
             self._write_annotation_details_json(
                 path, drawn, W, H, last_out or path)
-            self.status_label.setText(
-                f"Annotation details saved: {os.path.basename(path)}")
+            self.status_label.setText(self.tr("ann_details_saved_status")
+                                      .format(name=os.path.basename(path)))
             self.siril.log(f"Annotation details saved: {path}", LogColor.GREEN)
         except Exception as e:
-            QMessageBox.critical(self, "Save failed", str(e))
+            QMessageBox.critical(self, self.tr("ann_save_failed_title"), str(e))
 
     def on_save_annotated_image(self):
         """Export the last annotated (or plain, if the overlay is hidden)
@@ -2803,13 +2790,13 @@ class AnnotateMixin:
         canvas = getattr(self, "_last_annotated_canvas", None)
         if canvas is None:
             QMessageBox.information(
-                self, "No annotated image",
-                "Run the Annotate stage at least once first.")
+                self, self.tr("ann_no_image_title"),
+                self.tr("ann_no_image_body"))
             return
         now = datetime.now().strftime("%Y-%m-%d_%H%M")
         default_path = os.path.join(self.cwd, f"annotated_{now}.jpg")
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save annotated image", default_path,
+            self, self.tr("ann_save_image_dialog_title"), default_path,
             "JPEG (*.jpg *.jpeg);;PNG (*.png)")
         if not path:
             return
@@ -2820,10 +2807,11 @@ class AnnotateMixin:
             elif ext == ".png":
                 cv2.imwrite(path, canvas, [cv2.IMWRITE_PNG_COMPRESSION, 3])
             else:
-                raise RuntimeError(
-                    f"Unsupported format '{ext or '(none)'}' — choose .jpg or .png.")
-            self.status_label.setText(f"Annotated image saved: {os.path.basename(path)}")
+                raise RuntimeError(self.tr("ann_error_unsupported_format")
+                                   .format(ext=ext or '(none)'))
+            self.status_label.setText(self.tr("ann_image_saved_status")
+                                      .format(name=os.path.basename(path)))
             self.siril.log(f"Annotated image saved: {path}", LogColor.GREEN)
         except Exception as e:
-            QMessageBox.critical(self, "Save failed", str(e))
+            QMessageBox.critical(self, self.tr("ann_save_failed_title"), str(e))
 

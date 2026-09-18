@@ -18,36 +18,83 @@ from s30pro_pipeline.constants import IDX_WM, WATERMARK_POSITIONS
 from s30pro_pipeline.image_utils import to_hwc_float
 
 
+# Canonical (English) field key -> i18n key for its checkbox label —
+# also doubles as the label used in _WM_LABEL_MAP below for the field
+# names *baked into the image* (see that constant's own comment for
+# why those stay English-only regardless of self.lang).
+_WM_FIELD_DEFS = [
+    # (field key, i18n key, checked by default)
+    ("object", "wm_field_object", True),
+    ("date", "wm_field_date", True),
+    ("telescope", "wm_field_telescope", True),
+    ("integration", "wm_field_integration", False),
+    ("fov", "wm_field_fov", False),
+    ("size", "wm_field_size", False),
+    ("bortle", "wm_field_bortle", False),
+]
+
+# Canonical (English) position value -> i18n key for its combo entry.
+# The combo's *value* (read via currentData(), never currentText())
+# always stays one of WATERMARK_POSITIONS' own English strings — both
+# because settings JSON round-trips that exact string (see
+# _collect_settings/_apply_settings) and because _render_watermark
+# matches against it with plain "Right"/"Left"/"Top" substring checks;
+# only the displayed label is translated.
+_WM_POSITION_KEYS = {
+    "Bottom-Right": "wm_pos_bottom_right", "Bottom-Left": "wm_pos_bottom_left",
+    "Bottom-Center": "wm_pos_bottom_center", "Top-Right": "wm_pos_top_right",
+    "Top-Left": "wm_pos_top_left", "Top-Center": "wm_pos_top_center",
+}
+
+# Same pattern for the integration-time unit combo — currentData() is
+# always "Minutes"/"Hours"/"Seconds" (matched by
+# _gather_watermark_fields and saved in settings JSON); only the shown
+# text is translated.
+_WM_UNIT_KEYS = [
+    ("Minutes", "wm_unit_minutes"),
+    ("Hours", "wm_unit_hours"),
+    ("Seconds", "wm_unit_seconds"),
+]
+
+# Field labels baked directly into the image's pixels by cv2.putText
+# (see _render_watermark) — these can NOT be translated to Chinese:
+# OpenCV's built-in Hershey fonts have no CJK glyphs at all, so
+# anything beyond Latin/basic punctuation would render as empty boxes.
+# Properly supporting CJK watermark text would need a real font-
+# rendering pipeline (e.g. compositing with PIL/Pillow and a CJK TTF)
+# — out of scope for this UI-only i18n pass. The *panel* around this
+# (checkboxes, tooltips) is still fully bilingual; only the pixels
+# baked into the photo itself stay English.
+_WM_LABEL_MAP = {
+    "object": "Object", "date": "Date", "integration": "Integration",
+    "telescope": "Telescope", "fov": "FOV", "size": "Image Size",
+    "bortle": "Bortle",
+}
+
+
 class WatermarkMixin:
     def _build_stage_watermark(self):
+        # Title stays the literal "Watermark" for now, not self.tr(...):
+        # the pane header AND the sidebar rail both draw stage titles
+        # from the one shared STAGES list in constants.py (see
+        # ui_shell.py's StageRail/RAIL_LABELS), so translating just this
+        # stage's title here would leave it out of sync with the rail
+        # entry until every stage's title is handled together — that's
+        # Phase 7 (main window chrome) in the i18n rollout plan.
         box, v = self._stage_box(13, "Watermark", enabled_check=False)
         self.stage_wm_box = box
 
-        info = QLabel("Draws a semi-transparent info block onto the image "
-                      "using the fields checked below (same data as the "
-                      "info bar above, without icons), plus an optional "
-                      "free-text Author credit line. Saves the block into "
-                      "the working image — use Undo to remove it.")
-        info.setObjectName("SubHeader")
-        info.setWordWrap(True)
-        v.addWidget(info)
+        self.wm_info_label = QLabel(self.tr("wm_info"))
+        self.wm_info_label.setObjectName("SubHeader")
+        self.wm_info_label.setWordWrap(True)
+        v.addWidget(self.wm_info_label)
 
         self.wm_field_checkboxes = {}
         fields_row = QGridLayout()
         fields_row.setHorizontalSpacing(10)
         fields_row.setVerticalSpacing(6)
-        # (field key, checkbox label, checked by default)
-        field_defs = [
-            ("object", "Object name", True),
-            ("date", "Date", True),
-            ("telescope", "Telescope", True),
-            ("integration", "Integration time", False),
-            ("fov", "FOV", False),
-            ("size", "Image size", False),
-            ("bortle", "Bortle estimate", False),
-        ]
-        for i, (key, label, default_on) in enumerate(field_defs):
-            cb = QCheckBox(label)
+        for i, (key, i18n_key, default_on) in enumerate(_WM_FIELD_DEFS):
+            cb = QCheckBox(self.tr(i18n_key))
             cb.setChecked(default_on)
             self.wm_field_checkboxes[key] = cb
             fields_row.addWidget(cb, i // 2, i % 2)
@@ -55,55 +102,49 @@ class WatermarkMixin:
 
         integration_unit_row = QHBoxLayout()
         integration_unit_row.setSpacing(10)
-        integration_unit_row.addWidget(QLabel("Integration time unit:"))
+        self.wm_integration_unit_label = QLabel(
+            self.tr("wm_integration_unit_label"))
+        integration_unit_row.addWidget(self.wm_integration_unit_label)
         self.wm_integration_unit_combo = QComboBox()
-        self.wm_integration_unit_combo.addItems(["Minutes", "Hours", "Seconds"])
+        for value, i18n_key in _WM_UNIT_KEYS:
+            self.wm_integration_unit_combo.addItem(self.tr(i18n_key), value)
         self.wm_integration_unit_combo.setToolTip(
-            "Unit used to display the Integration time field above.\n"
-            "Minutes is the default (e.g. \"180 min\"); switch to Hours for\n"
-            "very long sessions or Seconds for short ones. The sub "
-            "count × exposure detail (e.g. \"360×30s\") is always shown "
-            "alongside it when available.")
+            self.tr("wm_integration_unit_tooltip"))
         integration_unit_row.addWidget(self.wm_integration_unit_combo, 1)
         v.addLayout(integration_unit_row)
 
         author_row = QHBoxLayout()
         author_row.setSpacing(10)
-        self.wm_author_checkbox = QCheckBox("Author")
-        self.wm_author_checkbox.setToolTip(
-            "Adds a free-text credit line (typically your name or handle) "
-            "to the watermark block — this isn't read from the image's "
-            "metadata like the fields above, you type it yourself.")
+        self.wm_author_checkbox = QCheckBox(self.tr("wm_author"))
+        self.wm_author_checkbox.setToolTip(self.tr("wm_author_tooltip"))
         author_row.addWidget(self.wm_author_checkbox)
         self.wm_author_edit = QLineEdit()
-        self.wm_author_edit.setPlaceholderText("Your name...")
+        self.wm_author_edit.setPlaceholderText(
+            self.tr("wm_author_placeholder"))
         author_row.addWidget(self.wm_author_edit, 1)
         v.addLayout(author_row)
 
         opts_row = QHBoxLayout()
         opts_row.setSpacing(10)
-        opts_row.addWidget(QLabel("Position:"))
+        self.wm_position_label = QLabel(self.tr("wm_position_label"))
+        opts_row.addWidget(self.wm_position_label)
         self.wm_position_combo = QComboBox()
-        self.wm_position_combo.addItems(WATERMARK_POSITIONS)
+        for value in WATERMARK_POSITIONS:
+            self.wm_position_combo.addItem(
+                self.tr(_WM_POSITION_KEYS[value]), value)
         opts_row.addWidget(self.wm_position_combo, 1)
-        opts_row.addWidget(QLabel("Opacity:"))
+        self.wm_opacity_label = QLabel(self.tr("wm_opacity_label"))
+        opts_row.addWidget(self.wm_opacity_label)
         self.wm_alpha_spin = QSpinBox()
         self.wm_alpha_spin.setRange(0, 100)
         self.wm_alpha_spin.setValue(55)
         self.wm_alpha_spin.setSuffix("%")
-        self.wm_alpha_spin.setToolTip(
-            "Opacity of the watermark's background block — 0% is fully "
-            "see-through, 100% is a solid block.")
+        self.wm_alpha_spin.setToolTip(self.tr("wm_opacity_tooltip"))
         opts_row.addWidget(self.wm_alpha_spin)
         v.addLayout(opts_row)
 
-        self.wm_two_col_checkbox = QCheckBox("Two-column layout")
-        self.wm_two_col_checkbox.setToolTip(
-            "Lays the checked fields out in two side-by-side columns "
-            "instead of one long vertical list — makes the block wider "
-            "but noticeably shorter, useful when several fields are "
-            "checked and you don't want the watermark to dominate the "
-            "image's height.")
+        self.wm_two_col_checkbox = QCheckBox(self.tr("wm_two_col"))
+        self.wm_two_col_checkbox.setToolTip(self.tr("wm_two_col_tooltip"))
         v.addWidget(self.wm_two_col_checkbox)
 
         row, self.stage_wm_run = self._run_row(
@@ -111,23 +152,62 @@ class WatermarkMixin:
         v.addLayout(row)
 
         save_row = QHBoxLayout()
-        self.wm_save_btn = QPushButton("💾  Save image...")
-        self.wm_save_btn.setToolTip(
-            "Export the last watermarked result as JPEG or PNG, wherever "
-            "you choose.")
+        self.wm_save_btn = QPushButton(self.tr("wm_save_btn"))
+        self.wm_save_btn.setToolTip(self.tr("wm_save_tooltip"))
         self.wm_save_btn.clicked.connect(self.on_save_watermarked_image)
         save_row.addWidget(self.wm_save_btn)
-        self.wm_remove_all_btn = QPushButton("🗑  Remove all")
-        self.wm_remove_all_btn.setToolTip(
-            "Restores the image to how it looked before the very first "
-            "Watermark run in this session — undoes every watermark "
-            "you've applied so far, not just the last one (the Undo "
-            "button above only reverts the most recent run).")
+        self.wm_remove_all_btn = QPushButton(self.tr("wm_remove_all_btn"))
+        self.wm_remove_all_btn.setToolTip(self.tr("wm_remove_all_tooltip"))
         self.wm_remove_all_btn.clicked.connect(self._remove_all_watermarks)
         save_row.addWidget(self.wm_remove_all_btn)
         save_row.addStretch()
         v.addLayout(save_row)
         return box
+
+    def retranslate_ui_watermark(self):
+        """Re-applies every Watermark widget's text/tooltip to the
+        current self.lang — see retranslate_ui's docstring for when
+        this runs. Combo boxes are rebuilt in place (clear + repopulate
+        with translated labels) rather than using setItemText, since
+        that's the simplest way to keep each item's underlying
+        currentData() value untouched while its displayed text
+        changes; current selection is restored by that same data value
+        so mid-edit choices survive a language toggle."""
+        self.wm_info_label.setText(self.tr("wm_info"))
+        for key, i18n_key, _default_on in _WM_FIELD_DEFS:
+            self.wm_field_checkboxes[key].setText(self.tr(i18n_key))
+        self.wm_integration_unit_label.setText(
+            self.tr("wm_integration_unit_label"))
+        self.wm_integration_unit_combo.setToolTip(
+            self.tr("wm_integration_unit_tooltip"))
+        cur_unit = self.wm_integration_unit_combo.currentData()
+        self.wm_integration_unit_combo.clear()
+        for value, i18n_key in _WM_UNIT_KEYS:
+            self.wm_integration_unit_combo.addItem(self.tr(i18n_key), value)
+        idx = self.wm_integration_unit_combo.findData(cur_unit)
+        if idx >= 0:
+            self.wm_integration_unit_combo.setCurrentIndex(idx)
+        self.wm_author_checkbox.setText(self.tr("wm_author"))
+        self.wm_author_checkbox.setToolTip(self.tr("wm_author_tooltip"))
+        self.wm_author_edit.setPlaceholderText(
+            self.tr("wm_author_placeholder"))
+        self.wm_position_label.setText(self.tr("wm_position_label"))
+        cur_pos = self.wm_position_combo.currentData()
+        self.wm_position_combo.clear()
+        for value in WATERMARK_POSITIONS:
+            self.wm_position_combo.addItem(
+                self.tr(_WM_POSITION_KEYS[value]), value)
+        idx = self.wm_position_combo.findData(cur_pos)
+        if idx >= 0:
+            self.wm_position_combo.setCurrentIndex(idx)
+        self.wm_opacity_label.setText(self.tr("wm_opacity_label"))
+        self.wm_alpha_spin.setToolTip(self.tr("wm_opacity_tooltip"))
+        self.wm_two_col_checkbox.setText(self.tr("wm_two_col"))
+        self.wm_two_col_checkbox.setToolTip(self.tr("wm_two_col_tooltip"))
+        self.wm_save_btn.setText(self.tr("wm_save_btn"))
+        self.wm_save_btn.setToolTip(self.tr("wm_save_tooltip"))
+        self.wm_remove_all_btn.setText(self.tr("wm_remove_all_btn"))
+        self.wm_remove_all_btn.setToolTip(self.tr("wm_remove_all_tooltip"))
 
     @staticmethod
     def _clean_telescope_name(raw):
@@ -169,7 +249,11 @@ class WatermarkMixin:
                 live = cnt * exp
             if live > 0:
                 unit = getattr(self, "wm_integration_unit_combo", None)
-                unit_text = unit.currentText() if unit else "Minutes"
+                # currentData(), not currentText() — see the matching
+                # comment in _build_stage_watermark: the combo's shown
+                # label is translated, but this comparison needs the
+                # canonical English value.
+                unit_text = unit.currentData() if unit else "Minutes"
                 if unit_text == "Hours":
                     txt = f"{live / 3600.0:.1f} h"
                 elif unit_text == "Seconds":
@@ -318,7 +402,7 @@ class WatermarkMixin:
         return canvas
 
     def _exec_stage_watermark(self, progress):
-        progress("Watermark: fetching image...", 0.1)
+        progress(self.tr("wm_progress_fetching"), 0.1)
         before = self._get_current_image()
         # Remembered once per "clean" streak so "Remove all watermarks" can
         # undo every watermark applied so far, not just the last run — the
@@ -327,29 +411,26 @@ class WatermarkMixin:
             self._wm_baseline = before.copy()
         hwc = to_hwc_float(before)
 
-        progress("Watermark: gathering info fields...", 0.3)
+        progress(self.tr("wm_progress_gathering"), 0.3)
         available = self._gather_watermark_fields()
-        label_map = {
-            "object": "Object", "date": "Date", "integration": "Integration",
-            "telescope": "Telescope", "fov": "FOV", "size": "Image Size",
-            "bortle": "Bortle",
-        }
-        selected = [(label_map.get(key, key.title()), available[key])
+        # _WM_LABEL_MAP (module-level, see its own comment) deliberately
+        # stays English — these are the labels baked into the image's
+        # pixels, which OpenCV's Hershey fonts can't render in Chinese.
+        selected = [(_WM_LABEL_MAP.get(key, key.title()), available[key])
                    for key, cb in self.wm_field_checkboxes.items()
                    if cb.isChecked() and key in available]
         author = self.wm_author_edit.text().strip()
         if self.wm_author_checkbox.isChecked() and author:
             selected.append(("Author", author))
         if not selected:
-            raise RuntimeError(
-                "Nothing to watermark: no metadata fields are both "
-                "checked and available in this image (check at least one, "
-                "or make sure the image has the relevant header info, e.g. "
-                "OBJECT, DATE-OBS, TELESCOP), and the Author field is "
-                "either unchecked or empty.")
+            raise RuntimeError(self.tr("wm_no_fields_error"))
 
-        progress("Watermark: drawing...", 0.6)
-        position = self.wm_position_combo.currentText()
+        progress(self.tr("wm_progress_drawing"), 0.6)
+        # currentData(), not currentText() — see _build_stage_watermark's
+        # comment: the combo shows a translated label but its value is
+        # always the canonical English position string _render_watermark
+        # matches against.
+        position = self.wm_position_combo.currentData()
         alpha = self.wm_alpha_spin.value() / 100.0
         two_column = self.wm_two_col_checkbox.isChecked()
         # `canvas` comes back in display orientation (see _render_watermark's
@@ -367,7 +448,7 @@ class WatermarkMixin:
         after = np.transpose(watermarked_hwc, (2, 0, 1)).astype(np.float32)
         self._set_current_image(after, "AstroPipeline: watermark")
         self._finish_stage(
-            IDX_WM, before, after, "Watermark: done.",
+            IDX_WM, before, after, self.tr("wm_progress_done"),
             f"Watermark applied ({len(selected)} field(s), {position})",
             before_linear=False, after_linear=False, progress=progress)
 
@@ -378,13 +459,13 @@ class WatermarkMixin:
         canvas = getattr(self, "_last_watermarked_canvas", None)
         if canvas is None:
             QMessageBox.information(
-                self, "No watermarked image",
-                "Run the Watermark stage at least once first.")
+                self, self.tr("wm_no_image_title"),
+                self.tr("wm_no_image_body"))
             return
         now = datetime.now().strftime("%Y-%m-%d_%H%M")
         default_path = os.path.join(self.cwd, f"watermarked_{now}.jpg")
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save watermarked image", default_path,
+            self, self.tr("wm_save_dialog_title"), default_path,
             "JPEG (*.jpg *.jpeg);;PNG (*.png)")
         if not path:
             return
@@ -395,13 +476,13 @@ class WatermarkMixin:
             elif ext == ".png":
                 cv2.imwrite(path, canvas, [cv2.IMWRITE_PNG_COMPRESSION, 3])
             else:
-                raise RuntimeError(
-                    f"Unsupported format '{ext or '(none)'}' — choose .jpg or .png.")
-            self.status_label.setText(
-                f"Watermarked image saved: {os.path.basename(path)}")
+                raise RuntimeError(self.tr("wm_unsupported_format").format(
+                    ext=ext or "(none)"))
+            self.status_label.setText(self.tr("wm_saved_status").format(
+                name=os.path.basename(path)))
             self.siril.log(f"Watermarked image saved: {path}", LogColor.GREEN)
         except Exception as e:
-            QMessageBox.critical(self, "Save failed", str(e))
+            QMessageBox.critical(self, self.tr("wm_save_failed_title"), str(e))
 
     def _remove_all_watermarks(self):
         """Restore the image to how it looked before the very first
@@ -411,25 +492,23 @@ class WatermarkMixin:
         baseline = getattr(self, "_wm_baseline", None)
         if baseline is None:
             QMessageBox.information(
-                self, "No watermark to remove",
-                "Run the Watermark stage at least once first.")
+                self, self.tr("wm_no_watermark_title"),
+                self.tr("wm_no_image_body"))
             return
         reply = QMessageBox.question(
-            self, "Remove all watermarks",
-            "Restore the image to how it looked before any watermark was "
-            "applied? This undoes every Watermark run so far, not just "
-            "the last one.",
+            self, self.tr("wm_remove_confirm_title"),
+            self.tr("wm_remove_confirm_body"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply != QMessageBox.StandardButton.Yes:
             return
 
         def job(progress):
-            progress("Removing all watermarks...", 0.3)
+            progress(self.tr("wm_progress_removing"), 0.3)
             self._set_current_image(
                 baseline, "AstroPipeline: remove all watermarks")
             self._store_snapshot(IDX_WM, baseline, baseline,
                                  before_linear=False, after_linear=False)
-            progress("All watermarks removed.", 1.0)
+            progress(self.tr("wm_progress_removed"), 1.0)
             self.siril.log(
                 "Watermark: all watermarks removed (restored pre-watermark "
                 "image).", LogColor.GREEN)

@@ -504,6 +504,28 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     few releases so the file stays skimmable. The full, detailed history
     lives in <code>CHANGELOG.md</code> alongside the script.</p>
     <table class="fields"><tr><th>Version</th><th>Highlights</th></tr>
+      <tr><td>2.11.0</td><td><b>Added a full bilingual (English /
+        Traditional Chinese) interface to the plugin's own desktop
+        window</b> — matching this documentation site's long-standing
+        EN/繁體中文 toggle. Every stage's labels, tooltips, buttons,
+        checkboxes, dropdowns, dialogs, and progress/status messages
+        now switch language instantly via a new EN/中文 toggle in the
+        top-right of the session ribbon, alongside the window chrome
+        itself: the stage rail's names and group headers
+        (Stack/Clean/Stretch/Finish), each stage's pane-header title
+        and one-line description, the preview toolbar's stage stepper,
+        and Undo's progress text. The chosen language is saved and
+        restored with the rest of a session's settings (Export/Import
+        settings JSON). Siril's own console log stays English-only
+        throughout, by design — it's a shared external log Siril
+        itself writes to, not this plugin's own UI — and a handful of
+        proper-noun dropdowns (sensor profiles, AI model names,
+        palette/constellation-color preset names, telescope/filter
+        names, Annotate's marker-style and label-position combos) and
+        anything baked directly into exported pixels (Annotate's
+        on-image labels, Watermark's rendered text) also stay as
+        typed/drawn, since they're either literal catalogue/dict keys
+        or your own session data rather than interface text.</td></tr>
       <tr><td>2.10.0</td><td><b>Added a "Bake into image (for
         Watermark &amp; later stages)" checkbox to Annotate.</b> By
         design, Annotate never touched the actual working image
@@ -1523,6 +1545,7 @@ xattr -dr com.apple.quarantine .         # 移除下載隔離標記</code></pre>
     <code>CHANGELOG.md</code>（英文）。</p>
     <p>以下摘要（英文）列出近期重要版本的重點：</p>
     <table class="fields"><tr><th>版本</th><th>重點</th></tr>
+      <tr><td>2.11.0</td><td><b>為外掛自己的桌面視窗新增完整雙語（英文／繁體中文）介面</b>——與本說明文件行之有年的 EN／繁體中文切換一致。每個步驟的標籤、提示文字、按鈕、核取方塊、下拉選單、對話框與進度／狀態訊息，現在都能透過工作階段狀態列右上角全新的 EN／中文切換鈕即時切換語言，視窗框架本身也一併涵蓋：步驟導覽列的名稱與分組標題（疊圖／清理／拉伸／收尾）、每個步驟面板標題與一行說明、預覽工具列的步驟切換器，以及「復原」的進度文字。所選語言會與其他工作階段設定一併儲存與還原（匯出／匯入設定 JSON）。Siril 自己的主控台日誌則一律維持英文——這是刻意的設計，因為那是 Siril 自己寫入的共用外部日誌，並非這個外掛自己的介面；少數屬於專有名詞的下拉選單（感光元件設定檔、AI 模型名稱、色盤／星座顏色預設集名稱、望遠鏡／濾鏡名稱、「標註」的標記樣式與標籤位置選單）以及直接烘焙進匯出像素的文字（「標註」的畫面文字標籤、「浮水印」的印製文字）也同樣維持原樣，因為它們不是目錄／字典鍵值就是你自己的工作階段資料，而非介面文字。</td></tr>
       <tr><td>2.10.0</td><td><b>「標註」步驟新增「烘焙進影像（供浮水印及後續步驟使用）」勾選框。</b>設計上，「標註」步驟原本從不會真的動到交給 Siril 的工作用影像本身——標記／文字只會出現在匯出的 JPG／PNG，以及這個步驟自己的前後比較預覽裡，讓「全部移除」與重新執行這個步驟永遠保持不會破壞原始資料。副作用是：在「標註」之後執行的任何步驟（最常見的就是「浮水印」，它單純讀取 Siril 目前載入的影像）從來都看不到標註內容，因為真正被推回 Siril 工作緩衝區的，一直都只是沒有標記的原始影像。這個新勾選框（預設關閉，維持原本行為）勾選後，會把目前完整算好的標註畫面——標記、文字、星座連線，所有已畫出的內容——直接烘焙進 Siril 的工作用影像，讓「浮水印」（或之後執行的任何步驟）也能看到標註內容。不論是否勾選，Undo 都仍然能還原回標註之前的影像，因為這是另外獨立追蹤的。</td></tr>
       <tr><td>2.9.0</td><td><b>修正堆疊後「標註」步驟把天體標示在錯誤位置（且是固定方向的偏移），即使 Crop 裁切都還沒動過影像也一樣。</b>使用者直接在 Siril 裡做的實測釐清了根本原因：讀取剛疊完的 <code>result.fit</code> 並標註，位置就是錯的；但先手動對這個檔案重新做一次板解算之後，位置就正確了——也就是說，一份主影像剛完成對齊／疊圖時所帶的 WCS 座標，本身就是過時或不正確的，要等重新解算過才會正確，這與「標註」步驟自己的程式邏輯完全無關。前置處理先前只有在「SPCC 色彩校正」勾選框開啟時，才會順帶執行堆疊後的板解算——因此只要 SPCC 沒勾選，就完全不會有任何步驟重新解算剛疊好的結果，導致後續每個步驟（Crop、標註）都繼承了這個過時的 WCS。現在板解算已獨立成自己的一個步驟，不論 SPCC 勾選框狀態為何，都會在疊圖／合併完成後立刻執行——單次流程與批次疊圖的最終合併結果都一樣。SPCC 本身的色彩校正仍然只在勾選時才執行，但現在一定會排在板解算之後才進行。</td></tr>
       <tr><td>2.8.1</td><td><b>修正後續步驟（例如緊接在「最終潤飾」之後的「標註」）的預覽畫面出現「過度明亮」／重複拉伸的問題，即使點了「⇩ 使用 Siril 目前影像」也一樣。</b>自動預覽讀取（針對這個工作階段session中尚未執行過的步驟）以及「使用 Siril 目前影像」按鈕，兩者都會抓取 Siril 目前載入的影像，並且在「顯示時自動拉伸」勾選開啟時，對它套用一次僅用於畫面顯示的自動拉伸，好讓線性、尚未處理過的資料也能在預覽時看起來正常。這個自動拉伸函式原本就有自己的安全判斷，理應跳過「已經拉伸過」的影像（畫面中位數亮度高於某個門檻），但典型深空影像「整張畫面」的中位數，即使影像本身已經處理得很好，仍然會因為大部分畫面是暗夜空背景而偏低——導致這個判斷無法可靠辨識出「這張影像其實已經處理過了」，於是預覽就在「最終潤飾」已經處理好的結果上，又疊加了一次拉伸。Siril 裡實際的 FITS 資料自始至終都沒有問題——出錯的只有這個特定的預覽畫面。現在新增了一小段狀態記錄，每當某個步驟把結果推送進 Siril 時就會同步更新，記錄這個結果到底還是線性資料、還是已經是可直接顯示的成品；預覽相關的程式碼現在會先查詢這個記錄，而不是只單靠亮度判斷法。</td></tr>

@@ -21,17 +21,29 @@ from s30pro_pipeline.graxpert_helpers import (
 from s30pro_pipeline.image_utils import to_hwc_float, display_autostretch, make_qimage
 
 
+_BGE_METHOD_KEYS = ["bge_method_graxpert", "bge_method_rbf", "bge_method_poly"]
+_BGE_CORRECTION_KEYS = [
+    ("subtraction", "bge_correction_subtraction"),
+    ("division", "bge_correction_division"),
+]
+
+
 class BgeMixin:
     def _build_stage2(self):
+        # Title stays literal English for now — stage titles move
+        # together in Phase 7 (see stage_watermark.py's comment).
         box, v = self._stage_box(5, "Remove Background")
         self.stage2_box = box
 
         m = QHBoxLayout()
         m.setSpacing(10)
-        m.addWidget(QLabel("Method:"))
+        self.bge_method_row_label = QLabel(self.tr("bge_method_label"))
+        m.addWidget(self.bge_method_row_label)
         self.bge_method_combo = QComboBox()
+        # Plain addItems: read via currentIndex() everywhere, never
+        # currentText(), so translated labels are safe here.
         self.bge_method_combo.addItems(
-            ["GraXpert AI", "Siril subsky — RBF", "Siril subsky — Polynomial"])
+            [self.tr(k) for k in _BGE_METHOD_KEYS])
         m.addWidget(self.bge_method_combo, 1)
         v.addLayout(m)
 
@@ -47,22 +59,29 @@ class BgeMixin:
         g = QGridLayout()
         g.setHorizontalSpacing(10)
         g.setColumnStretch(1, 1)
-        g.addWidget(QLabel("Model:"), 0, 0)
+        self.bge_model_row_label = QLabel(self.tr("bge_model_label"))
+        g.addWidget(self.bge_model_row_label, 0, 0)
         self.bge_model_combo = QComboBox()
         self.bge_models = get_available_local_models("bge-ai-models")
-        self.bge_model_combo.addItems(sorted(self.bge_models.keys())
-                                      or ["No models found"])
+        self.bge_model_combo.addItems(
+            sorted(self.bge_models.keys())
+            or [self.tr("bge_no_models_found")])
         if self.bge_models:
             self.bge_model_combo.setCurrentIndex(self.bge_model_combo.count() - 1)
         g.addWidget(self.bge_model_combo, 0, 1)
-        g.addWidget(QLabel("Correction:"), 1, 0)
+        self.bge_correction_row_label = QLabel(self.tr("bge_correction_label"))
+        g.addWidget(self.bge_correction_row_label, 1, 0)
         self.bge_correction_combo = QComboBox()
-        self.bge_correction_combo.addItems(["subtraction", "division"])
+        # currentData(), not currentText() — see S30Pro_Pipeline.py's
+        # settings-JSON comment and _exec_stage2's own comment below.
+        for value, i18n_key in _BGE_CORRECTION_KEYS:
+            self.bge_correction_combo.addItem(self.tr(i18n_key), value)
         g.addWidget(self.bge_correction_combo, 1, 1)
         gx_v.addLayout(g)
 
         sm = QHBoxLayout()
-        sm.addWidget(QLabel("Smoothing:"))
+        self.bge_smoothing_row_label = QLabel(self.tr("bge_smoothing_label"))
+        sm.addWidget(self.bge_smoothing_row_label)
         self.bge_smoothing_slider = QSlider(Qt.Orientation.Horizontal)
         self.bge_smoothing_slider.setRange(0, 100)
         self.bge_smoothing_slider.setValue(50)
@@ -83,45 +102,42 @@ class BgeMixin:
         sg.setHorizontalSpacing(10)
         sg.setColumnStretch(1, 1)
         sg.setColumnStretch(3, 1)
-        sg.addWidget(QLabel("Samples:"), 0, 0)
+        self.bge_samples_row_label = QLabel(self.tr("bge_samples_label"))
+        sg.addWidget(self.bge_samples_row_label, 0, 0)
         self.subsky_samples = QSpinBox()
         self.subsky_samples.setRange(4, 100)
         self.subsky_samples.setValue(20)
         sg.addWidget(self.subsky_samples, 0, 1)
-        sg.addWidget(QLabel("Tolerance:"), 0, 2)
+        self.bge_tolerance_row_label = QLabel(self.tr("bge_tolerance_label"))
+        sg.addWidget(self.bge_tolerance_row_label, 0, 2)
         self.subsky_tolerance = QDoubleSpinBox()
         self.subsky_tolerance.setRange(0.1, 10.0)
         self.subsky_tolerance.setSingleStep(0.1)
         self.subsky_tolerance.setValue(2.0)
         sg.addWidget(self.subsky_tolerance, 0, 3)
-        sg.addWidget(QLabel("RBF smooth:"), 1, 0)
+        self.bge_rbf_smooth_row_label = QLabel(self.tr("bge_rbf_smooth_label"))
+        sg.addWidget(self.bge_rbf_smooth_row_label, 1, 0)
         self.subsky_smooth = QDoubleSpinBox()
         self.subsky_smooth.setRange(0.0, 1.0)
         self.subsky_smooth.setSingleStep(0.05)
         self.subsky_smooth.setValue(0.5)
         sg.addWidget(self.subsky_smooth, 1, 1)
-        sg.addWidget(QLabel("Poly degree:"), 1, 2)
+        self.bge_poly_degree_row_label = QLabel(self.tr("bge_poly_degree_label"))
+        sg.addWidget(self.bge_poly_degree_row_label, 1, 2)
         self.subsky_degree = QSpinBox()
         self.subsky_degree.setRange(1, 4)
         self.subsky_degree.setValue(2)
         sg.addWidget(self.subsky_degree, 1, 3)
         ss_v.addLayout(sg)
-        ss_info = QLabel("Siril's built-in background extraction — fast, no AI "
-                         "model needed. RBF handles complex gradients; "
-                         "polynomial suits simple linear gradients.")
-        ss_info.setObjectName("SubHeader")
-        ss_info.setWordWrap(True)
-        ss_v.addWidget(ss_info)
-        self.subsky_boxes_btn = QPushButton("🖼  Edit sample boxes...")
-        self.subsky_boxes_btn.setToolTip(
-            "See the background sample boxes over the current image, "
-            "click one to toggle it off/on, or click empty space to add "
-            "a new one. The kept boxes are used instead of Siril's own "
-            "automatic placement the next time this stage runs.")
+        self.bge_subsky_info_label = QLabel(self.tr("bge_subsky_info"))
+        self.bge_subsky_info_label.setObjectName("SubHeader")
+        self.bge_subsky_info_label.setWordWrap(True)
+        ss_v.addWidget(self.bge_subsky_info_label)
+        self.subsky_boxes_btn = QPushButton(self.tr("bge_boxes_btn"))
+        self.subsky_boxes_btn.setToolTip(self.tr("bge_boxes_tooltip"))
         self.subsky_boxes_btn.clicked.connect(self._open_subsky_box_editor)
         ss_v.addWidget(self.subsky_boxes_btn)
-        self.subsky_boxes_status = QLabel("Using Siril's automatic sample "
-                                          "placement (default).")
+        self.subsky_boxes_status = QLabel(self.tr("bge_boxes_status_default"))
         self.subsky_boxes_status.setObjectName("SubHeader")
         self.subsky_boxes_status.setWordWrap(True)
         ss_v.addWidget(self.subsky_boxes_status)
@@ -135,6 +151,42 @@ class BgeMixin:
             lambda: self._launch([self._exec_stage2]), undo_stage=IDX_BGE)
         v.addLayout(row)
         return box
+
+    def retranslate_ui_bge(self):
+        self.bge_method_row_label.setText(self.tr("bge_method_label"))
+        cur_method = self.bge_method_combo.currentIndex()
+        for i, key in enumerate(_BGE_METHOD_KEYS):
+            self.bge_method_combo.setItemText(i, self.tr(key))
+        self.bge_method_combo.setCurrentIndex(cur_method)
+        self.bge_model_row_label.setText(self.tr("bge_model_label"))
+        if not self.bge_models and self.bge_model_combo.count() == 1:
+            self.bge_model_combo.setItemText(0, self.tr("bge_no_models_found"))
+        self.bge_correction_row_label.setText(self.tr("bge_correction_label"))
+        cur_corr = self.bge_correction_combo.currentData()
+        self.bge_correction_combo.clear()
+        for value, i18n_key in _BGE_CORRECTION_KEYS:
+            self.bge_correction_combo.addItem(self.tr(i18n_key), value)
+        idx = self.bge_correction_combo.findData(cur_corr)
+        if idx >= 0:
+            self.bge_correction_combo.setCurrentIndex(idx)
+        self.bge_smoothing_row_label.setText(self.tr("bge_smoothing_label"))
+        self.bge_samples_row_label.setText(self.tr("bge_samples_label"))
+        self.bge_tolerance_row_label.setText(self.tr("bge_tolerance_label"))
+        self.bge_rbf_smooth_row_label.setText(self.tr("bge_rbf_smooth_label"))
+        self.bge_poly_degree_row_label.setText(self.tr("bge_poly_degree_label"))
+        self.bge_subsky_info_label.setText(self.tr("bge_subsky_info"))
+        self.subsky_boxes_btn.setText(self.tr("bge_boxes_btn"))
+        self.subsky_boxes_btn.setToolTip(self.tr("bge_boxes_tooltip"))
+        # subsky_boxes_status holds transient, state-dependent text — see
+        # _open_subsky_box_editor, which sets either the default text or
+        # a custom-box-count summary depending on self._subsky_boxes.
+        custom = getattr(self, "_subsky_boxes", None)
+        if custom:
+            self.subsky_boxes_status.setText(
+                self.tr("bge_boxes_status_custom").format(n=len(custom)))
+        else:
+            self.subsky_boxes_status.setText(
+                self.tr("bge_boxes_status_default"))
 
     @staticmethod
     def _generate_default_bg_boxes(img_w, img_h, n_per_side=5, size=25):
@@ -162,7 +214,7 @@ class BgeMixin:
         try:
             arr = self._get_current_image()
         except RuntimeError as e:
-            QMessageBox.warning(self, "No image", str(e))
+            QMessageBox.warning(self, self.tr("bge_no_image_title"), str(e))
             return
 
         hwc = to_hwc_float(arr)
@@ -171,7 +223,8 @@ class BgeMixin:
         qimg = make_qimage(stretched)
         img_w, img_h = qimg.width(), qimg.height()
         if img_w <= 0 or img_h <= 0:
-            QMessageBox.warning(self, "No image", "No image loaded in Siril.")
+            QMessageBox.warning(self, self.tr("bge_no_image_title"),
+                                self.tr("bge_no_image_loaded"))
             return
 
         max_dim = 800.0
@@ -183,13 +236,9 @@ class BgeMixin:
                 else self._generate_default_bg_boxes(img_w, img_h))
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("Preview & Edit Background Sample Boxes")
+        dlg.setWindowTitle(self.tr("bge_dialog_title"))
         dv = QVBoxLayout(dlg)
-        info = QLabel(
-            "Click a box to toggle it off (red) or back on (green). "
-            "Click empty space to add a new one there. The kept (green) "
-            "boxes are used instead of Siril's automatic placement the "
-            "next time this stage runs with a Siril subsky method.")
+        info = QLabel(self.tr("bge_dialog_info"))
         info.setWordWrap(True)
         dv.addWidget(info)
 
@@ -199,7 +248,7 @@ class BgeMixin:
         dv.addWidget(canvas)
 
         size_row = QHBoxLayout()
-        size_row.addWidget(QLabel("New box size (px):"))
+        size_row.addWidget(QLabel(self.tr("bge_new_box_size_label")))
         size_spin = QSpinBox()
         size_spin.setRange(8, 300)
         size_spin.setValue(25)
@@ -240,17 +289,17 @@ class BgeMixin:
         redraw()
 
         btn_row = QHBoxLayout()
-        regen_btn = QPushButton("Regenerate default grid")
+        regen_btn = QPushButton(self.tr("bge_regen_btn"))
 
         def do_regen():
             boxes.clear()
             boxes.extend(self._generate_default_bg_boxes(img_w, img_h))
             redraw()
         regen_btn.clicked.connect(do_regen)
-        select_all_btn = QPushButton("Select All")
+        select_all_btn = QPushButton(self.tr("bge_select_all_btn"))
         select_all_btn.clicked.connect(
             lambda: ([b.__setitem__(3, True) for b in boxes], redraw()))
-        deselect_all_btn = QPushButton("Deselect All")
+        deselect_all_btn = QPushButton(self.tr("bge_deselect_all_btn"))
         deselect_all_btn.clicked.connect(
             lambda: ([b.__setitem__(3, False) for b in boxes], redraw()))
         btn_row.addWidget(regen_btn)
@@ -272,42 +321,36 @@ class BgeMixin:
         kept = [(x, y, sz) for x, y, sz, k in boxes if k]
         if not kept:
             QMessageBox.warning(
-                self, "No boxes kept",
-                "Every sample box was deselected — reverting to Siril's "
-                "automatic placement instead of an empty sample set.")
+                self, self.tr("bge_no_boxes_title"), self.tr("bge_no_boxes_body"))
             self._subsky_boxes = None
             self.subsky_boxes_status.setText(
-                "Using Siril's automatic sample placement (default).")
+                self.tr("bge_boxes_status_default"))
             return
         self._subsky_boxes = kept
         self.subsky_boxes_status.setText(
-            f"{len(kept)} custom sample box(es) set — will be used "
-            "instead of Siril's automatic placement next time this "
-            "stage runs. Click above to edit again, or Regenerate/select "
-            "none to go back to automatic.")
+            self.tr("bge_boxes_status_custom").format(n=len(kept)))
         self.status_label.setText(
-            f"Remove background: {len(kept)} custom sample box(es) set.")
+            self.tr("bge_status_custom").format(n=len(kept)))
 
     def _exec_stage2(self, progress):
         method = self.bge_method_combo.currentIndex()
-        progress("Remove background: fetching image...", 0.02)
+        progress(self.tr("bge_progress_fetching"), 0.02)
         before = self._get_current_image()
 
         if method == 0:  # GraXpert AI
             model_name = self.bge_model_combo.currentText()
             model_path = self.bge_models.get(model_name)
             if not model_path:
-                raise RuntimeError(
-                    "No GraXpert background-extraction model found. Download one "
-                    "via GraXpert or the GraXpert-AI script's Model Manager — "
-                    "or switch the Method to Siril subsky.")
+                raise RuntimeError(self.tr("bge_no_model_error"))
             background = graxpert_extract_background(
                 before, model_path,
                 smoothing=self.bge_smoothing_slider.value() / 100.0,
                 progress=progress)
-            progress("Remove background: applying correction...", 0.9)
+            progress(self.tr("bge_progress_correcting"), 0.9)
+            # currentData(), not currentText() — see the settings-JSON
+            # comment in S30Pro_Pipeline.py.
             after = graxpert_apply_correction(
-                before, background, self.bge_correction_combo.currentText())
+                before, background, self.bge_correction_combo.currentData())
             self._set_current_image(after, "AstroPipeline: GraXpert BGE")
             label = "GraXpert AI"
         else:  # Siril subsky
@@ -335,7 +378,7 @@ class BgeMixin:
                 args.append(str(self.subsky_degree.value()))
             args.append(f"-samples={self.subsky_samples.value()}")
             args.append(f"-tolerance={self.subsky_tolerance.value():.1f}")
-            progress("Remove background: running Siril subsky...", 0.4)
+            progress(self.tr("bge_progress_subsky"), 0.4)
             self.siril.cmd(*args)
             after = self._get_current_image()
             label = "Siril subsky (RBF)" if method == 1 else \
@@ -344,6 +387,6 @@ class BgeMixin:
                 label += f", {len(custom_boxes)} custom sample boxes"
 
         self._finish_stage(IDX_BGE, before, after,
-                           "Remove background: done.",
+                           self.tr("bge_progress_done"),
                            f"Background extraction complete ({label})",
                            progress=progress)

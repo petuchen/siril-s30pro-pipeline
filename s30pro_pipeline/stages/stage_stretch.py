@@ -16,21 +16,33 @@ from s30pro_pipeline.constants import IDX_STR, SENSOR_PROFILES
 from s30pro_pipeline.veralux_stretch import VeraLuxCore, veralux_stretch
 
 
+_STRETCH_MODE_KEYS = [("Ready-to-Use", "str_mode_rtu"), ("Scientific", "str_mode_scientific")]
+
+
 class StretchMixin:
     def _build_stage4(self):
+        # Title stays literal English for now — stage titles move
+        # together in Phase 7 (see stage_watermark.py's comment).
         box, v = self._stage_box(9, "Stretch — VeraLux HyperMetric")
         self.stage4_box = box
 
         g = QGridLayout()
-        g.addWidget(QLabel("Sensor profile:"), 0, 0)
+        self.str_profile_row_label = QLabel(self.tr("str_profile_label"))
+        g.addWidget(self.str_profile_row_label, 0, 0)
         self.profile_combo = QComboBox()
+        # Not translated — see the module i18n.py comment: sensor
+        # profile names are manufacturer/model names, not prose.
         self.profile_combo.addItems(list(SENSOR_PROFILES.keys()))
         self.profile_combo.setCurrentText("ZWO Seestar S30")
         g.addWidget(self.profile_combo, 0, 1)
 
-        g.addWidget(QLabel("Mode:"), 1, 0)
+        self.str_mode_row_label = QLabel(self.tr("str_mode_label"))
+        g.addWidget(self.str_mode_row_label, 1, 0)
         self.stretch_mode_combo = QComboBox()
-        self.stretch_mode_combo.addItems(["Ready-to-Use", "Scientific"])
+        # currentData(), not currentText() — see the settings-JSON
+        # comment in S30Pro_Pipeline.py for why.
+        for value, i18n_key in _STRETCH_MODE_KEYS:
+            self.stretch_mode_combo.addItem(self.tr(i18n_key), value)
         g.addWidget(self.stretch_mode_combo, 1, 1)
         v.addLayout(g)
 
@@ -38,7 +50,8 @@ class StretchMixin:
         # row since it's the parameter you'll adjust most.
         d_row = QHBoxLayout()
         d_row.setSpacing(8)
-        d_row.addWidget(QLabel("Log D:"))
+        self.str_log_d_row_label = QLabel(self.tr("str_log_d_label"))
+        d_row.addWidget(self.str_log_d_row_label)
         self.log_d_slider = QSlider(Qt.Orientation.Horizontal)
         self.log_d_slider.setRange(0, 700)   # ×100 of 0.0–7.0
         self.log_d_slider.setValue(200)
@@ -55,7 +68,8 @@ class StretchMixin:
         # directly drives the auto Log D solver's result.
         bg_row = QHBoxLayout()
         bg_row.setSpacing(8)
-        bg_row.addWidget(QLabel("Target bg:"))
+        self.str_target_bg_row_label = QLabel(self.tr("str_target_bg_label"))
+        bg_row.addWidget(self.str_target_bg_row_label)
         self.target_bg_slider = QSlider(Qt.Orientation.Horizontal)
         self.target_bg_slider.setRange(5, 50)   # ×100 of 0.05–0.50
         self.target_bg_slider.setValue(20)
@@ -76,26 +90,30 @@ class StretchMixin:
         g2.setVerticalSpacing(8)
         g2.setColumnStretch(1, 1)
 
-        g2.addWidget(QLabel("Protect b:"), 0, 0)
+        self.str_protect_b_row_label = QLabel(self.tr("str_protect_b_label"))
+        g2.addWidget(self.str_protect_b_row_label, 0, 0)
         self.protect_b_spin = QDoubleSpinBox()
         self.protect_b_spin.setRange(0.1, 30.0)
         self.protect_b_spin.setSingleStep(0.5)
         self.protect_b_spin.setValue(6.0)
         g2.addWidget(self.protect_b_spin, 0, 1)
-        g2.addWidget(QLabel("Convergence:"), 1, 0)
+        self.str_convergence_row_label = QLabel(self.tr("str_convergence_label"))
+        g2.addWidget(self.str_convergence_row_label, 1, 0)
         self.convergence_spin = QDoubleSpinBox()
         self.convergence_spin.setRange(0.1, 10.0)
         self.convergence_spin.setSingleStep(0.1)
         self.convergence_spin.setValue(2.0)
         g2.addWidget(self.convergence_spin, 1, 1)
 
-        g2.addWidget(QLabel("Color grip:"), 2, 0)
+        self.str_color_grip_row_label = QLabel(self.tr("str_color_grip_label"))
+        g2.addWidget(self.str_color_grip_row_label, 2, 0)
         self.color_grip_spin = QDoubleSpinBox()
         self.color_grip_spin.setRange(0.0, 1.0)
         self.color_grip_spin.setSingleStep(0.05)
         self.color_grip_spin.setValue(1.0)
         g2.addWidget(self.color_grip_spin, 2, 1)
-        g2.addWidget(QLabel("Linear exp:"), 3, 0)
+        self.str_linear_exp_row_label = QLabel(self.tr("str_linear_exp_label"))
+        g2.addWidget(self.str_linear_exp_row_label, 3, 0)
         self.linear_exp_spin = QDoubleSpinBox()
         self.linear_exp_spin.setRange(0.0, 1.0)
         self.linear_exp_spin.setSingleStep(0.05)
@@ -105,12 +123,11 @@ class StretchMixin:
 
         opts = QHBoxLayout()
         opts.setSpacing(14)
-        self.auto_d_checkbox = QCheckBox("Auto Log D at run time")
+        self.auto_d_checkbox = QCheckBox(self.tr("str_auto_d"))
         self.auto_d_checkbox.setChecked(True)
-        self.auto_d_checkbox.setToolTip(
-            "Solve the optimal Log D automatically when the stage runs")
+        self.auto_d_checkbox.setToolTip(self.tr("str_auto_d_tooltip"))
         opts.addWidget(self.auto_d_checkbox)
-        self.adaptive_anchor_checkbox = QCheckBox("Adaptive anchor")
+        self.adaptive_anchor_checkbox = QCheckBox(self.tr("str_adaptive_anchor"))
         self.adaptive_anchor_checkbox.setChecked(True)
         opts.addWidget(self.adaptive_anchor_checkbox)
         opts.addStretch()
@@ -119,28 +136,45 @@ class StretchMixin:
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
         # VeraLux-style solver button: fills the Log D spinbox from the image
-        self.calc_d_btn = QPushButton("⚙  Auto Log D")
+        self.calc_d_btn = QPushButton(self.tr("str_calc_d_btn"))
         self.calc_d_btn.setObjectName("AutoButton")
-        self.calc_d_btn.setToolTip(
-            "VeraLux smart solver: analyses the current image and computes the\n"
-            "Log D that puts the sky background at the target level while\n"
-            "backing off if any color channel would clip (Floating Sky Check).\n"
-            "Fills the Log D box and switches Auto off so your value is used.")
+        self.calc_d_btn.setToolTip(self.tr("str_calc_d_tooltip"))
         self.calc_d_btn.clicked.connect(self.on_calc_log_d)
         btn_row.addWidget(self.calc_d_btn, 1)
-        reset_stretch_btn = QPushButton("↺  Reset")
-        reset_stretch_btn.setToolTip(
-            "Reset Log D, Protect b, Target bg, Convergence, Color grip, "
-            "Linear expansion and the anchor/auto options to defaults "
-            "(sensor profile and mode are left as-is).")
-        reset_stretch_btn.clicked.connect(self._reset_stretch_controls)
-        btn_row.addWidget(reset_stretch_btn)
+        self.reset_stretch_btn = QPushButton(self.tr("str_reset_btn"))
+        self.reset_stretch_btn.setToolTip(self.tr("str_reset_tooltip"))
+        self.reset_stretch_btn.clicked.connect(self._reset_stretch_controls)
+        btn_row.addWidget(self.reset_stretch_btn)
         v.addLayout(btn_row)
 
         row, self.stage4_run = self._run_row(
             lambda: self._launch([self._exec_stage4]), undo_stage=IDX_STR)
         v.addLayout(row)
         return box
+
+    def retranslate_ui_stretch(self):
+        self.str_profile_row_label.setText(self.tr("str_profile_label"))
+        self.str_mode_row_label.setText(self.tr("str_mode_label"))
+        cur_mode = self.stretch_mode_combo.currentData()
+        self.stretch_mode_combo.clear()
+        for value, i18n_key in _STRETCH_MODE_KEYS:
+            self.stretch_mode_combo.addItem(self.tr(i18n_key), value)
+        idx = self.stretch_mode_combo.findData(cur_mode)
+        if idx >= 0:
+            self.stretch_mode_combo.setCurrentIndex(idx)
+        self.str_log_d_row_label.setText(self.tr("str_log_d_label"))
+        self.str_target_bg_row_label.setText(self.tr("str_target_bg_label"))
+        self.str_protect_b_row_label.setText(self.tr("str_protect_b_label"))
+        self.str_convergence_row_label.setText(self.tr("str_convergence_label"))
+        self.str_color_grip_row_label.setText(self.tr("str_color_grip_label"))
+        self.str_linear_exp_row_label.setText(self.tr("str_linear_exp_label"))
+        self.auto_d_checkbox.setText(self.tr("str_auto_d"))
+        self.auto_d_checkbox.setToolTip(self.tr("str_auto_d_tooltip"))
+        self.adaptive_anchor_checkbox.setText(self.tr("str_adaptive_anchor"))
+        self.calc_d_btn.setText(self.tr("str_calc_d_btn"))
+        self.calc_d_btn.setToolTip(self.tr("str_calc_d_tooltip"))
+        self.reset_stretch_btn.setText(self.tr("str_reset_btn"))
+        self.reset_stretch_btn.setToolTip(self.tr("str_reset_tooltip"))
 
     @staticmethod
     def _link_slider_spin(slider, spin, factor):
@@ -170,7 +204,7 @@ class StretchMixin:
         self.linear_exp_spin.setValue(0.0)
         self.adaptive_anchor_checkbox.setChecked(True)
         self.auto_d_checkbox.setChecked(True)
-        self.status_label.setText("Stretch parameters reset to defaults.")
+        self.status_label.setText(self.tr("str_reset_status"))
 
     def _solve_log_d_from(self, img, progress=None):
         """VeraLux-style Log D solver with a per-channel 'Floating Sky'
@@ -225,7 +259,9 @@ class StretchMixin:
 
         b_val = self.protect_b_spin.value()
         convergence_power = self.convergence_spin.value()
-        is_rtu = self.stretch_mode_combo.currentText() == "Ready-to-Use"
+        # currentData(), not currentText() — see the module-level
+        # comment near _STRETCH_MODE_KEYS.
+        is_rtu = self.stretch_mode_combo.currentData() == "Ready-to-Use"
         target = min(self.target_bg_spin.value(), 0.10) if is_rtu \
             else self.target_bg_spin.value()
 
@@ -257,11 +293,11 @@ class StretchMixin:
         """'Calculate Optimal Log D' button — runs the solver on the current
         image and fills the Log D spinbox (does not modify the image)."""
         def job(progress):
-            progress("VeraLux solver: analysing image...", 0.2)
+            progress(self.tr("str_solver_progress"), 0.2)
             img = self._get_current_image()
             log_d = self._solve_log_d_from(img, progress)
             self.log_d_solved.emit(float(log_d))
-            progress(f"Optimal Log D = {log_d:.2f}", 1.0)
+            progress(self.tr("str_solver_result_progress").format(d=log_d), 1.0)
             self.siril.log(f"VeraLux solver: optimal Log D = {log_d:.2f}",
                            LogColor.BLUE)
         self._launch([job])
@@ -271,15 +307,17 @@ class StretchMixin:
         self.auto_d_checkbox.setChecked(False)  # use the computed value
 
     def _exec_stage4(self, progress):
-        progress("Stretch: fetching image...", 0.02)
+        progress(self.tr("str_progress_fetching"), 0.02)
         before = self._get_current_image()
         weights = SENSOR_PROFILES[self.profile_combo.currentText()]
-        mode = ("ready_to_use" if self.stretch_mode_combo.currentText()
+        # currentData(), not currentText() — see the module-level
+        # comment near _STRETCH_MODE_KEYS.
+        mode = ("ready_to_use" if self.stretch_mode_combo.currentData()
                 == "Ready-to-Use" else "scientific")
 
         log_d = self.log_d_spin.value()
         if self.auto_d_checkbox.isChecked():
-            progress("Stretch: solving optimal log D...", 0.1)
+            progress(self.tr("str_progress_solving"), 0.1)
             log_d = self._solve_log_d_from(before)
             self.siril.log(f"VeraLux solver: log D = {log_d:.2f}", LogColor.BLUE)
 
@@ -299,13 +337,13 @@ class StretchMixin:
         if held is not None:
             self.held_stars = None  # consumed either way — never re-applied twice
             if held.shape == after.shape:
-                progress("Stretch: stretching stars separately (asinh)...", 0.9)
+                progress(self.tr("str_progress_stars"), 0.9)
                 k = self.star_asinh_spin.value()
                 stars_str = np.arcsinh(k * np.clip(held, 0.0, 1.0)) / math.asinh(k)
                 stars_str = np.clip(stars_str, 0.0, 1.0)
                 strength = self.star_strength_spin.value()
                 if strength > 0.001:
-                    progress("Stretch: recombining stars with nebula...", 0.95)
+                    progress(self.tr("str_progress_recombining"), 0.95)
                     after = 1.0 - (1.0 - after) * (1.0 - stars_str * strength)
                     after = np.clip(after, 0.0, 1.0).astype(np.float32)
                 self.siril.log(
@@ -324,6 +362,6 @@ class StretchMixin:
 
         self._set_current_image(after, f"AstroPipeline: VeraLux stretch D={log_d:.2f}")
         self._finish_stage(IDX_STR, before, after,
-                           "Stretch: done.", "Stretch complete!",
+                           self.tr("str_progress_done"), "Stretch complete!",
                            before_linear=True, after_linear=False,
                            autosave_name="final_stretched", progress=progress)

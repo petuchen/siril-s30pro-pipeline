@@ -22,15 +22,19 @@ from s30pro_pipeline.graxpert_helpers import get_available_local_models, graxper
 
 class DenoiseMixin:
     def _build_stage3(self):
+        # Title stays literal English for now — stage titles move
+        # together in Phase 7 (see stage_watermark.py's comment).
         box, v = self._stage_box(7, "Denoise — GraXpert AI")
         self.stage3_box = box
 
         g = QGridLayout()
-        g.addWidget(QLabel("Model:"), 0, 0)
+        self.den_model_row_label = QLabel(self.tr("den_model_label"))
+        g.addWidget(self.den_model_row_label, 0, 0)
         self.denoise_model_combo = QComboBox()
         self.denoise_models = get_available_local_models("denoise-ai-models")
-        self.denoise_model_combo.addItems(sorted(self.denoise_models.keys())
-                                          or ["No models found"])
+        self.denoise_model_combo.addItems(
+            sorted(self.denoise_models.keys())
+            or [self.tr("den_no_models_found")])
         self.denoise_model_combo.setToolTip(
             "Known issue on Mac: the 3.x denoise models (3.0.0/3.0.1/3.0.2)\n"
             "fail to compile under CoreML with an 'Espresso exception:\n"
@@ -55,7 +59,8 @@ class DenoiseMixin:
         v.addLayout(g)
 
         st = QHBoxLayout()
-        st.addWidget(QLabel("Strength:"))
+        self.den_strength_row_label = QLabel(self.tr("den_strength_label"))
+        st.addWidget(self.den_strength_row_label)
         self.denoise_strength_slider = QSlider(Qt.Orientation.Horizontal)
         self.denoise_strength_slider.setRange(0, 100)
         self.denoise_strength_slider.setValue(80)
@@ -67,7 +72,8 @@ class DenoiseMixin:
         v.addLayout(st)
 
         adv = QHBoxLayout()
-        adv.addWidget(QLabel("Batch size:"))
+        self.den_batch_row_label = QLabel(self.tr("den_batch_label"))
+        adv.addWidget(self.den_batch_row_label)
         self.denoise_batch = QSpinBox()
         self.denoise_batch.setRange(1, 32)
         # GPU on by default → start with a saturating batch. There is no
@@ -82,7 +88,7 @@ class DenoiseMixin:
             "16–32 recommended with GPU acceleration; use 2–4 on CPU-only\n"
             "machines where large batches just add latency per tile.")
         adv.addWidget(self.denoise_batch)
-        self.denoise_gpu = QCheckBox("GPU acceleration")
+        self.denoise_gpu = QCheckBox(self.tr("den_gpu"))
         self.denoise_gpu.setChecked(True)
         self.denoise_gpu.setToolTip(
             "Runs the AI model on the platform accelerator via ONNX Runtime:\n"
@@ -105,14 +111,21 @@ class DenoiseMixin:
         v.addLayout(row)
         return box
 
+    def retranslate_ui_denoise(self):
+        self.den_model_row_label.setText(self.tr("den_model_label"))
+        if not self.denoise_models and self.denoise_model_combo.count() == 1:
+            self.denoise_model_combo.setItemText(
+                0, self.tr("den_no_models_found"))
+        self.den_strength_row_label.setText(self.tr("den_strength_label"))
+        self.den_batch_row_label.setText(self.tr("den_batch_label"))
+        self.denoise_gpu.setText(self.tr("den_gpu"))
+
     def _exec_stage3(self, progress):
         model_name = self.denoise_model_combo.currentText()
         model_path = self.denoise_models.get(model_name)
         if not model_path:
-            raise RuntimeError(
-                "No GraXpert denoise model found. Download one via GraXpert "
-                "or the GraXpert-AI script's Model Manager.")
-        progress("Denoise: fetching image...", 0.02)
+            raise RuntimeError(self.tr("den_no_model_error"))
+        progress(self.tr("den_progress_fetching"), 0.02)
         before = self._get_current_image()
         denoised = graxpert_denoise(
             before.copy(), model_path,
@@ -174,6 +187,6 @@ class DenoiseMixin:
                     "did not offer a GPU provider for this platform/model, "
                     "so it ran on CPU.", LogColor.SALMON)
         self._finish_stage(
-            IDX_DEN, before, after, "Denoise: done.",
+            IDX_DEN, before, after, self.tr("den_progress_done"),
             f"Denoising complete (execution provider: {provider})",
             progress=progress)

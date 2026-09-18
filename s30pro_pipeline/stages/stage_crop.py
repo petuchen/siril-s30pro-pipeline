@@ -13,13 +13,21 @@ from sirilpy import LogColor
 from s30pro_pipeline.constants import IDX_CROP
 
 
+_CROP_MARGIN_KEYS = {
+    "left": "crop_margin_left", "right": "crop_margin_right",
+    "top": "crop_margin_top", "bottom": "crop_margin_bottom",
+}
+
+
 class CropMixin:
     def _build_stage_crop(self):
+        # Title stays literal English for now — stage titles move
+        # together in Phase 7 (see stage_watermark.py's comment).
         box, v = self._stage_box(2, "Crop")
         self.stage_crop_box = box
         self._pending_crop_box = None  # (fx, fy, fw, fh) fractions, set by draw-box
 
-        self.crop_auto_checkbox = QCheckBox("Auto crop (5% off each side)")
+        self.crop_auto_checkbox = QCheckBox(self.tr("crop_auto"))
         self.crop_auto_checkbox.setChecked(True)
         v.addWidget(self.crop_auto_checkbox)
 
@@ -29,14 +37,16 @@ class CropMixin:
         g.setColumnStretch(1, 1)
         g.setColumnStretch(3, 1)
         self.crop_margins = {}
-        for i, (key, label) in enumerate((("left", "Left %"), ("right", "Right %"),
-                                          ("top", "Top %"), ("bottom", "Bottom %"))):
+        self.crop_margin_labels = {}
+        for i, key in enumerate(("left", "right", "top", "bottom")):
             spin = QDoubleSpinBox()
             spin.setRange(0.0, 40.0)
             spin.setSingleStep(0.5)
             spin.setValue(5.0)
             self.crop_margins[key] = spin
-            g.addWidget(QLabel(label + ":"), i // 2, (i % 2) * 2)
+            lbl = QLabel(self.tr(_CROP_MARGIN_KEYS[key]) + ":")
+            self.crop_margin_labels[key] = lbl
+            g.addWidget(lbl, i // 2, (i % 2) * 2)
             g.addWidget(spin, i // 2, (i % 2) * 2 + 1)
         v.addLayout(g)
 
@@ -53,28 +63,17 @@ class CropMixin:
         # frame gets straightened and the (now ragged/black) corners it
         # leaves behind can be trimmed off by the margins or drawn box
         rot_row, self.crop_rotate_spin = self._slider_spin_row(
-            "Rotate (°):", -180.0, 180.0, 0.1, 0.0, 1,
-            "Rotate the image before cropping. Positive is counter-"
-            "clockwise. Siril crops to the original frame size after "
-            "rotating (no black borders), so set the margins/drawn box "
-            "below generously enough to trim whatever the rotation "
-            "leaves ragged at the edges. The preview updates live as you "
-            "drag this — it's a quick on-screen approximation (Qt "
-            "rotating the already-rendered preview image), not the same "
-            "interpolation Siril's own `rotate` command uses, so treat it "
-            "as a guide for framing/angle, not a pixel-exact result.",
+            self.tr("crop_rotate_label"), -180.0, 180.0, 0.1, 0.0, 1,
+            self.tr("crop_rotate_tooltip"),
             on_change=lambda _val: self._update_crop_rotate_preview())
         v.addLayout(rot_row)
 
         # manual crop by drawing a box in the preview
         draw_row = QHBoxLayout()
         draw_row.setSpacing(10)
-        self.crop_draw_btn = QPushButton("⬚  Draw crop box in preview")
+        self.crop_draw_btn = QPushButton(self.tr("crop_draw_btn"))
         self.crop_draw_btn.setCheckable(True)
-        self.crop_draw_btn.setToolTip(
-            "Click, then drag a rectangle on the preview panel. This only\n"
-            "marks the box and switches off Auto crop — press \"Run this\n"
-            "stage\" below to actually crop.")
+        self.crop_draw_btn.setToolTip(self.tr("crop_draw_tooltip"))
         self.crop_draw_btn.toggled.connect(self._toggle_crop_draw)
         draw_row.addWidget(self.crop_draw_btn)
         draw_row.addStretch()
@@ -88,6 +87,24 @@ class CropMixin:
             lambda: self._launch([self._exec_stage_crop]), undo_stage=IDX_CROP)
         v.addLayout(row)
         return box
+
+    def retranslate_ui_crop(self):
+        self.crop_auto_checkbox.setText(self.tr("crop_auto"))
+        for key, lbl in self.crop_margin_labels.items():
+            lbl.setText(self.tr(_CROP_MARGIN_KEYS[key]) + ":")
+        self._retranslate_slider_row(
+            self.crop_rotate_spin, "crop_rotate_label", "crop_rotate_tooltip")
+        self.crop_draw_btn.setText(self.tr("crop_draw_btn"))
+        self.crop_draw_btn.setToolTip(self.tr("crop_draw_tooltip"))
+        # crop_draw_hint holds transient, state-dependent text (dragging
+        # hint / box-marked summary / nothing) — re-derive it from
+        # current state rather than blindly re-setting one fixed string.
+        if self.crop_draw_btn.isChecked():
+            self.crop_draw_hint.setText(self.tr("crop_draw_hint_dragging"))
+        elif self._pending_crop_box:
+            fx, fy, fw, fh = self._pending_crop_box
+            self.crop_draw_hint.setText(self.tr("crop_box_marked").format(
+                w=fw * 100, h=fh * 100, run=self.tr("run_this_stage")))
 
     def _update_crop_rotate_preview(self):
         """Live preview for the Rotate slider/spinbox: rotate the cached
@@ -142,9 +159,7 @@ class CropMixin:
             self.crop_auto_checkbox.setChecked(False)
         compare.set_select_mode(checked)
         if checked:
-            self.crop_draw_hint.setText(
-                "Drag a box on the preview to mark the crop. Click the "
-                "button again to cancel.")
+            self.crop_draw_hint.setText(self.tr("crop_draw_hint_dragging"))
         elif not self._pending_crop_box:
             self.crop_draw_hint.setText("")
 
@@ -153,9 +168,8 @@ class CropMixin:
         crop happens when the stage is run."""
         self.crop_draw_btn.setChecked(False)  # also exits select mode
         self._pending_crop_box = (fx, fy, fw, fh)
-        self.crop_draw_hint.setText(
-            f"Box marked ({fw*100:.0f}% × {fh*100:.0f}% of the image) — "
-            "press \"Run this stage\" below to crop.")
+        self.crop_draw_hint.setText(self.tr("crop_box_marked").format(
+            w=fw * 100, h=fh * 100, run=self.tr("run_this_stage")))
 
     def _clear_pending_crop_box(self, *_args):
         self._pending_crop_box = None
@@ -178,7 +192,7 @@ class CropMixin:
         if drawing:
             self.crop_draw_btn.setChecked(False)  # also exits select mode
         self._clear_pending_crop_box()
-        self.status_label.setText("Crop box canceled.")
+        self.status_label.setText(self.tr("crop_canceled_status"))
         return True
 
     def _do_siril_crop(self, x, y, cw, ch):
@@ -225,13 +239,13 @@ class CropMixin:
             LogColor.SALMON)
 
     def _exec_stage_crop(self, progress):
-        progress("Crop: fetching image...", 0.05)
+        progress(self.tr("crop_progress_fetching"), 0.05)
         before = self._get_current_image()
         _, h, w = before.shape if before.ndim == 3 else (1,) + before.shape
 
         rotate_deg = self.crop_rotate_spin.value()
         if abs(rotate_deg) > 1e-6:
-            progress(f"Crop: rotating {rotate_deg:.1f}°...", 0.15)
+            progress(self.tr("crop_progress_rotating").format(deg=rotate_deg), 0.15)
             try:
                 self.siril.cmd("rotate", f"{rotate_deg:.2f}")
             except (s.DataError, s.CommandError, s.SirilError) as e:
@@ -252,8 +266,9 @@ class CropMixin:
             cw = max(16, min(cw, w - x))
             ch = max(16, min(ch, h - y))
             if cw < 32 or ch < 32:
-                raise RuntimeError("Drawn crop box is too small (min 32 px).")
-            progress(f"Crop: {w}x{h} → {cw}x{ch} (drawn box)...", 0.3)
+                raise RuntimeError(self.tr("crop_error_too_small"))
+            progress(self.tr("crop_progress_drawn_box").format(
+                w=w, h=h, cw=cw, ch=ch), 0.3)
         else:
             if self.crop_auto_checkbox.isChecked():
                 ml = mr = mt = mb = 5.0
@@ -267,20 +282,21 @@ class CropMixin:
             cw = w - x - int(w * mr / 100.0)
             ch = h - y - int(h * mb / 100.0)
             if cw < 32 or ch < 32:
-                raise RuntimeError("Crop margins too large — nothing would remain.")
+                raise RuntimeError(self.tr("crop_error_margins"))
             if not (x > 0 or y > 0 or cw < w or ch < h):
                 if abs(rotate_deg) <= 1e-6:
-                    progress("Crop: nothing to do (0% margins, no rotation).", 1.0)
+                    progress(self.tr("crop_progress_nothing"), 1.0)
                     return
                 # 0% margins but a rotation was applied above — still a
                 # real change to record, just skip the no-op crop itself.
                 after = self._get_current_image()
                 self._finish_stage(
-                    IDX_CROP, before, after, "Crop: done.",
+                    IDX_CROP, before, after, self.tr("crop_progress_done"),
                     f"Rotated {rotate_deg:.1f}° (no crop, 0% margins)",
                     progress=progress)
                 return
-            progress(f"Crop: {w}x{h} → {cw}x{ch}...", 0.3)
+            progress(self.tr("crop_progress_sizing").format(
+                w=w, h=h, cw=cw, ch=ch), 0.3)
 
         self._do_siril_crop(x, y, cw, ch)
         after = self._get_current_image()
@@ -290,5 +306,5 @@ class CropMixin:
         if abs(rotate_deg) > 1e-6:
             msg = f"Rotated {rotate_deg:.1f}° then " + msg[0].lower() + msg[1:]
         self._finish_stage(IDX_CROP, before, after,
-                           "Crop: done.", msg,
+                           self.tr("crop_progress_done"), msg,
                            progress=progress)

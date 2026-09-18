@@ -24,62 +24,47 @@ from s30pro_pipeline.constants import IDX_STARS
 
 class StarsMixin:
     def _build_stage_stars(self):
+        # Title stays literal English for now — stage titles move
+        # together in Phase 7 (see stage_watermark.py's comment).
         box, v = self._stage_box(6, "Remove Stars (StarNet)",
                                  enabled_check=False)
         self.stage_stars_box = box
 
-        info = QLabel("Separates stars from nebulosity with StarNet so the "
-                      "later stages (denoise, palette, stretch) work on the "
-                      "starless image. The star layer is kept and stretched "
-                      "separately (gentle asinh) at the end of the Stretch "
-                      "stage, then recombined — keeping stars tight and "
-                      "colorful. Requires the StarNet executable to be set "
-                      "in Siril Preferences → Miscellaneous.")
-        info.setObjectName("SubHeader")
-        info.setWordWrap(True)
-        v.addWidget(info)
+        self.stars_info_label = QLabel(self.tr("stars_info"))
+        self.stars_info_label.setObjectName("SubHeader")
+        self.stars_info_label.setWordWrap(True)
+        v.addWidget(self.stars_info_label)
 
         srow = QHBoxLayout()
         srow.setSpacing(10)
-        srow.addWidget(QLabel("Star strength:"))
+        self.stars_strength_row_label = QLabel(self.tr("stars_strength_label"))
+        srow.addWidget(self.stars_strength_row_label)
         self.star_strength_spin = QDoubleSpinBox()
         self.star_strength_spin.setRange(0.0, 1.0)
         self.star_strength_spin.setSingleStep(0.05)
         self.star_strength_spin.setValue(1.0)
-        self.star_strength_spin.setToolTip(
-            "Brightness of the stars when they are added back.\n"
-            "1.0 = original brightness, lower = fainter stars, 0 = starless.")
+        self.star_strength_spin.setToolTip(self.tr("stars_strength_tooltip"))
         srow.addWidget(self.star_strength_spin)
-        srow.addWidget(QLabel("Star stretch (asinh):"))
+        self.stars_asinh_row_label = QLabel(self.tr("stars_asinh_label"))
+        srow.addWidget(self.stars_asinh_row_label)
         self.star_asinh_spin = QDoubleSpinBox()
         self.star_asinh_spin.setRange(1.0, 100.0)
         self.star_asinh_spin.setSingleStep(0.5)
         self.star_asinh_spin.setValue(8.0)
-        self.star_asinh_spin.setToolTip(
-            "Intensity of the separate star stretch applied at the end of\n"
-            "the Stretch stage. 7–8 keeps stars tight and colorful.")
+        self.star_asinh_spin.setToolTip(self.tr("stars_asinh_tooltip"))
         srow.addWidget(self.star_asinh_spin)
         srow.addStretch()
         v.addLayout(srow)
 
-        self.stars_cache_label = QLabel(
-            "No star layer yet — running this stage calls StarNet once and "
-            "caches the result until the source image changes or the window "
-            "closes.")
+        self.stars_cache_label = QLabel(self.tr("stars_cache_label_default"))
         self.stars_cache_label.setObjectName("SubHeader")
         self.stars_cache_label.setWordWrap(True)
         v.addWidget(self.stars_cache_label)
 
         manual_row = QHBoxLayout()
         manual_row.setSpacing(10)
-        self.manual_readd_stars_btn = QPushButton("⭐ Add Stars Back Now")
-        self.manual_readd_stars_btn.setToolTip(
-            "Manual safety valve: blends the saved star layer onto whatever "
-            "image is currently loaded in Siril right now, regardless of "
-            "which stage you're on. Use this any time the automatic star\n"
-            "hand-off (Remove Stars → Stretch) didn't put the stars back.\n"
-            "Works from the held-stars buffer if present, otherwise from the "
-            "star layer cached to disk on the last StarNet run.")
+        self.manual_readd_stars_btn = QPushButton(self.tr("stars_manual_btn"))
+        self.manual_readd_stars_btn.setToolTip(self.tr("stars_manual_tooltip"))
         self.manual_readd_stars_btn.clicked.connect(
             lambda: self._launch([self._manual_readd_stars]))
         manual_row.addWidget(self.manual_readd_stars_btn)
@@ -91,6 +76,24 @@ class StarsMixin:
             undo_stage=IDX_STARS)
         v.addLayout(row)
         return box
+
+    def retranslate_ui_stars(self):
+        self.stars_info_label.setText(self.tr("stars_info"))
+        self.stars_strength_row_label.setText(self.tr("stars_strength_label"))
+        self.star_strength_spin.setToolTip(self.tr("stars_strength_tooltip"))
+        self.stars_asinh_row_label.setText(self.tr("stars_asinh_label"))
+        self.star_asinh_spin.setToolTip(self.tr("stars_asinh_tooltip"))
+        # stars_cache_label holds transient, state-dependent text — see
+        # _stars_cache_state, set alongside every place this label's
+        # text changes (default / reused-from-cache / freshly-cached).
+        state = getattr(self, "_stars_cache_state", "default")
+        self.stars_cache_label.setText(self.tr({
+            "default": "stars_cache_label_default",
+            "reused": "stars_cache_reused",
+            "cached": "stars_cache_saved",
+        }[state]))
+        self.manual_readd_stars_btn.setText(self.tr("stars_manual_btn"))
+        self.manual_readd_stars_btn.setToolTip(self.tr("stars_manual_tooltip"))
 
     @staticmethod
     def _array_fingerprint(arr):
@@ -113,7 +116,7 @@ class StarsMixin:
         the end; every later stage has a fallback re-add, plus the manual
         '⭐ Add Stars Back Now' button.
         """
-        progress("Remove stars: fetching image...", 0.05)
+        progress(self.tr("stars_progress_fetching"), 0.05)
         before = self._get_current_image()
 
         fp = self._array_fingerprint(before)
@@ -122,30 +125,27 @@ class StarsMixin:
                 and cache.get("starless_path")
                 and os.path.isfile(cache["starless_path"])
                 and os.path.isfile(cache["stars_path"])):
-            progress("Remove stars: reusing cached StarNet result...", 0.3)
+            progress(self.tr("stars_progress_reusing"), 0.3)
             starless = np.load(cache["starless_path"])
             stars = np.load(cache["stars_path"])
             self.siril.log("Remove stars: reused cached StarNet result "
                            "(source image unchanged)", LogColor.BLUE)
-            self.palette_cache_updated.emit(
-                "✓ Reused cached star layer (StarNet skipped) — kept on "
-                "disk until the source image changes or the window closes.")
+            self._stars_cache_state = "reused"
+            self.palette_cache_updated.emit(self.tr("stars_cache_reused"))
             # cache path skips StarNet, so push the starless image ourselves
             self._set_current_image(starless, "AstroPipeline: remove stars")
         else:
-            progress("Remove stars: running StarNet (may take a while)...",
-                     0.1)
+            progress(self.tr("stars_progress_running"), 0.1)
             try:
                 self.siril.cmd("starnet", "-stretch", "-nostarmask")
             except (s.DataError, s.CommandError, s.SirilError) as e:
                 raise RuntimeError(
-                    "StarNet failed. Make sure the StarNet executable is "
-                    f"set in Siril Preferences → Miscellaneous. ({e})")
+                    self.tr("stars_error_starnet_failed").format(e=e))
             starless = self._get_current_image()
             if starless.shape != before.shape:
-                raise RuntimeError("StarNet returned an unexpected image size.")
+                raise RuntimeError(self.tr("stars_error_size_mismatch"))
             stars = np.clip(before - starless, 0.0, 1.0)
-            progress("Remove stars: caching star layer to disk...", 0.8)
+            progress(self.tr("stars_progress_caching"), 0.8)
             starless_path = os.path.join(self._temp_dir, "stars_starless.npy")
             stars_path = os.path.join(self._temp_dir, "stars_layer.npy")
             np.save(starless_path, starless)
@@ -154,9 +154,8 @@ class StarsMixin:
                 "fingerprint": fp, "starless_path": starless_path,
                 "stars_path": stars_path,
             }
-            self.palette_cache_updated.emit(
-                "✓ Star layer cached to disk — repeat runs on this same "
-                "image skip StarNet. Deleted when the window closes.")
+            self._stars_cache_state = "cached"
+            self.palette_cache_updated.emit(self.tr("stars_cache_saved"))
 
         self.held_stars = stars
         self.stage_backups[IDX_STARS] = before
@@ -199,8 +198,7 @@ class StarsMixin:
         if strength <= 0.001:
             return arr, False
         if progress:
-            progress("Re-adding stars held back from the Palette stage "
-                     "(Stretch hasn't run yet)...", 0.02)
+            progress(self.tr("stars_reconcile_progress"), 0.02)
         self.siril.log(
             "Stretch stage hasn't run yet — re-adding the stars held back "
             "by the Palette stage now as a fallback, using the same gentle "
@@ -224,7 +222,7 @@ class StarsMixin:
         consumed by some other stage). Use this any time stars are missing
         from the current image and the automatic recombination didn't do it.
         """
-        progress("Add stars: looking for a saved star layer...", 0.1)
+        progress(self.tr("stars_manual_progress_looking"), 0.1)
         stars = getattr(self, "held_stars", None)
         source_desc = "held from the last Remove Stars run"
         if stars is None:
@@ -234,25 +232,18 @@ class StarsMixin:
                 stars = np.load(stars_path)
                 source_desc = "star layer cached to disk from the last StarNet run"
         if stars is None:
-            raise RuntimeError(
-                "No star layer available to add back. Run the Remove Stars "
-                "stage at least once, then try this button.")
+            raise RuntimeError(self.tr("stars_error_no_layer"))
 
         before = self._get_current_image()
         if stars.shape != before.shape:
-            raise RuntimeError(
-                f"The saved star layer {stars.shape} doesn't match the "
-                f"current image {before.shape} — likely a crop or resize "
-                "happened since the stars were removed. Re-run the Remove "
-                "Stars stage to recapture them at the current size.")
+            raise RuntimeError(self.tr("stars_error_shape_mismatch").format(
+                shape1=stars.shape, shape2=before.shape))
 
         strength = self.star_strength_spin.value()
         if strength <= 0.001:
-            raise RuntimeError(
-                "Star strength is set to 0 in the Remove Stars stage — "
-                "raise it above 0 before adding stars back.")
+            raise RuntimeError(self.tr("stars_error_zero_strength"))
 
-        progress("Add stars: blending stars onto the current image...", 0.5)
+        progress(self.tr("stars_manual_progress_blending"), 0.5)
         # The saved star layer is the raw, linear (unstretched) residual
         # StarNet split off — tiny pixel values next to an already-stretched
         # final image, so blending it in directly used to look barely
@@ -276,7 +267,7 @@ class StarsMixin:
         idx = self.preview_stage_combo.currentIndex()
         self._store_snapshot(idx, before, after, True, True)
 
-        progress("Add stars: done.", 1.0)
+        progress(self.tr("stars_manual_progress_done"), 1.0)
         self.siril.log(
             f"Stars added back manually ({source_desc}, "
             f"strength {strength:.2f})", LogColor.GREEN)

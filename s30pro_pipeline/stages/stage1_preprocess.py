@@ -39,15 +39,21 @@ class Stage1Mixin:
         g.setColumnStretch(1, 1)
         g.setColumnStretch(3, 1)
 
-        g.addWidget(QLabel("Telescope:"), 0, 0)
+        self.s1_telescope_label = QLabel(self.tr("s1_telescope_label"))
+        g.addWidget(self.s1_telescope_label, 0, 0)
         self.telescope_combo = QComboBox()
+        # Not translated — manufacturer/model names, used as dict keys
+        # (TELESCOPES / FILTER_OPTIONS_MAP / SPCC_SENSOR_MAP / settings
+        # JSON), same reasoning as stage_stretch.py's sensor profiles.
         self.telescope_combo.addItems(TELESCOPES)
         self.telescope_combo.setCurrentText("ZWO Seestar S30 Pro")
         self.telescope_combo.currentTextChanged.connect(self._on_telescope_changed)
         g.addWidget(self.telescope_combo, 0, 1, 1, 3)
 
-        g.addWidget(QLabel("Filter:"), 1, 0)
+        self.s1_filter_label = QLabel(self.tr("s1_filter_label"))
+        g.addWidget(self.s1_filter_label, 1, 0)
         self.filter_combo = QComboBox()
+        # Not translated — same reasoning as telescope_combo above.
         self.filter_combo.addItems(FILTER_OPTIONS_MAP["ZWO Seestar S30 Pro"])
         self.filter_combo.setCurrentText("LP (Narrowband)")
         g.addWidget(self.filter_combo, 1, 1, 1, 3)
@@ -55,10 +61,11 @@ class Stage1Mixin:
 
         cal = QHBoxLayout()
         cal.setSpacing(14)
-        cal.addWidget(QLabel("Calibration:"))
-        self.darks_checkbox = QCheckBox("Darks")
-        self.flats_checkbox = QCheckBox("Flats")
-        self.biases_checkbox = QCheckBox("Biases")
+        self.s1_calibration_label = QLabel(self.tr("s1_calibration_label"))
+        cal.addWidget(self.s1_calibration_label)
+        self.darks_checkbox = QCheckBox(self.tr("s1_darks"))
+        self.flats_checkbox = QCheckBox(self.tr("s1_flats"))
+        self.biases_checkbox = QCheckBox(self.tr("s1_biases"))
         for c in (self.darks_checkbox, self.flats_checkbox, self.biases_checkbox):
             cal.addWidget(c)
         cal.addStretch()
@@ -73,104 +80,93 @@ class Stage1Mixin:
         g2.setVerticalSpacing(8)
         g2.setColumnStretch(1, 1)
 
-        self.drizzle_checkbox = QCheckBox("Drizzle")
+        self.drizzle_checkbox = QCheckBox(self.tr("s1_drizzle"))
         g2.addWidget(self.drizzle_checkbox, 0, 0, 1, 2)
-        g2.addWidget(QLabel("Scale:"), 1, 0)
+        self.s1_scale_label = QLabel(self.tr("s1_scale_label"))
+        g2.addWidget(self.s1_scale_label, 1, 0)
         self.drizzle_amount = QDoubleSpinBox()
         self.drizzle_amount.setRange(1.0, 3.0)
         self.drizzle_amount.setSingleStep(0.1)
         self.drizzle_amount.setValue(1.0)
         g2.addWidget(self.drizzle_amount, 1, 1)
-        g2.addWidget(QLabel("Pixfrac:"), 2, 0)
+        self.s1_pixfrac_label = QLabel(self.tr("s1_pixfrac_label"))
+        g2.addWidget(self.s1_pixfrac_label, 2, 0)
         self.pixel_fraction = QDoubleSpinBox()
         self.pixel_fraction.setRange(0.1, 2.0)
         self.pixel_fraction.setSingleStep(0.05)
         self.pixel_fraction.setValue(1.0)
         g2.addWidget(self.pixel_fraction, 2, 1)
 
-        self.feather_checkbox = QCheckBox("Feather")
-        self.feather_checkbox.setToolTip(
-            "Blends frame/panel edges over this many pixels when stacking.\n"
-            "Together with per-frame background removal, this is the fix for\n"
-            "visible strips at mosaic seams — try 100–300 px for mosaics.\n"
-            "Only applies to the Average (rejection) stacking method below\n"
-            "(Siril requires -maximize framing for this, which Median/Sum\n"
-            "don't support).")
+        self.feather_checkbox = QCheckBox(self.tr("s1_feather"))
+        self.feather_checkbox.setToolTip(self.tr("s1_feather_tooltip"))
         g2.addWidget(self.feather_checkbox, 3, 0, 1, 2)
-        g2.addWidget(QLabel("Amount:"), 4, 0)
+        self.s1_amount_label = QLabel(self.tr("s1_amount_label"))
+        g2.addWidget(self.s1_amount_label, 4, 0)
         self.feather_amount = QSpinBox()
         self.feather_amount.setRange(5, 2000)
         self.feather_amount.setValue(20)
         g2.addWidget(self.feather_amount, 4, 1)
 
-        self.overlap_norm_checkbox = QCheckBox("Normalize on overlaps")
+        self.overlap_norm_checkbox = QCheckBox(self.tr("s1_overlap_norm"))
         self.overlap_norm_checkbox.setToolTip(
-            "Computes stack normalization from only the overlapping regions\n"
-            "between tiles/frames, instead of whole images (Siril's\n"
-            "-overlap_norm, requires -maximize framing — used with the\n"
-            "Average (rejection) stacking method below only; Median/Sum\n"
-            "don't support -maximize).\n"
-            "Helps when tiles have very different content (e.g. one mostly\n"
-            "nebula, another mostly blank sky) and a seam still shows up\n"
-            "with plain normalization. Slower to compute — try without it\n"
-            "first, enable only if seams persist.")
+            self.tr("s1_overlap_norm_tooltip"))
         g2.addWidget(self.overlap_norm_checkbox, 5, 0, 1, 2)
         v.addLayout(g2)
 
         # stacking method
         sm = QHBoxLayout()
         sm.setSpacing(10)
-        sm.addWidget(QLabel("Stacking method:"))
+        self.s1_stacking_method_label = QLabel(
+            self.tr("s1_stacking_method_label"))
+        sm.addWidget(self.s1_stacking_method_label)
         self.stack_method_combo = QComboBox()
-        self.stack_method_combo.addItems(
-            ["Average (rejection)", "Median (Milky Way Mode)", "Sum",
-             "Comet Stack"])
-        stack_method_tooltips = [
-            "Average (rejection): the usual choice for deep-sky — sigma-clip\n"
-            "rejection (3/3) with normalization and weighting. Registered\n"
-            "frames are padded to their union/max footprint before stacking\n"
-            "(widest possible field of view).",
-            "Median: no rejection settings, more robust than sigma-clip at\n"
-            "erasing something that only shows up in a few frames (e.g. a\n"
-            "satellite or plane trail) — ZWO's own recommendation for wide,\n"
-            "trail-prone shots like Seestar's Milky Way Mode. Siril doesn't\n"
-            "support padding mismatched frame sizes for Median, so frames\n"
-            "are cropped to their common overlap instead — the result's\n"
-            "field of view may be a bit smaller than Average's.",
-            "Sum: no normalization or rejection at all — for planetary/lucky\n"
-            "imaging stacks, not typically useful for deep-sky or Milky Way.\n"
-            "Also cropped to the common overlap, like Median.",
-            "Comet Stack: produces two separate stacks from the same subs —\n"
-            "one registered on the stars, one on the comet's own motion —\n"
-            "then combines them so both look sharp. Needs two brief manual\n"
-            "steps in Siril's own window partway through (comet picking,\n"
-            "then Star Recomposition) since neither has a console command.\n"
-            "Automatically disables Remove Background and Remove Stars\n"
-            "below (this mode already does both as part of its own\n"
-            "workflow).",
+        # addItem(display, userData=canonical): the canonical English
+        # value is what every currentData() comparison throughout this
+        # file (and settings JSON) checks against — same
+        # currentText()->currentData() pattern used for the combos in
+        # other already-converted stages (see e.g. stage_agr.py's
+        # agr_mode_combo). Only the displayed label is translated.
+        self._S1_STACK_METHOD_KEYS = [
+            ("Average (rejection)", "s1_stack_avg", "s1_stack_tip_avg"),
+            ("Median (Milky Way Mode)", "s1_stack_median", "s1_stack_tip_median"),
+            ("Sum", "s1_stack_sum", "s1_stack_tip_sum"),
+            ("Comet Stack", "s1_stack_comet", "s1_stack_tip_comet"),
         ]
+        for canonical, label_key, _tip_key in self._S1_STACK_METHOD_KEYS:
+            self.stack_method_combo.addItem(self.tr(label_key), userData=canonical)
         # Per-item tooltips (shown while hovering an option in the open
         # dropdown list), in addition to the combo's own tooltip below.
-        for i, tip in enumerate(stack_method_tooltips):
+        for i, (_canonical, _label_key, tip_key) in enumerate(
+                self._S1_STACK_METHOD_KEYS):
             self.stack_method_combo.setItemData(
-                i, tip, Qt.ItemDataRole.ToolTipRole)
-        self.stack_method_combo.setToolTip("\n".join(stack_method_tooltips))
+                i, self.tr(tip_key), Qt.ItemDataRole.ToolTipRole)
+        self.stack_method_combo.setToolTip(
+            "\n".join(self.tr(k) for _c, _l, k in self._S1_STACK_METHOD_KEYS))
         sm.addWidget(self.stack_method_combo, 1)
         v.addLayout(sm)
 
         # stacking weights (Average method only)
         wt = QHBoxLayout()
         wt.setSpacing(10)
-        self.weighting_checkbox = QCheckBox("Stack weighting")
-        self.weighting_checkbox.setToolTip(
-            "Weight frames during stacking by quality metric. Only applies\n"
-            "to the Average (rejection) stacking method above.")
+        self.weighting_checkbox = QCheckBox(self.tr("s1_weighting"))
+        self.weighting_checkbox.setToolTip(self.tr("s1_weighting_tooltip"))
         self.weighting_checkbox.setChecked(True)
         wt.addWidget(self.weighting_checkbox)
         self.weighting_method_combo = QComboBox()
-        self.weighting_method_combo.addItems(
-            ["Noise", "Number of Stars", "Weighted FWHM"])
-        self.weighting_method_combo.setCurrentText("Weighted FWHM")
+        # Same addItem(display, userData=canonical) pattern — canonical
+        # values are the wmap keys used in _stack_sequence and in
+        # settings JSON.
+        self._S1_WEIGHT_METHOD_KEYS = [
+            ("Noise", "s1_weight_noise"),
+            ("Number of Stars", "s1_weight_nbstars"),
+            ("Weighted FWHM", "s1_weight_wfwhm"),
+        ]
+        for canonical, label_key in self._S1_WEIGHT_METHOD_KEYS:
+            self.weighting_method_combo.addItem(
+                self.tr(label_key), userData=canonical)
+        idx = self.weighting_method_combo.findData("Weighted FWHM")
+        if idx >= 0:
+            self.weighting_method_combo.setCurrentIndex(idx)
         wt.addWidget(self.weighting_method_combo, 1)
         v.addLayout(wt)
 
@@ -180,37 +176,28 @@ class Stage1Mixin:
         # mode's own workflow (step 3 in _exec_stage1_comet_stack) — same
         # widget style as the Siril subsky controls in Remove Background
         # (stage_bge.py) so it feels consistent with the rest of the app.
-        self.comet_settings_box = QGroupBox("Comet Stack settings")
+        self.comet_settings_box = QGroupBox(self.tr("s1_comet_settings_title"))
         cs_v = QVBoxLayout(self.comet_settings_box)
         cs_v.setSpacing(8)
-        cs_info = QLabel(
-            "Produces a comet-sharp stack and a stars-sharp stack from "
-            "the same subs, then pauses twice for quick manual steps in "
-            "Siril's own window (comet picking, then Star Recomposition) "
-            "that have no console-command equivalent. Remove Background "
-            "and Remove Stars below are disabled — this mode already "
-            "does both as part of its own workflow.")
-        cs_info.setObjectName("SubHeader")
-        cs_info.setWordWrap(True)
-        cs_v.addWidget(cs_info)
+        self.s1_comet_info_label = QLabel(self.tr("s1_comet_info"))
+        self.s1_comet_info_label.setObjectName("SubHeader")
+        self.s1_comet_info_label.setWordWrap(True)
+        cs_v.addWidget(self.s1_comet_info_label)
         cs_g = QGridLayout()
         cs_g.setHorizontalSpacing(10)
         cs_g.setVerticalSpacing(8)
         cs_g.setColumnStretch(1, 1)
         cs_g.setColumnStretch(3, 1)
-        cs_g.addWidget(QLabel("Stack sigma low:"), 0, 0)
+        self.s1_sigma_low_label = QLabel(self.tr("s1_sigma_low_label"))
+        cs_g.addWidget(self.s1_sigma_low_label, 0, 0)
         self.comet_sigma_low_spin = QDoubleSpinBox()
         self.comet_sigma_low_spin.setRange(0.1, 10.0)
         self.comet_sigma_low_spin.setSingleStep(0.5)
         self.comet_sigma_low_spin.setValue(5.0)
-        self.comet_sigma_low_spin.setToolTip(
-            "Rejection sigma (low side) used for both the comet stack and\n"
-            "the star stack (Siril's `stack ... rej low high`). 5/5 is a\n"
-            "reasonable default; other combinations like 2/5 or 3/5 also\n"
-            "work well on comet data — experiment if the result has too\n"
-            "much or too little rejection.")
+        self.comet_sigma_low_spin.setToolTip(self.tr("s1_sigma_tooltip"))
         cs_g.addWidget(self.comet_sigma_low_spin, 0, 1)
-        cs_g.addWidget(QLabel("Stack sigma high:"), 0, 2)
+        self.s1_sigma_high_label = QLabel(self.tr("s1_sigma_high_label"))
+        cs_g.addWidget(self.s1_sigma_high_label, 0, 2)
         self.comet_sigma_high_spin = QDoubleSpinBox()
         self.comet_sigma_high_spin.setRange(0.1, 10.0)
         self.comet_sigma_high_spin.setSingleStep(0.5)
@@ -218,28 +205,27 @@ class Stage1Mixin:
         self.comet_sigma_high_spin.setToolTip(
             self.comet_sigma_low_spin.toolTip())
         cs_g.addWidget(self.comet_sigma_high_spin, 0, 3)
-        cs_g.addWidget(QLabel("Bkg degree:"), 1, 0)
+        self.s1_bkg_degree_label = QLabel(self.tr("s1_bkg_degree_label"))
+        cs_g.addWidget(self.s1_bkg_degree_label, 1, 0)
         self.comet_subsky_degree_spin = QSpinBox()
         self.comet_subsky_degree_spin.setRange(1, 4)
         self.comet_subsky_degree_spin.setValue(1)
         self.comet_subsky_degree_spin.setToolTip(
-            "Polynomial degree for the whole-sequence background removal\n"
-            "(seqsubsky) this mode runs on the star-registered sequence,\n"
-            "before star removal. 1 (linear) is the default.")
+            self.tr("s1_bkg_degree_tooltip"))
         cs_g.addWidget(self.comet_subsky_degree_spin, 1, 1)
-        cs_g.addWidget(QLabel("Bkg samples:"), 1, 2)
+        self.s1_bkg_samples_label = QLabel(self.tr("s1_bkg_samples_label"))
+        cs_g.addWidget(self.s1_bkg_samples_label, 1, 2)
         self.comet_subsky_samples_spin = QSpinBox()
         self.comet_subsky_samples_spin.setRange(4, 100)
         self.comet_subsky_samples_spin.setValue(20)
         self.comet_subsky_samples_spin.setToolTip(
-            "Number of background sample points for the whole-sequence\n"
-            "seqsubsky above.")
+            self.tr("s1_bkg_samples_tooltip"))
         cs_g.addWidget(self.comet_subsky_samples_spin, 1, 3)
         cs_v.addLayout(cs_g)
         v.addWidget(self.comet_settings_box)
 
         def sync_stack_method_enabled():
-            method = self.stack_method_combo.currentText()
+            method = self.stack_method_combo.currentData()
             is_avg = method == "Average (rejection)"
             is_comet = method == "Comet Stack"
             self.weighting_checkbox.setEnabled(is_avg)
@@ -271,39 +257,26 @@ class Stage1Mixin:
         mos.setHorizontalSpacing(10)
         mos.setVerticalSpacing(8)
         mos.setColumnStretch(1, 1)
-        mos.addWidget(QLabel("Distortion order:"), 0, 0)
+        self.s1_distortion_order_label = QLabel(
+            self.tr("s1_distortion_order_label"))
+        mos.addWidget(self.s1_distortion_order_label, 0, 0)
         self.disto_order_spin = QSpinBox()
         self.disto_order_spin.setRange(1, 5)
         self.disto_order_spin.setValue(4)
         self.disto_order_spin.setToolTip(
-            "SIP polynomial order used by the sequence plate solve to model\n"
-            "lens distortion (needs the Gaia astrometry catalog).\n"
-            "3–4 suits wide fields like smart telescopes; drop to 2–3 if\n"
-            "solves fail on star-poor panels, raise to 5 only for extreme\n"
-            "corner distortion. Default: 4.")
+            self.tr("s1_distortion_order_tooltip"))
         mos.addWidget(self.disto_order_spin, 0, 1)
-        self.seqsubsky_checkbox = QCheckBox("Per-frame background (mosaic seams)")
-        self.seqsubsky_checkbox.setToolTip(
-            "Runs seqsubsky (polynomial gradient removal, degree set below)\n"
-            "on every calibrated sub before registration. Each mosaic panel\n"
-            "has its own sky level/gradient — equalizing them BEFORE\n"
-            "stacking is the main fix for bright strips at panel seams.\n"
-            "Recommended for mosaics; harmless (slightly slower) for\n"
-            "single-panel fields.")
+        self.seqsubsky_checkbox = QCheckBox(self.tr("s1_seqsubsky"))
+        self.seqsubsky_checkbox.setToolTip(self.tr("s1_seqsubsky_tooltip"))
         self.seqsubsky_checkbox.setChecked(True)
         mos.addWidget(self.seqsubsky_checkbox, 1, 0, 1, 2)
-        mos.addWidget(QLabel("Degree:"), 2, 0)
+        self.s1_seqsubsky_degree_label = QLabel(self.tr("s1_degree_label"))
+        mos.addWidget(self.s1_seqsubsky_degree_label, 2, 0)
         self.seqsubsky_degree_spin = QSpinBox()
         self.seqsubsky_degree_spin.setRange(1, 4)
         self.seqsubsky_degree_spin.setValue(1)
         self.seqsubsky_degree_spin.setToolTip(
-            "Polynomial degree for the per-frame background removal above.\n"
-            "1 (linear) is the default and suits a simple sky tilt. Raise to\n"
-            "2–4 if a seam persists with degree 1 — this usually means the\n"
-            "per-panel gradient is more complex than a flat tilt (e.g.\n"
-            "radial vignetting-like falloff). Higher degrees are slower and\n"
-            "can overfit on frames with little background to sample, so\n"
-            "only raise it if you actually see the fix helping.")
+            self.tr("s1_seqsubsky_degree_tooltip"))
         mos.addWidget(self.seqsubsky_degree_spin, 2, 1)
         v.addLayout(mos)
 
@@ -313,46 +286,37 @@ class Stage1Mixin:
         misc = QGridLayout()
         misc.setHorizontalSpacing(14)
         misc.setVerticalSpacing(6)
-        self.spcc_checkbox = QCheckBox("SPCC color calibration")
+        self.spcc_checkbox = QCheckBox(self.tr("s1_spcc"))
         self.spcc_checkbox.setChecked(True)
         misc.addWidget(self.spcc_checkbox, 0, 0)
-        self.compression_checkbox = QCheckBox("Compression (Rice)")
+        self.compression_checkbox = QCheckBox(self.tr("s1_compression"))
         self.compression_checkbox.setToolTip(
-            "Compress intermediate FITS files to save disk space during processing")
+            self.tr("s1_compression_tooltip"))
         self.compression_checkbox.setChecked(True)
         misc.addWidget(self.compression_checkbox, 0, 1)
-        self.cleanup_checkbox = QCheckBox("Clean up temp files")
+        self.cleanup_checkbox = QCheckBox(self.tr("s1_cleanup"))
         self.cleanup_checkbox.setChecked(True)
         misc.addWidget(self.cleanup_checkbox, 1, 0)
         v.addLayout(misc)
 
         combine_box, combine_v, self.combine_toggle_btn = self._collapsible_section(
-            "Combine with existing master")
-        combine_v.addLayout(self._info_row(
-            "For merging in an already-stacked FITS from an earlier "
-            "session that kept no raw subs.",
-            "Combine with existing master",
-            "For when you already have a stacked FITS from an earlier "
-            "session but the raw subs weren't kept.\n\n"
-            "After stacking the lights above into a new master, this "
-            "registers it against the file you pick here and combines "
-            "the two with Siril's -weight=nbstack, so a master built "
-            "from more subs correctly outweighs one built from fewer "
-            "— needs the STACKCNT header Siril writes into every "
-            "master it produces (use the override below if that file "
-            "is missing it).\n\n"
-            "Your original file is never modified."))
+            "s1_combine_title")
+        self.s1_combine_info_row = self._info_row(
+            "s1_combine_info_summary", "s1_combine_title",
+            "s1_combine_info_full")
+        combine_v.addLayout(self.s1_combine_info_row)
 
-        self.combine_master_checkbox = QCheckBox("Combine with existing master")
+        self.combine_master_checkbox = QCheckBox(self.tr("s1_combine_title"))
         combine_v.addWidget(self.combine_master_checkbox)
 
         combine_path_row = QHBoxLayout()
         combine_path_row.setSpacing(8)
         self.combine_master_path_edit = QLineEdit()
         self.combine_master_path_edit.setReadOnly(True)
-        self.combine_master_path_edit.setPlaceholderText("No file selected")
+        self.combine_master_path_edit.setPlaceholderText(
+            self.tr("s1_no_file_selected"))
         combine_path_row.addWidget(self.combine_master_path_edit, 1)
-        self.combine_master_browse_btn = QPushButton("Browse...")
+        self.combine_master_browse_btn = QPushButton(self.tr("s1_browse_btn"))
         self.combine_master_browse_btn.clicked.connect(
             self._on_browse_combine_master)
         combine_path_row.addWidget(self.combine_master_browse_btn)
@@ -360,17 +324,13 @@ class Stage1Mixin:
 
         combine_subcount_row = QHBoxLayout()
         combine_subcount_row.setSpacing(8)
-        combine_subcount_row.addWidget(QLabel("Sub count override:"))
+        self.s1_subcount_label = QLabel(self.tr("s1_subcount_label"))
+        combine_subcount_row.addWidget(self.s1_subcount_label)
         self.combine_master_subcount_spin = QSpinBox()
         self.combine_master_subcount_spin.setRange(0, 100000)
         self.combine_master_subcount_spin.setValue(0)
         self.combine_master_subcount_spin.setToolTip(
-            "0 = trust whatever STACKCNT is already in that file's FITS "
-            "header (if missing, Siril treats it as a single frame — "
-            "likely under-weighting it badly). Set this if you know how "
-            "many subs actually went into that master; it's written "
-            "into a copy of the header before combining, never into "
-            "your original file.")
+            self.tr("s1_subcount_tooltip"))
         combine_subcount_row.addWidget(self.combine_master_subcount_spin)
         combine_subcount_row.addStretch()
         combine_v.addLayout(combine_subcount_row)
@@ -378,49 +338,24 @@ class Stage1Mixin:
         v.addWidget(combine_box)
 
         batch_box, batch_v, self.batch_toggle_btn = self._collapsible_section(
-            "Batch stacking")
-        batch_v.addLayout(self._info_row(
-            "For sessions with too many subs to stack all at once "
-            "(memory or disk pressure).",
-            "Batch stacking",
-            "For sessions with too many subs to stack all at once "
-            "(memory or disk pressure).\n\n"
-            "Every sub in the session is still registered together "
-            "in one pass, exactly like a normal run — that part was "
-            "never actually the problem. Only the memory-heavy "
-            "rejection-stacking step is split into groups of the "
-            "size below, each group stacking its own frame range out "
-            "of that one shared, already-registered sequence.\n\n"
-            "Every group's master is scale- and rotation-aligned with "
-            "every other (same registration pass, same reference "
-            "frame) — but each group's own framing is computed from "
-            "just that group's own subset of shifts, so groups can "
-            "still come out different physical sizes. The final "
-            "combine reconciles that with a light, shift-only "
-            "registration pass (Siril's -transf=shift — no rotation "
-            "or scale for it to get wrong) before a weighted stack "
-            "(-weight=nbstack, so a group built from more subs "
-            "correctly outweighs one built from fewer).\n\n"
-            "Calibration masters are still built once and shared by "
-            "every group; SPCC and \"Combine with existing master\" "
-            "still run once, on the final assembled result. Not "
-            "compatible with Comet Stack mode."))
+            "s1_batch_title")
+        self.s1_batch_info_row = self._info_row(
+            "s1_batch_info_summary", "s1_batch_title", "s1_batch_info_full")
+        batch_v.addLayout(self.s1_batch_info_row)
 
-        self.batch_stacking_checkbox = QCheckBox("Batch stacking")
+        self.batch_stacking_checkbox = QCheckBox(self.tr("s1_batch_checkbox"))
         batch_v.addWidget(self.batch_stacking_checkbox)
 
         batch_size_row = QHBoxLayout()
         batch_size_row.setSpacing(8)
-        batch_size_row.addWidget(QLabel("Subs per batch:"))
+        self.s1_subs_per_batch_label = QLabel(
+            self.tr("s1_subs_per_batch_label"))
+        batch_size_row.addWidget(self.s1_subs_per_batch_label)
         self.batch_size_spin = QSpinBox()
         self.batch_size_spin.setRange(5, 10000)
         self.batch_size_spin.setValue(100)
         self.batch_size_spin.setToolTip(
-            "How many light frames go into each batch. Lower uses less "
-            "memory/disk per batch but means more (slower) combine "
-            "rounds; higher is faster overall but each batch costs "
-            "more. 100 is a reasonable starting point — if you're "
-            "still hitting memory limits with 100, try 50.")
+            self.tr("s1_subs_per_batch_tooltip"))
         batch_size_row.addWidget(self.batch_size_spin)
         batch_size_row.addStretch()
         batch_v.addLayout(batch_size_row)
@@ -440,17 +375,13 @@ class Stage1Mixin:
         _on_combine_toggle(False)
 
         # local Gaia catalog status
-        astro = "✅" if self.gaia_available else "❌"
-        photo = "✅" if self.gaia_photo_available else "❌"
-        gaia_label = QLabel(
-            f"Local Gaia — astrometry (plate solve): {astro}    "
-            f"photometry (SPCC): {photo}")
-        gaia_label.setObjectName("SubHeader")
-        gaia_label.setToolTip(
-            "Local Gaia catalogues are configured in Siril Preferences → Astrometry.\n"
-            "Without the astrometry catalogue, mosaics fall back to star registration.\n"
-            "Without the photometry catalogue, SPCC uses the online catalogue.")
-        v.addWidget(gaia_label)
+        self._s1_gaia_astro = "✅" if self.gaia_available else "❌"
+        self._s1_gaia_photo = "✅" if self.gaia_photo_available else "❌"
+        self.gaia_label = QLabel(self.tr("s1_gaia_label").format(
+            astro=self._s1_gaia_astro, photo=self._s1_gaia_photo))
+        self.gaia_label.setObjectName("SubHeader")
+        self.gaia_label.setToolTip(self.tr("s1_gaia_tooltip"))
+        v.addWidget(self.gaia_label)
 
         self.files_label = QLabel("")
         self.files_label.setObjectName("SubHeader")
@@ -459,6 +390,90 @@ class Stage1Mixin:
         row, self.stage1_run = self._run_row(lambda: self._launch([self._exec_stage1]))
         v.addLayout(row)
         return box
+
+    def retranslate_ui_stage1(self):
+        self.s1_telescope_label.setText(self.tr("s1_telescope_label"))
+        self.s1_filter_label.setText(self.tr("s1_filter_label"))
+        self.s1_calibration_label.setText(self.tr("s1_calibration_label"))
+        self.darks_checkbox.setText(self.tr("s1_darks"))
+        self.flats_checkbox.setText(self.tr("s1_flats"))
+        self.biases_checkbox.setText(self.tr("s1_biases"))
+        self.drizzle_checkbox.setText(self.tr("s1_drizzle"))
+        self.s1_scale_label.setText(self.tr("s1_scale_label"))
+        self.s1_pixfrac_label.setText(self.tr("s1_pixfrac_label"))
+        self.feather_checkbox.setText(self.tr("s1_feather"))
+        self.feather_checkbox.setToolTip(self.tr("s1_feather_tooltip"))
+        self.s1_amount_label.setText(self.tr("s1_amount_label"))
+        self.overlap_norm_checkbox.setText(self.tr("s1_overlap_norm"))
+        self.overlap_norm_checkbox.setToolTip(
+            self.tr("s1_overlap_norm_tooltip"))
+
+        self.s1_stacking_method_label.setText(
+            self.tr("s1_stacking_method_label"))
+        for i, (_canonical, label_key, tip_key) in enumerate(
+                self._S1_STACK_METHOD_KEYS):
+            self.stack_method_combo.setItemText(i, self.tr(label_key))
+            self.stack_method_combo.setItemData(
+                i, self.tr(tip_key), Qt.ItemDataRole.ToolTipRole)
+        self.stack_method_combo.setToolTip(
+            "\n".join(self.tr(k) for _c, _l, k in self._S1_STACK_METHOD_KEYS))
+
+        self.weighting_checkbox.setText(self.tr("s1_weighting"))
+        self.weighting_checkbox.setToolTip(self.tr("s1_weighting_tooltip"))
+        for i, (_canonical, label_key) in enumerate(
+                self._S1_WEIGHT_METHOD_KEYS):
+            self.weighting_method_combo.setItemText(i, self.tr(label_key))
+
+        self.comet_settings_box.setTitle(self.tr("s1_comet_settings_title"))
+        self.s1_comet_info_label.setText(self.tr("s1_comet_info"))
+        self.s1_sigma_low_label.setText(self.tr("s1_sigma_low_label"))
+        self.comet_sigma_low_spin.setToolTip(self.tr("s1_sigma_tooltip"))
+        self.s1_sigma_high_label.setText(self.tr("s1_sigma_high_label"))
+        self.comet_sigma_high_spin.setToolTip(
+            self.comet_sigma_low_spin.toolTip())
+        self.s1_bkg_degree_label.setText(self.tr("s1_bkg_degree_label"))
+        self.comet_subsky_degree_spin.setToolTip(
+            self.tr("s1_bkg_degree_tooltip"))
+        self.s1_bkg_samples_label.setText(self.tr("s1_bkg_samples_label"))
+        self.comet_subsky_samples_spin.setToolTip(
+            self.tr("s1_bkg_samples_tooltip"))
+
+        self.s1_distortion_order_label.setText(
+            self.tr("s1_distortion_order_label"))
+        self.disto_order_spin.setToolTip(
+            self.tr("s1_distortion_order_tooltip"))
+        self.seqsubsky_checkbox.setText(self.tr("s1_seqsubsky"))
+        self.seqsubsky_checkbox.setToolTip(self.tr("s1_seqsubsky_tooltip"))
+        self.s1_seqsubsky_degree_label.setText(self.tr("s1_degree_label"))
+        self.seqsubsky_degree_spin.setToolTip(
+            self.tr("s1_seqsubsky_degree_tooltip"))
+
+        self.spcc_checkbox.setText(self.tr("s1_spcc"))
+        self.compression_checkbox.setText(self.tr("s1_compression"))
+        self.compression_checkbox.setToolTip(
+            self.tr("s1_compression_tooltip"))
+        self.cleanup_checkbox.setText(self.tr("s1_cleanup"))
+
+        self._retranslate_collapsible(self.combine_toggle_btn)
+        self._retranslate_info_row(self.s1_combine_info_row)
+        self.combine_master_checkbox.setText(self.tr("s1_combine_title"))
+        self.combine_master_path_edit.setPlaceholderText(
+            self.tr("s1_no_file_selected"))
+        self.combine_master_browse_btn.setText(self.tr("s1_browse_btn"))
+        self.s1_subcount_label.setText(self.tr("s1_subcount_label"))
+        self.combine_master_subcount_spin.setToolTip(
+            self.tr("s1_subcount_tooltip"))
+
+        self._retranslate_collapsible(self.batch_toggle_btn)
+        self._retranslate_info_row(self.s1_batch_info_row)
+        self.batch_stacking_checkbox.setText(self.tr("s1_batch_checkbox"))
+        self.s1_subs_per_batch_label.setText(
+            self.tr("s1_subs_per_batch_label"))
+        self.batch_size_spin.setToolTip(self.tr("s1_subs_per_batch_tooltip"))
+
+        self.gaia_label.setText(self.tr("s1_gaia_label").format(
+            astro=self._s1_gaia_astro, photo=self._s1_gaia_photo))
+        self.gaia_label.setToolTip(self.tr("s1_gaia_tooltip"))
 
     def _sync_comet_bge_stars_disable(self, is_comet):
         """Comet Stack mode already removes background (whole-sequence
@@ -515,7 +530,7 @@ class Stage1Mixin:
 
     def _on_browse_combine_master(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select existing master FITS", self.cwd,
+            self, self.tr("s1_select_master_dialog_title"), self.cwd,
             "FITS files (*.fits *.fit *.fits.fz *.fit.fz);;All files (*)")
         if path:
             self.combine_master_path_edit.setText(path)
@@ -538,7 +553,7 @@ class Stage1Mixin:
         current run is using Milky Way Mode (wide-camera) stacking, so the
         solver uses the wide camera's real optics instead of a possibly
         wrong/inherited header value. Empty list otherwise."""
-        if self.stack_method_combo.currentText() == "Median (Milky Way Mode)":
+        if self.stack_method_combo.currentData() == "Median (Milky Way Mode)":
             return [f"-focal={self.MILKYWAY_FOCAL_MM}",
                     f"-pixelsize={self.MILKYWAY_PIXEL_UM}"]
         return []
@@ -552,7 +567,7 @@ class Stage1Mixin:
         self._combine_applied_this_run = False
         lights_dir = os.path.join(cwd, "lights")
         if not os.path.isdir(lights_dir):
-            raise RuntimeError("No 'lights' directory found in the working directory.")
+            raise RuntimeError(self.tr("s1_error_no_lights_dir"))
 
         # A held star layer from a previous Remove Stars run belongs to that
         # earlier stack, not the fresh one Preprocess is about to produce —
@@ -571,14 +586,14 @@ class Stage1Mixin:
             self._exec_stage1_batched(progress, lights_dir)
             return
 
-        progress("Preprocess: starting...", 0.01)
+        progress(self.tr("s1_progress_starting"), 0.01)
 
         # grab a raw sub for the 'before' preview
         before_arr = self._load_raw_light_preview(lights_dir)
 
         # estimate sky brightness / Bortle scale from 2-3 random raw subs
         # (never blocks stacking if it fails — just omitted from the info bar)
-        progress("Preprocess: estimating sky brightness (Bortle, sample subs)...", 0.02)
+        progress(self.tr("s1_progress_bortle"), 0.02)
         try:
             self.estimated_bortle = self._estimate_bortle_scale(lights_dir)
             if self.estimated_bortle:
@@ -616,7 +631,7 @@ class Stage1Mixin:
         # ---- lights: convert / calibrate / (seqsubsky)
         seq_name = self._convert_calibrate_seqsubsky(progress)
 
-        stack_method = self.stack_method_combo.currentText()
+        stack_method = self.stack_method_combo.currentData()
 
         if stack_method == "Comet Stack":
             # Comet Stack replaces everything from here through stacking
@@ -656,7 +671,7 @@ class Stage1Mixin:
 
         # ---- save stacked result with a descriptive name
         file_name = self._save_result_named()
-        progress("Preprocess: done.", 1.0)
+        progress(self.tr("s1_progress_done"), 1.0)
 
         after_arr = self._get_current_image()
         self._store_snapshot(0, before_arr, after_arr,
@@ -679,7 +694,8 @@ class Stage1Mixin:
                           ("flats", self.flats_checkbox.isChecked()),
                           ("darks", self.darks_checkbox.isChecked())):
             if use:
-                progress(f"Preprocess: stacking {name}...", progress_frac)
+                progress(self.tr("s1_progress_stacking_cal").format(name=name),
+                         progress_frac)
                 self._convert_dir(name)
                 self._stack_calibration(name)
 
@@ -701,12 +717,12 @@ class Stage1Mixin:
         use_flats = self.flats_checkbox.isChecked()
         use_biases = self.biases_checkbox.isChecked()
 
-        progress(f"{log_prefix}Preprocess: converting lights...",
+        progress(f"{log_prefix}{self.tr('s1_progress_converting')}",
                  progress_base)
         self._convert_dir("lights")
         seq_name = "lights_"
 
-        progress(f"{log_prefix}Preprocess: calibrating lights...",
+        progress(f"{log_prefix}{self.tr('s1_progress_calibrating')}",
                  progress_base + progress_span * 0.4)
         cmd = ["calibrate", seq_name]
         if use_darks and self._master_exists("darks"):
@@ -728,8 +744,7 @@ class Stage1Mixin:
         # degree-1 background from every sub BEFORE registration stops
         # bright strips appearing where panels overlap)
         if self.seqsubsky_checkbox.isChecked():
-            progress(f"{log_prefix}Preprocess: per-frame background "
-                     "removal (seqsubsky)...",
+            progress(f"{log_prefix}{self.tr('s1_progress_seqsubsky')}",
                      progress_base + progress_span * 0.75)
             try:
                 siril.cmd("seqsubsky", seq_name,
@@ -765,7 +780,7 @@ class Stage1Mixin:
         drizzle = self.drizzle_checkbox.isChecked()
         drizzle_amount = round(self.drizzle_amount.value(), 2)
         pixfrac = round(self.pixel_fraction.value(), 2)
-        stack_method = self.stack_method_combo.currentText()
+        stack_method = self.stack_method_combo.currentData()
 
         # ---- registration (plate solve for mosaics if Gaia is
         # available, falling back to ordinary star-based registration
@@ -776,7 +791,7 @@ class Stage1Mixin:
         # master" below.)
         plate_solved = False
         if self.gaia_available:
-            progress(f"{log_prefix}Preprocess: plate solving sequence...",
+            progress(f"{log_prefix}{self.tr('s1_progress_platesolve_seq')}",
                      progress_base)
             try:
                 siril.cmd("seqplatesolve", seq_name, "-nocache", "-force",
@@ -790,7 +805,7 @@ class Stage1Mixin:
                     f"failed ({e}), falling back to star-based "
                     "registration.", LogColor.SALMON)
         if not plate_solved:
-            progress(f"{log_prefix}Preprocess: registering (2-pass)...",
+            progress(f"{log_prefix}{self.tr('s1_progress_registering')}",
                      progress_base)
             reg = ["register", seq_name, "-2pass"]
             if drizzle:
@@ -810,7 +825,7 @@ class Stage1Mixin:
         # touched (Average still gets the wider union canvas).
         apply_framing = "max" if stack_method == "Average (rejection)" else "min"
 
-        progress(f"{log_prefix}Preprocess: applying registration...",
+        progress(f"{log_prefix}{self.tr('s1_progress_applying_reg')}",
                  progress_base + progress_span * 0.5)
         apply_cmd = ["seqapplyreg", seq_name, "-kernel=square",
                      f"-framing={apply_framing}"]
@@ -860,10 +875,10 @@ class Stage1Mixin:
         siril = self.siril
         feather = self.feather_checkbox.isChecked()
         feather_amount = self.feather_amount.value()
-        stack_method = self.stack_method_combo.currentText()
+        stack_method = self.stack_method_combo.currentData()
 
         # ---- stacking (compression is always off for the final stack)
-        progress(f"{log_prefix}Preprocess: stacking...", progress_base)
+        progress(f"{log_prefix}{self.tr('s1_progress_stacking')}", progress_base)
         siril.cmd("setcompress", "0")
         if stack_method == "Sum":
             # Sum has no normalization/rejection/weighting (matches Siril's
@@ -888,7 +903,7 @@ class Stage1Mixin:
                         "Weighted FWHM": "wfwhm", "Noise": "noise"}
                 stack_cmd.append(
                     "-weight="
-                    f"{wmap[self.weighting_method_combo.currentText()]}")
+                    f"{wmap[self.weighting_method_combo.currentData()]}")
             if maximize and feather:
                 stack_cmd.append(f"-feather={feather_amount}")
             if maximize and self.overlap_norm_checkbox.isChecked():
@@ -936,10 +951,10 @@ class Stage1Mixin:
         stacking's final assembled result — this only makes sense to
         run once, on the fully combined image, not once per batch."""
         siril = self.siril
-        progress("Preprocess: plate solving result...", 0.85)
+        progress(self.tr("s1_progress_platesolve_result"), 0.85)
         solved = False
         mw_args = self._milkyway_solve_args()
-        is_milkyway = (self.stack_method_combo.currentText()
+        is_milkyway = (self.stack_method_combo.currentData()
                        == "Median (Milky Way Mode)")
         try:
             siril.cmd("platesolve", "-force", *mw_args)
@@ -1079,12 +1094,8 @@ class Stage1Mixin:
         siril = self.siril
         cwd = self.cwd
 
-        if self.stack_method_combo.currentText() == "Comet Stack":
-            raise RuntimeError(
-                "Batch stacking doesn't support Comet Stack mode — its "
-                "manual guided-pause steps don't make sense repeated "
-                "per batch. Turn off Batch stacking, or switch "
-                "Stacking method away from Comet Stack.")
+        if self.stack_method_combo.currentData() == "Comet Stack":
+            raise RuntimeError(self.tr("s1_error_batch_comet_unsupported"))
 
         # Feathering and overlap normalization both require Siril's
         # -maximize on the stack command (see _stack_sequence's
@@ -1095,17 +1106,11 @@ class Stage1Mixin:
         # fixed for the whole session, producing a different physical
         # size per batch. So there's no way to honor either option
         # correctly while batching.
-        if self.stack_method_combo.currentText() == "Average (rejection)" and (
+        if self.stack_method_combo.currentData() == "Average (rejection)" and (
                 self.feather_checkbox.isChecked()
                 or self.overlap_norm_checkbox.isChecked()):
             raise RuntimeError(
-                "Batch stacking doesn't support feathering or overlap "
-                "normalization — both need Siril's -maximize at stack "
-                "time, which has to stay off per-batch so every "
-                "batch's master comes out the same physical size (see "
-                "the Batch stacking Details popup for why). Turn off "
-                "feathering/overlap normalization, or turn off Batch "
-                "stacking.")
+                self.tr("s1_error_batch_feather_unsupported"))
 
         batch_size = self.batch_size_spin.value()
         light_files = sorted(
@@ -1113,7 +1118,7 @@ class Stage1Mixin:
             if not f.startswith(".") and f.lower().endswith(
                 (".fit", ".fits", ".fit.fz", ".fits.fz")))
         if not light_files:
-            raise RuntimeError("No FITS light frames found in 'lights'.")
+            raise RuntimeError(self.tr("s1_error_no_fits_found"))
         n_frames = len(light_files)
         batches = [light_files[i:i + batch_size]
                   for i in range(0, n_frames, batch_size)]
@@ -1123,10 +1128,9 @@ class Stage1Mixin:
             f"stacked in {n_batches} batch(es) of up to {batch_size}.",
             LogColor.BLUE)
 
-        progress("Preprocess: starting batch stacking...", 0.01)
+        progress(self.tr("s1_progress_batch_starting"), 0.01)
         before_arr = self._load_raw_light_preview(lights_dir)
-        progress("Preprocess: estimating sky brightness (Bortle, sample "
-                 "subs)...", 0.02)
+        progress(self.tr("s1_progress_bortle"), 0.02)
         try:
             self.estimated_bortle = self._estimate_bortle_scale(lights_dir)
             if self.estimated_bortle:
@@ -1196,8 +1200,8 @@ class Stage1Mixin:
             frac_span = 0.45 / n_batches
             prefix = f"Batch {bi}/{n_batches}: "
             progress(
-                f"{prefix}stacking frames {start_idx}-{end_idx} "
-                f"({len(files)} subs)...", frac_base)
+                f"{prefix}{self.tr('s1_progress_batch_range').format(start=start_idx, end=end_idx, n=len(files))}",
+                frac_base)
 
             # Narrow the shared registered sequence down to just this
             # batch's frame-index range before stacking — unselect
@@ -1219,7 +1223,7 @@ class Stage1Mixin:
                 proc_dir, f"{out_name}{self.fits_extension}")
             if not os.path.isfile(batch_result):
                 raise RuntimeError(
-                    f"{prefix}stacking didn't produce a result file.")
+                    f"{prefix}{self.tr('s1_error_batch_no_result')}")
             stable_path = os.path.join(
                 batch_root, f"{out_name}{self.fits_extension}")
             shutil.move(batch_result, stable_path)
@@ -1240,8 +1244,7 @@ class Stage1Mixin:
         if cleanup:
             self._clean_process(reg_seq_name)
 
-        progress("Preprocess: combining all batches into one result...",
-                 0.82)
+        progress(self.tr("s1_progress_combining_batches"), 0.82)
         combine_scratch = None
         if len(batch_results) == 1:
             final_master = batch_results[0]
@@ -1289,7 +1292,7 @@ class Stage1Mixin:
                                 LogColor.SALMON)
 
         file_name = self._save_result_named()
-        progress("Preprocess: done.", 1.0)
+        progress(self.tr("s1_progress_done"), 1.0)
 
         after_arr = self._get_current_image()
         self._store_snapshot(0, before_arr, after_arr,
@@ -1505,39 +1508,32 @@ class Stage1Mixin:
         subsky_samples = self.comet_subsky_samples_spin.value()
 
         # ---- 2. register the sequence on the stars
-        progress("Comet Stack: registering on stars (2-pass)...", 0.40)
+        progress(self.tr("s1_comet_progress_register"), 0.40)
         siril.cmd("register", seq_name, "-2pass")
         self._seqapplyreg_current_then_max(seq_name)
         reg_seq = "r_" + seq_name
 
         # ---- 3. whole-sequence background extraction
-        progress("Comet Stack: removing background from the whole "
-                 "sequence (seqsubsky)...", 0.47)
+        progress(self.tr("s1_comet_progress_seqsubsky"), 0.47)
         siril.cmd("seqsubsky", reg_seq, str(subsky_degree),
                   f"-samples={subsky_samples}")
         bkg_seq = "bkg_" + reg_seq
 
         # ---- 4. whole-sequence star removal (drops registration data)
-        progress("Comet Stack: removing stars from the whole sequence "
-                 "(seqstarnet)...", 0.54)
+        progress(self.tr("s1_comet_progress_seqstarnet"), 0.54)
         siril.cmd("seqstarnet", bkg_seq, "-stretch", "-nostarmask")
         starless_seq = "starless_" + bkg_seq
 
         # ---- 5. splice the registration data seqstarnet dropped back in
-        progress("Comet Stack: restoring registration data that "
-                 "seqstarnet dropped...", 0.58)
+        progress(self.tr("s1_comet_progress_splice"), 0.58)
         src_seq_path = os.path.join(proc_dir, f"{bkg_seq}.seq")
         dst_seq_path = os.path.join(proc_dir, f"{starless_seq}.seq")
         if not os.path.isfile(src_seq_path):
-            raise RuntimeError(
-                "Comet Stack: couldn't find "
-                f"{os.path.basename(src_seq_path)} to copy registration "
-                "data from — seqsubsky may have failed.")
+            raise RuntimeError(self.tr("s1_error_comet_src_seq_missing").format(
+                name=os.path.basename(src_seq_path)))
         if not os.path.isfile(dst_seq_path):
-            raise RuntimeError(
-                "Comet Stack: couldn't find "
-                f"{os.path.basename(dst_seq_path)} to splice "
-                "registration data into — seqstarnet may have failed.")
+            raise RuntimeError(self.tr("s1_error_comet_dst_seq_missing").format(
+                name=os.path.basename(dst_seq_path)))
         n_spliced = self._splice_seq_registration(src_seq_path, dst_seq_path)
         siril.log(
             f"Comet Stack: spliced {n_spliced} registration line(s) from "
@@ -1548,8 +1544,7 @@ class Stage1Mixin:
         siril.cmd("load_seq", starless_seq)
 
         # ---- 7. apply registration to both sequences, with matched framing
-        progress("Comet Stack: applying registration to the comet and "
-                 "star sequences (matched framing)...", 0.64)
+        progress(self.tr("s1_comet_progress_apply_reg"), 0.64)
         comet_input_seq = "r_" + starless_seq
         star_input_seq = "r_" + bkg_seq
         self._comet_seqapplyreg_matched(starless_seq, bkg_seq)
@@ -1558,54 +1553,31 @@ class Stage1Mixin:
         # no console command exists for this in Siril)
         comet_seq = "comet_" + comet_input_seq
         comet_seq_path = os.path.join(proc_dir, f"{comet_seq}.seq")
-        instructions1 = (
-            "Manual step required: in Siril's own window, go to the "
-            "Registration tab. Set the registration method to 'Comet/"
-            "Asteroid registration'. Make sure sequence "
-            f"'{comet_input_seq}' is selected. On the first frame, draw "
-            "a box around the comet's nucleus and click 'Pick object in "
-            "#1'. Go to the last frame, draw a box around the comet, "
-            "click 'Pick object in #2'. Click 'Register'. Siril will "
-            f"create a new sequence named '{comet_seq}'. Once done, "
-            "click Continue below.")
+        instructions1 = self.tr("s1_comet_pause1_body").format(
+            comet_input_seq=comet_input_seq, comet_seq=comet_seq)
         self._guided_pause(
-            "Comet Stack — Comet Registration (manual step)",
+            self.tr("s1_comet_pause1_title"),
             instructions1,
             verify_fn=lambda: os.path.isfile(comet_seq_path),
-            verify_error=(
-                f"'{comet_seq}.seq' wasn't found in the process "
-                "directory yet — the comet-registration step above "
-                "doesn't look like it finished. Redo it in Siril's "
-                "Registration tab, then click Continue again."))
+            verify_error=self.tr("s1_comet_pause1_verify_error").format(
+                comet_seq=comet_seq))
 
         # ---- 9. / 10. stack the comet sequence and the star sequence
-        progress("Comet Stack: stacking the comet sequence...", 0.75)
+        progress(self.tr("s1_comet_progress_stack_comet"), 0.75)
         siril.cmd("stack", comet_seq, f" rej {sigma_low} {sigma_high}",
                   "-out=comet_stack")
-        progress("Comet Stack: stacking the star sequence...", 0.82)
+        progress(self.tr("s1_comet_progress_stack_star"), 0.82)
         siril.cmd("stack", star_input_seq, f" rej {sigma_low} {sigma_high}",
                   "-out=star_stack")
 
         # ---- 11. GUIDED PAUSE #2 — Star Recomposition (GUI-only, no
         # console command exists for this in Siril)
-        instructions2 = (
-            "Manual step required: in Siril, go to Image Processing → "
-            "Star Processing → Star Recomposition. Load 'comet_stack' "
-            "and 'star_stack' as the two input images (use Linear mode, "
-            "not auto-stretch, if you plan to apply your own stretch "
-            "afterward — auto-stretch here can make manual stretch "
-            "controls behave oddly). Click Apply. Once you're happy "
-            "with the result, leave it as Siril's currently-loaded image "
-            "and click Continue below — don't close or replace it.")
+        instructions2 = self.tr("s1_comet_pause2_body")
         self._guided_pause(
-            "Comet Stack — Star Recomposition (manual step)",
+            self.tr("s1_comet_pause2_title"),
             instructions2,
             verify_fn=lambda: siril.is_image_loaded(),
-            verify_error=(
-                "No image appears to be loaded in Siril — redo the Star "
-                "Recomposition step (Image Processing → Star "
-                "Processing → Star Recomposition), leave the result "
-                "loaded, then click Continue again."))
+            verify_error=self.tr("s1_comet_pause2_verify_error"))
 
         self._load_siril_current_into_stage(0, "Preprocess")
         siril.cmd("cd", "../")
@@ -1692,7 +1664,15 @@ class Stage1Mixin:
         Raises RuntimeError with a clear message (rather than silently
         writing a still-broken sequence file) if either file is missing
         the expected M0/M1 markers, or if the source has no R-lines to
-        copy.
+        copy. These three messages are deliberately left English-only
+        (unlike the rest of this stage) — they're internal-format
+        invariant violations ("should never happen" .seq corruption),
+        this is a @staticmethod with no `self.tr(...)` access exercised
+        directly by unit tests (see
+        test_S30Pro_Pipeline_functions.py), and converting it to an
+        instance method purely for this would be disproportionate to
+        how rarely a real user would ever see one. Flagged as a known
+        gap, same as Denoise's GPU/CoreML troubleshooting tooltips.
         """
         def _find_marker(lines, token):
             for i, line in enumerate(lines):
@@ -1886,12 +1866,9 @@ class Stage1Mixin:
         siril = self.siril
         src_path = self.combine_master_path_edit.text().strip()
         if not src_path or not os.path.isfile(src_path):
-            raise RuntimeError(
-                "Combine with existing master is enabled but no valid "
-                "file is selected — pick one in the Preprocess stage, "
-                "or turn the option off.")
+            raise RuntimeError(self.tr("s1_error_combine_no_file"))
 
-        progress("Preprocess: combining with existing master...", 0.75)
+        progress(self.tr("s1_progress_combine_master"), 0.75)
         combine_dir = os.path.join(self.cwd, "process", "combine_masters")
         if os.path.isdir(combine_dir):
             shutil.rmtree(combine_dir, ignore_errors=True)
@@ -1900,9 +1877,7 @@ class Stage1Mixin:
         new_master_src = os.path.join(
             self.cwd, "process", f"result{self.fits_extension}")
         if not os.path.isfile(new_master_src):
-            raise RuntimeError(
-                "Combine with existing master: couldn't find this run's "
-                "own stacked result to combine against.")
+            raise RuntimeError(self.tr("s1_error_combine_no_own_result"))
         shutil.copy2(
             new_master_src,
             os.path.join(combine_dir, f"new_session{self.fits_extension}"))
