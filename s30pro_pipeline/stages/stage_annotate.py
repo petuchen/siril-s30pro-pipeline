@@ -570,14 +570,14 @@ class AnnotateMixin:
         self.ann_color_preset_label.setText(self.tr("ann_color_preset_label"))
         self.ann_const_preset_combo.setToolTip(
             self.tr("ann_color_preset_tooltip"))
-        self.ann_line_color_btn.setText(self.tr("ann_line_color_btn"))
-        self.ann_line_color_btn.setToolTip(
+        self.ann_const_color_btn.setText(self.tr("ann_line_color_btn"))
+        self.ann_const_color_btn.setToolTip(
             self.tr("ann_line_color_tooltip"))
-        self.ann_name_color_btn.setText(self.tr("ann_name_color_btn"))
-        self.ann_name_color_btn.setToolTip(
+        self.ann_const_name_color_btn.setText(self.tr("ann_name_color_btn"))
+        self.ann_const_name_color_btn.setToolTip(
             self.tr("ann_name_color_tooltip"))
-        self.ann_select_const_btn.setText(self.tr("ann_select_const_btn"))
-        self.ann_select_const_btn.setToolTip(
+        self.ann_const_select_btn.setText(self.tr("ann_select_const_btn"))
+        self.ann_const_select_btn.setToolTip(
             self.tr("ann_select_const_tooltip"))
 
         self._retranslate_collapsible(self.ann_step2_toggle_btn)
